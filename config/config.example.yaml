@@ -1,0 +1,239 @@
+# Kabbalah Configuration Example
+
+# Provider Configuration Mode
+# Options: unified, explicit, hierarchy, hybrid
+providers:
+  mode: unified
+  
+  # Unified Mode: Use same provider for all roles
+  provider: openai
+  model: gpt-3.5-turbo
+  
+  # Fallback chain if primary provider fails
+  fallback:
+    - anthropic:claude-3-sonnet
+    - google:gemini-pro
+    - deepseek:deepseek-chat
+
+# Explicit Mode Example (uncomment to use)
+# providers:
+#   mode: explicit
+#   roles:
+#     intake_clarifier:
+#       provider: openai
+#       model: gpt-3.5-turbo
+#       fallback:
+#         - anthropic:claude-3-sonnet
+#         - google:gemini-pro
+#     
+#     root_planner:
+#       provider: openai
+#       model: gpt-3.5-turbo
+#       fallback:
+#         - anthropic:claude-3-sonnet
+#     
+#     domain_coordinator:
+#       provider: google
+#       model: gemini-pro
+#       fallback:
+#         - openai:gpt-3.5-turbo
+#         - deepseek:deepseek-chat
+#     
+#     leaf_builder:
+#       provider: openai
+#       model: gpt-3.5-turbo
+#       fallback:
+#         - deepseek:deepseek-chat
+#         - mistral:mistral-medium
+#     
+#     leaf_verifier:
+#       provider: anthropic
+#       model: claude-3-sonnet
+#       fallback:
+#         - groq:mixtral-8x7b
+#         - openai:gpt-4
+#     
+#     leaf_auditor:
+#       provider: anthropic
+#       model: claude-3-sonnet
+#       fallback:
+#         - openai:gpt-4
+#         - groq:mixtral-8x7b
+#     
+#     synthesizer_consolidator:
+#       provider: openai
+#       model: gpt-3.5-turbo
+#       fallback:
+#         - anthropic:claude-3-sonnet
+#         - google:gemini-pro
+
+# Hierarchy Mode Example (uncomment to use)
+# providers:
+#   mode: hierarchy
+#   # System automatically uses:
+#   # - Premium models (GPT-4, Claude) for Intake, Root, Synthesizer
+#   # - Mid-tier models (Gemini, GPT-3.5) for Domain
+#   # - Cost-effective models (DeepSeek, Mistral) for Leaf
+
+# Hybrid Mode Example (uncomment to use)
+# providers:
+#   mode: hybrid
+#   default:
+#     provider: openai
+#     model: gpt-3.5-turbo
+#     fallback:
+#       - anthropic:claude-3-sonnet
+#       - google:gemini-pro
+#   overrides:
+#     leaf_verifier:
+#       provider: anthropic
+#       model: claude-3-sonnet
+#       description: "Claude is better at verification"
+#     leaf_auditor:
+#       provider: anthropic
+#       model: claude-3-sonnet
+#       description: "Claude is better at auditing"
+
+# Runtime Mode
+# Options: BOOTSTRAP, DAY1, DAY2
+runtime:
+  mode: BOOTSTRAP
+  # BOOTSTRAP: Initialization mode (all operations allowed)
+  # DAY1: Initial deployment (bootstrap operations allowed)
+  # DAY2: Production mode (bootstrap operations blocked)
+
+# Memory Configuration
+memory:
+  # Backend: cognee or jsonl
+  backend: cognee
+  
+  # Cognee configuration (Linux/macOS)
+  cognee:
+    enabled: true
+    # Add Cognee-specific settings here
+  
+  # JSONL fallback (Windows or when Cognee unavailable)
+  jsonl:
+    enabled: true
+    path: ./data/memory.jsonl
+    max_size_mb: 1000
+
+# Observability Configuration
+observability:
+  # Enable/disable observability
+  enabled: true
+  
+  # Tracing
+  tracing:
+    enabled: true
+    exporter: jaeger
+    jaeger:
+      host: localhost
+      port: 6831
+  
+  # Metrics
+  metrics:
+    enabled: true
+    exporter: prometheus
+    prometheus:
+      port: 8000
+  
+  # Logging
+  logging:
+    level: INFO
+    format: json
+    file: ./logs/kabbalah.log
+
+# Tool Execution Configuration
+tools:
+  # Enable/disable tool execution
+  enabled: true
+  
+  # Sandboxing
+  sandbox:
+    enabled: true
+    
+    # Resource limits
+    cpu_limit: 2
+    memory_limit_mb: 512
+    disk_limit_mb: 1000
+    
+    # Timeout
+    timeout_seconds: 30
+  
+  # Allowed tools
+  allowed_tools:
+    - bash
+    - file
+    - grep
+    - mcp
+    - web
+
+# Specification Configuration
+specification:
+  # Parser settings
+  parser:
+    strict_mode: true
+    validate_on_load: true
+  
+  # Pretty printer settings
+  pretty_printer:
+    format: yaml  # yaml or json
+    indent: 2
+
+# Logging Configuration
+logging:
+  level: INFO
+  format: json
+  
+  # File logging
+  file:
+    enabled: true
+    path: ./logs/kabbalah.log
+    max_size_mb: 100
+    backup_count: 5
+  
+  # Console logging
+  console:
+    enabled: true
+    format: colored
+
+# Performance Configuration
+performance:
+  # Parallel execution
+  max_parallel_domains: 10
+  max_parallel_leaf_nodes: 100
+  
+  # Timeouts
+  decomposition_timeout_seconds: 30
+  synthesis_timeout_seconds: 60
+  operation_timeout_seconds: 300
+
+# Security Configuration
+security:
+  # Encryption
+  encryption:
+    enabled: true
+    algorithm: AES-256
+  
+  # Audit logging
+  audit_logging:
+    enabled: true
+    immutable: true
+    path: ./logs/audit.log
+  
+  # Access control
+  access_control:
+    enabled: true
+    strict_mode: true
+
+# Development Configuration
+development:
+  # Debug mode
+  debug: false
+  
+  # Verbose logging
+  verbose: false
+  
+  # Mock providers (for testing)
+  mock_providers: false
