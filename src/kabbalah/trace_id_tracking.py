@@ -26,21 +26,24 @@ class ExecutionLogEntry:
     status: str  # success, error, timeout, blocked
     start_time: float
     end_time: float
-    duration: float
     inputs: Dict = field(default_factory=dict)
     outputs: Dict = field(default_factory=dict)
     metadata: Dict = field(default_factory=dict)
     created_at: float = field(default_factory=lambda: datetime.utcnow().timestamp())
+    duration: float = field(default=0.0)
+    
+    def __post_init__(self):
+        """Calculate duration if not provided."""
+        # If duration is 0 (default), calculate it from start_time and end_time
+        if self.duration == 0.0:
+            object.__setattr__(self, 'duration', self.end_time - self.start_time)
+        object.__setattr__(self, '_initialized', True)
     
     def __setattr__(self, name, value):
         """Prevent modification after creation (immutability)."""
         if hasattr(self, '_initialized'):
             raise ExecutionLogError(f"Cannot modify immutable ExecutionLogEntry field: {name}")
         super().__setattr__(name, value)
-    
-    def __post_init__(self):
-        """Mark as initialized to enforce immutability."""
-        object.__setattr__(self, '_initialized', True)
 
 
 class TraceIDGenerator:
@@ -100,6 +103,7 @@ class TraceIDGenerator:
         try:
             if not domain or not isinstance(domain, str):
                 raise TraceIDError("Domain must be a non-empty string")
+            safe_domain = cls._sanitize_domain(domain)
             
             with cls._lock:
                 now = datetime.utcnow()
@@ -112,13 +116,13 @@ class TraceIDGenerator:
                     cls._leaf_counters = {}
                 
                 # Get counter for this domain
-                if domain not in cls._branch_counters:
-                    cls._branch_counters[domain] = 0
+                if safe_domain not in cls._branch_counters:
+                    cls._branch_counters[safe_domain] = 0
                 
-                cls._branch_counters[domain] += 1
-                counter = cls._branch_counters[domain]
+                cls._branch_counters[safe_domain] += 1
+                counter = cls._branch_counters[safe_domain]
                 
-                branch_id = f"branch_{domain}_{counter:03d}"
+                branch_id = f"branch_{safe_domain}_{counter:03d}"
                 return branch_id
         except TraceIDError:
             raise
@@ -142,6 +146,7 @@ class TraceIDGenerator:
         try:
             if not domain or not isinstance(domain, str):
                 raise TraceIDError("Domain must be a non-empty string")
+            safe_domain = cls._sanitize_domain(domain)
             
             with cls._lock:
                 now = datetime.utcnow()
@@ -154,13 +159,13 @@ class TraceIDGenerator:
                     cls._leaf_counters = {}
                 
                 # Get counter for this domain
-                if domain not in cls._leaf_counters:
-                    cls._leaf_counters[domain] = 0
+                if safe_domain not in cls._leaf_counters:
+                    cls._leaf_counters[safe_domain] = 0
                 
-                cls._leaf_counters[domain] += 1
-                counter = cls._leaf_counters[domain]
+                cls._leaf_counters[safe_domain] += 1
+                counter = cls._leaf_counters[safe_domain]
                 
-                leaf_id = f"leaf_{domain}_{counter:03d}"
+                leaf_id = f"leaf_{safe_domain}_{counter:03d}"
                 return leaf_id
         except TraceIDError:
             raise
@@ -208,9 +213,15 @@ class TraceIDGenerator:
         if not run_id or not isinstance(run_id, str):
             raise TraceIDError("run_id must be a non-empty string")
         
-        pattern = r"^run_\d{4}_\d{2}_\d{2}_\d{3}$"
+        pattern = r"^run_\d{4}_\d{2}_\d{2}_\d{3,}$"
         if not re.match(pattern, run_id):
             raise TraceIDError(f"Invalid run_id format: {run_id}. Expected: run_YYYY_MM_DD_NNN")
+
+    @classmethod
+    def _sanitize_domain(cls, domain: str) -> str:
+        """Convert arbitrary domain labels into trace-safe components."""
+        safe_domain = re.sub(r"[^a-zA-Z0-9_]+", "_", domain.strip()).strip("_")
+        return safe_domain or "domain"
     
     @classmethod
     def _validate_branch_id(cls, branch_id: str) -> None:
@@ -218,7 +229,7 @@ class TraceIDGenerator:
         if not branch_id or not isinstance(branch_id, str):
             raise TraceIDError("branch_id must be a non-empty string")
         
-        pattern = r"^branch_[a-zA-Z0-9_]+_\d{3}$"
+        pattern = r"^branch_[a-zA-Z0-9_]+_\d{3,}$"
         if not re.match(pattern, branch_id):
             raise TraceIDError(f"Invalid branch_id format: {branch_id}. Expected: branch_{{domain}}_NNN")
     
@@ -228,7 +239,7 @@ class TraceIDGenerator:
         if not leaf_id or not isinstance(leaf_id, str):
             raise TraceIDError("leaf_id must be a non-empty string")
         
-        pattern = r"^leaf_[a-zA-Z0-9_]+_\d{3}$"
+        pattern = r"^leaf_[a-zA-Z0-9_]+_\d{3,}$"
         if not re.match(pattern, leaf_id):
             raise TraceIDError(f"Invalid leaf_id format: {leaf_id}. Expected: leaf_{{domain}}_NNN")
     

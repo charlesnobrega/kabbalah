@@ -20,10 +20,11 @@ class TestTraceIDGeneratorRunID:
         run_id = TraceIDGenerator.generate_run_id()
         assert run_id.startswith("run_")
         parts = run_id.split("_")
-        assert len(parts) == 4
+        assert len(parts) == 5  # run, YYYY, MM, DD, NNN
         assert len(parts[1]) == 4  # YYYY
         assert len(parts[2]) == 2  # MM
         assert len(parts[3]) == 2  # DD
+        assert len(parts[4]) >= 3  # NNN minimum
     
     def test_generate_run_id_uniqueness(self):
         """Test that generated run_ids are unique."""
@@ -86,7 +87,7 @@ class TestTraceIDGeneratorBranchID:
         assert len(parts) == 3
         assert parts[0] == "branch"
         assert parts[1] == "backend"
-        assert len(parts[2]) == 3  # NNN
+        assert len(parts[2]) >= 3  # NNN minimum
     
     def test_generate_branch_id_multiple_domains(self):
         """Test branch_id generation for multiple domains."""
@@ -144,7 +145,7 @@ class TestTraceIDGeneratorLeafID:
         assert len(parts) == 3
         assert parts[0] == "leaf"
         assert parts[1] == "backend"
-        assert len(parts[2]) == 3  # NNN
+        assert len(parts[2]) >= 3  # NNN minimum
     
     def test_generate_leaf_id_uniqueness_per_domain(self):
         """Test that leaf_ids are unique per domain."""

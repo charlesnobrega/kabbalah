@@ -2,7 +2,7 @@
 
 import pytest
 import os
-from datetime import datetime
+import time
 from kabbalah.fsm_enforcement import (
     FSMEnforcementModule,
     OperationalMode,
@@ -310,9 +310,9 @@ class TestModeTransition:
     def test_transition_timestamp_recorded(self):
         """Test that transition timestamp is recorded."""
         module = FSMEnforcementModule()
-        before = datetime.now().timestamp()
+        before = time.time()
         module.transition_mode(OperationalMode.BOOTSTRAP, OperationalMode.DAY1)
-        after = datetime.now().timestamp()
+        after = time.time()
         
         log = module.transition_log
         assert before <= log[0].timestamp <= after

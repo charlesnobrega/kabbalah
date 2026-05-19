@@ -75,6 +75,7 @@ class Synthesizer:
                 if not hasattr(result, 'artifacts'):
                     continue
                 
+                # Allow empty artifact lists - they are valid for successful branches
                 for artifact in result.artifacts:
                     artifact_type = artifact.get("artifact_type", "unknown")
                     
@@ -83,6 +84,7 @@ class Synthesizer:
                     
                     artifacts_by_type[artifact_type].append(artifact)
             
+            # Empty artifacts_by_type is valid - branches may succeed without artifacts
             return artifacts_by_type
         
         except Exception as e:
@@ -144,9 +146,7 @@ class Synthesizer:
         Raises:
             SynthesisError: If merge fails
         """
-        if not artifacts:
-            raise SynthesisError("Artifacts cannot be empty")
-        
+        # Empty artifacts are valid - branches may succeed without artifacts
         try:
             # Validate consistency first
             is_consistent, violations = self.validate_consistency(artifacts)

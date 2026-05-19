@@ -173,22 +173,23 @@ This document outlines the implementation tasks for Kabbalah, organized by compo
 - [x] 4.1.1 Implement ProviderAbstractionLayer class
 - [x] 4.1.2 Implement execute_request method
 - [x] 4.1.3 Implement execute_with_fallback method
-- [x] 4.1.4 Support OpenAI provider
-- [x] 4.1.5 Support Anthropic provider
-- [x] 4.1.6 Support Google Gemini provider
-- [x] 4.1.7 Support Ollama provider
-- [x] 4.1.8 Support DeepSeek provider
-- [x] 4.1.9 Support Mistral provider
-- [x] 4.1.10 Support Groq provider
-- [x] 4.1.11 Support Together provider
-- [x] 4.1.12 Support Replicate provider
-- [x] 4.1.13 Support Hugging Face provider
-- [x] 4.1.14 Support Azure OpenAI provider
-- [x] 4.1.15 Support local models
-- [x] 4.1.16 Write unit tests for ProviderAbstractionLayer (>80% coverage)
-- [x] 4.1.17 Write property tests for provider assignment (Property 25)
-- [x] 4.1.18 Write property tests for request routing (Property 26)
-- [x] 4.1.19 Write property tests for fallback chain (Property 27)
+- [x] 4.1.4 Support OpenAI provider (with real API integration)
+- [ ] 4.1.5 Support Anthropic provider (with real API integration)
+- [x] 4.1.6 Support Google Gemini provider (with real API integration)
+- [ ] 4.1.7 Support Ollama provider (local, no API key needed)
+- [x] 4.1.8 Support DeepSeek provider (with real API integration)
+- [x] 4.1.9 Support Mistral provider (with real API integration)
+- [x] 4.1.10 Support Groq provider (with real API integration)
+- [x] 4.1.11 Support Together provider (with real API integration)
+- [ ] 4.1.12 Support Replicate provider (with real API integration)
+- [ ] 4.1.13 Support Hugging Face provider (with real API integration)
+- [ ] 4.1.14 Support Azure OpenAI provider (with real API integration)
+- [ ] 4.1.15 Support LM Studio provider (local, no API key needed)
+- [ ] 4.1.16 Support vLLM provider (local, no API key needed)
+- [ ] 4.1.17 Write unit tests for ProviderAbstractionLayer (>80% coverage)
+- [ ] 4.1.18 Write property tests for provider assignment (Property 25)
+- [ ] 4.1.19 Write property tests for request routing (Property 26)
+- [ ] 4.1.20 Write property tests for fallback chain (Property 27)
 
 ### 4.2 Provider Configuration
 
@@ -196,14 +197,95 @@ This document outlines the implementation tasks for Kabbalah, organized by compo
 - [x] 4.2.2 Implement provider fallback chain configuration
 - [x] 4.2.3 Implement cost/latency optimization logic
 - [x] 4.2.4 Write unit tests for provider configuration
-- [x] 4.2.5 Write property tests for per-domain config (Property 28)
+- [ ] 4.2.5 Write property tests for per-domain config (Property 28)
 
-### 4.3 Provider Integration Tests
+### 4.3 Mock Provider Infrastructure
 
-- [x] 4.3.1 Write integration tests for each provider
-- [x] 4.3.2 Test provider fallback behavior
-- [x] 4.3.3 Test provider timeout handling
-- [x] 4.3.4 Test provider error handling
+- [x] 4.3.1 Implement MockProvider base class for testing
+- [x] 4.3.2 Implement deterministic mock responses
+- [x] 4.3.3 Implement mock error scenarios
+- [x] 4.3.4 Implement mock latency simulation
+- [x] 4.3.5 Write unit tests for mock providers
+
+### 4.4 Real Provider Integration Tests
+
+- [ ] 4.4.1 Create test infrastructure for real provider testing
+- [ ] 4.4.2 Implement API key management for tests
+- [ ] 4.4.3 Implement test environment detection (mock vs real)
+- [x] 4.4.4 Write integration tests for OpenAI provider
+- [ ] 4.4.5 Write integration tests for Anthropic provider
+- [x] 4.4.6 Write integration tests for Google Gemini provider
+- [ ] 4.4.7 Write integration tests for Ollama provider
+- [x] 4.4.8 Write integration tests for DeepSeek provider
+- [x] 4.4.9 Write integration tests for Mistral provider
+- [x] 4.4.10 Write integration tests for Groq provider
+- [x] 4.4.11 Write integration tests for Together provider
+- [ ] 4.4.12 Write integration tests for Replicate provider
+- [ ] 4.4.13 Write integration tests for Hugging Face provider
+- [ ] 4.4.14 Write integration tests for Azure OpenAI provider
+- [ ] 4.4.15 Write integration tests for LM Studio provider
+- [ ] 4.4.16 Write integration tests for vLLM provider
+- [ ] 4.4.17 Test provider fallback behavior with real APIs
+- [ ] 4.4.18 Test provider timeout handling with real APIs
+- [ ] 4.4.19 Test provider error handling with real APIs
+- [ ] 4.4.20 Test provider cost tracking with real APIs
+
+### 4.5 Property-Based Testing for Providers
+
+- [ ] 4.5.1 Write PBT for provider request validation (Property 25)
+- [ ] 4.5.2 Write PBT for provider response parsing (Property 26)
+- [ ] 4.5.3 Write PBT for fallback chain correctness (Property 27)
+- [ ] 4.5.4 Write PBT for provider routing logic (Property 28)
+- [ ] 4.5.5 Write PBT for error handling consistency
+- [ ] 4.5.6 Write PBT for timeout behavior
+- [ ] 4.5.7 Write PBT for retry logic
+- [ ] 4.5.8 Write PBT for cost calculation accuracy
+
+### 4.6 Provider Configuration Modes
+
+- [ ] 4.6.1 Implement Unified Mode (same provider for all roles)
+- [ ] 4.6.2 Implement Explicit Mode (define each role's provider)
+- [ ] 4.6.3 Implement Hierarchy Mode (provider hierarchy by role)
+- [ ] 4.6.4 Implement Hybrid Mode (mix of above)
+- [ ] 4.6.5 Write tests for each configuration mode
+- [ ] 4.6.6 Write PBT for configuration validation
+
+---
+
+## PBT Update Tasks (Cross-Phase)
+
+### PBT.1 Update Phase 1 Tests to Real PBT
+
+- [ ] PBT.1.1 Update IntakeNode tests with Hypothesis property tests
+- [ ] PBT.1.2 Update RootOrchestrator tests with Hypothesis property tests
+- [ ] PBT.1.3 Update DomainOrchestrator tests with Hypothesis property tests
+- [ ] PBT.1.4 Update LeafNode tests with Hypothesis property tests
+- [ ] PBT.1.5 Update Synthesizer tests with Hypothesis property tests
+- [ ] PBT.1.6 Verify all Phase 1 properties with real PBT (Property 1-7)
+
+### PBT.2 Update Phase 2 Tests to Real PBT
+
+- [ ] PBT.2.1 Update FSMEnforcementModule tests with Hypothesis property tests
+- [ ] PBT.2.2 Update RoleTraceValidationModule tests with Hypothesis property tests
+- [ ] PBT.2.3 Update ContractEnforcementModule tests with Hypothesis property tests
+- [ ] PBT.2.4 Update TraceIDTracking tests with Hypothesis property tests
+- [ ] PBT.2.5 Verify all Phase 2 properties with real PBT (Property 8-19)
+
+### PBT.3 Update Phase 3 Tests to Real PBT
+
+- [ ] PBT.3.1 Update MemorySubsystem tests with Hypothesis property tests
+- [ ] PBT.3.2 Update MemoryGovernanceModule tests with Hypothesis property tests
+- [ ] PBT.3.3 Update Cognee integration tests with Hypothesis property tests
+- [ ] PBT.3.4 Update JSONL fallback tests with Hypothesis property tests
+- [ ] PBT.3.5 Verify all Phase 3 properties with real PBT (Property 20-24)
+
+### PBT.4 Create PBT Infrastructure
+
+- [ ] PBT.4.1 Set up Hypothesis framework for all tests
+- [ ] PBT.4.2 Create custom strategies for Kabbalah data types
+- [ ] PBT.4.3 Create PBT test runners with reporting
+- [ ] PBT.4.4 Create PBT failure database for regression testing
+- [ ] PBT.4.5 Document PBT best practices for team
 
 ---
 
@@ -462,3 +544,204 @@ This document outlines the implementation tasks for Kabbalah, organized by compo
 - Week 20: Integration and testing complete
 - Week 22: Documentation and release complete
 
+
+
+---
+
+## Phase 12: Cost-Aware Routing (Semanas 23-26)
+
+### 12.1 Roteador Bayesiano
+
+- [ ] 12.1.1 Implement Bayesian Router class
+- [ ] 12.1.2 Implement Jaccard Keywords matching
+- [ ] 12.1.3 Implement semantic similarity with embeddings
+- [ ] 12.1.4 Implement deterministic routing in <200ms
+- [ ] 12.1.5 Write unit tests for Bayesian Router (>80% coverage)
+- [ ] 12.1.6 Write property tests for routing consistency
+
+### 12.2 Free Model Radar
+
+- [ ] 12.2.1 Implement Free Model Radar daemon
+- [ ] 12.2.2 Monitor OpenRouter for free models
+- [ ] 12.2.3 Monitor HuggingFace for free models
+- [ ] 12.2.4 Monitor Together for free models
+- [ ] 12.2.5 Implement automatic task deviation
+- [ ] 12.2.6 Write integration tests for radar
+
+### 12.3 Cost Optimization Engine
+
+- [ ] 12.3.1 Implement Cost Predictor
+- [ ] 12.3.2 Implement Cost Tracker
+- [ ] 12.3.3 Implement Cost Alerts
+- [ ] 12.3.4 Implement Cost Optimization suggestions
+- [ ] 12.3.5 Write unit tests for cost engine
+
+---
+
+## Phase 13: Real Execution Capabilities (Semanas 27-30)
+
+### 13.1 Home Assistant Integration
+
+- [ ] 13.1.1 Implement Home Assistant MCP interface
+- [ ] 13.1.2 Implement IoT device detection
+- [ ] 13.1.3 Implement task classification (software vs physical)
+- [ ] 13.1.4 Implement automation API calls
+- [ ] 13.1.5 Write integration tests for Home Assistant
+
+### 13.2 Aggressive Execution (Open Interpreter)
+
+- [ ] 13.2.1 Implement Open Interpreter integration
+- [ ] 13.2.2 Implement dynamic Python script generation
+- [ ] 13.2.3 Implement local execution with output capture
+- [ ] 13.2.4 Implement error handling and recovery
+- [ ] 13.2.5 Write security tests for execution
+
+### 13.3 Multi-Tool Orchestration
+
+- [ ] 13.3.1 Implement Tool Chaining
+- [ ] 13.3.2 Implement Tool Composition
+- [ ] 13.3.3 Implement Tool Optimization
+- [ ] 13.3.4 Implement Tool Caching
+- [ ] 13.3.5 Write integration tests
+
+---
+
+## Phase 14: Self-Evolution (Semanas 31-34)
+
+### 14.1 Continuous Profiling
+
+- [ ] 14.1.1 Implement continuous profiling system
+- [ ] 14.1.2 Implement performance bottleneck detection
+- [ ] 14.1.3 Implement resource waste detection
+- [ ] 14.1.4 Implement optimization opportunity detection
+- [ ] 14.1.5 Write unit tests for profiling
+
+### 14.2 Intelligent Suggestions
+
+- [ ] 14.2.1 Implement suggestion engine
+- [ ] 14.2.2 Implement sandbox testing for suggestions
+- [ ] 14.2.3 Implement suggestion validation
+- [ ] 14.2.4 Implement suggestion packaging
+- [ ] 14.2.5 Write integration tests
+
+### 14.3 Human-In-The-Loop Approval
+
+- [ ] 14.3.1 Implement approval workflow
+- [ ] 14.3.2 Implement suggestion alerts
+- [ ] 14.3.3 Implement approval tracking
+- [ ] 14.3.4 Implement change application
+- [ ] 14.3.5 Write integration tests
+
+---
+
+## Phase 15: Web Dashboard & UI (Semanas 35-38)
+
+- [ ] 15.1 Implement FastAPI backend
+- [ ] 15.2 Implement Web Dashboard
+- [ ] 15.3 Implement Agent Monitor
+- [ ] 15.4 Implement Workflow Visualizer
+- [ ] 15.5 Implement Metrics Dashboard
+- [ ] 15.6 Implement Control Panel
+- [ ] 15.7 Write integration tests
+
+---
+
+## Phase 16: Plugin System (Semanas 39-42)
+
+- [ ] 16.1 Implement Plugin API
+- [ ] 16.2 Implement Plugin Loader
+- [ ] 16.3 Implement Plugin Marketplace
+- [ ] 16.4 Implement Custom Providers
+- [ ] 16.5 Implement Custom Tools
+- [ ] 16.6 Implement Custom Roles
+- [ ] 16.7 Write integration tests
+
+---
+
+## Phase 17: Collaboration Features (Semanas 43-50)
+
+- [ ] 17.1 Implement Multi-User Support
+- [ ] 17.2 Implement Permissions System
+- [ ] 17.3 Implement Audit Trail
+- [ ] 17.4 Implement Comments
+- [ ] 17.5 Implement Notifications
+- [ ] 17.6 Write integration tests
+
+---
+
+## Phase 18: Advanced Analytics (Semanas 51-54)
+
+- [ ] 18.1 Implement Performance Analytics
+- [ ] 18.2 Implement Cost Analytics
+- [ ] 18.3 Implement Quality Metrics
+- [ ] 18.4 Implement Trend Analysis
+- [ ] 18.5 Implement Predictive Analytics
+- [ ] 18.6 Write integration tests
+
+---
+
+## Phase 19: Enterprise Security (Semanas 55-58)
+
+- [ ] 19.1 Implement SSO Integration
+- [ ] 19.2 Implement Advanced RBAC
+- [ ] 19.3 Implement Encryption Keys Management
+- [ ] 19.4 Implement Compliance (GDPR, HIPAA, SOC2)
+- [ ] 19.5 Implement Security Scanning
+- [ ] 19.6 Write security tests
+
+---
+
+## Phase 20: Global Deployment (Semanas 59-62)
+
+- [ ] 20.1 Implement Multi-Region Support
+- [ ] 20.2 Implement CDN Integration
+- [ ] 20.3 Implement Latency Optimization
+- [ ] 20.4 Implement Data Residency
+- [ ] 20.5 Implement Disaster Recovery
+- [ ] 20.6 Write integration tests
+
+---
+
+## Phase 21: AI Training (Semanas 63-66)
+
+- [ ] 21.1 Implement Fine-Tuning
+- [ ] 21.2 Implement Custom Models
+- [ ] 21.3 Implement Transfer Learning
+- [ ] 21.4 Implement Model Versioning
+- [ ] 21.5 Implement A/B Testing
+- [ ] 21.6 Write integration tests
+
+---
+
+## Phase 22: Autonomous Agents (Semanas 67-70)
+
+- [ ] 22.1 Implement Self-Learning
+- [ ] 22.2 Implement Self-Optimization
+- [ ] 22.3 Implement Self-Healing
+- [ ] 22.4 Implement Emergent Behavior
+- [ ] 22.5 Implement Swarm Intelligence
+- [ ] 22.6 Write integration tests
+
+---
+
+## Summary
+
+**Total Tasks**: 350+ (167 original + 133 new + 50 PBT updates)
+**Total Phases**: 22 (11 original + 11 new)
+**Estimated Duration**: 80-90 weeks (includes real provider testing)
+**Estimated Team Size**: 4-6 developers
+**Test Coverage Goal**: >80% unit tests + comprehensive PBT
+
+**Current Status**:
+- Phase 1-3: Architecture complete, tests need PBT update
+- Phase 4: Architecture complete, providers need real implementation
+- Phase 5-11: Ready for implementation
+- Phase 12-22: Planned for future
+
+**Roadmap**: v1.0 (30-35 weeks with real testing) → v1.1 (12 weeks) → v1.2 (16 weeks) → v2.0 (20 weeks)
+
+**Critical Path**:
+1. Implement Phase 4 providers (20-30 days)
+2. Update Phase 1-3 tests to PBT (5-10 days)
+3. Complete Phase 5-11 (remaining weeks)
+4. Begin Phase 12+ (Intelligence Engine)
