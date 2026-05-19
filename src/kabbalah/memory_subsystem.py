@@ -142,6 +142,7 @@ class JSONLBackend(MemoryBackend):
         self.storage_path.mkdir(parents=True, exist_ok=True)
         self.knowledge_file = self.storage_path / "knowledge.jsonl"
         self.lock = threading.RLock()
+        self.available = True  # JSONL is always available
         logger.info(f"JSONL backend initialized at {self.storage_path}")
 
     def store(self, knowledge: Knowledge) -> bool:
@@ -268,7 +269,7 @@ class MemorySubsystem:
         # On Windows, prefer JSONL; on other platforms, prefer Cognee if available
         if platform.system() == "Windows":
             self.primary_backend = self.jsonl_backend
-            self.fallback_backend = self.cognee_backend
+            self.fallback_backend = self.jsonl_backend
             logger.info("Selected JSONL as primary backend (Windows platform)")
         else:
             if self.cognee_backend.is_available():
@@ -277,7 +278,7 @@ class MemorySubsystem:
                 logger.info("Selected Cognee as primary backend")
             else:
                 self.primary_backend = self.jsonl_backend
-                self.fallback_backend = self.cognee_backend
+                self.fallback_backend = self.jsonl_backend
                 logger.info("Selected JSONL as primary backend (Cognee unavailable)")
 
     def store_knowledge(self, knowledge: Knowledge, trace_id: str) -> bool:
@@ -375,13 +376,19 @@ class MemorySubsystem:
                 # Check primary backend consistency
                 primary_consistent = self.primary_backend.ensure_consistency()
 
-                # Check fallback backend consistency
-                fallback_consistent = self.fallback_backend.ensure_consistency()
+                # Check fallback backend consistency only if it's available
+                if self.fallback_backend.available:
+                    fallback_consistent = self.fallback_backend.ensure_consistency()
+                else:
+                    # If fallback is not available, don't require it to be consistent
+                    fallback_consistent = True
 
-                # Update consistency state
+                # Both backends must be consistent if both are available
+                # If one is unavailable, the available one is sufficient
                 self.consistency_state.is_consistent = (
                     primary_consistent and fallback_consistent
                 )
+                
                 self.consistency_state.last_sync_time = datetime.now().timestamp()
 
                 if self.consistency_state.is_consistent:

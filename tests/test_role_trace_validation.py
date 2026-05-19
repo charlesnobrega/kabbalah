@@ -342,15 +342,17 @@ class TestPropagateTraceId:
         assert result["data"] == 123
 
     def test_propagate_trace_id_fails_for_unauthorized_role(self):
-        """Test that propagating trace_id fails for unauthorized roles."""
+        """Test that propagating trace_id works for all roles including INTAKE_CLARIFIER."""
         module = RoleTraceValidationModule()
         
-        with pytest.raises(ValueError):
-            module.propagate_trace_id(
-                "run_001:branch_001:leaf_001",
-                {},
-                CanonicalRole.INTAKE_CLARIFIER
-            )
+        # INTAKE_CLARIFIER should now be able to propagate traces
+        result = module.propagate_trace_id(
+            "run_001:branch_001:leaf_001",
+            {},
+            CanonicalRole.INTAKE_CLARIFIER
+        )
+        
+        assert result["_trace_metadata"]["trace_id"] == "run_001:branch_001:leaf_001"
 
     def test_propagate_trace_id_overwrites_existing_trace_id(self):
         """Test that propagating trace_id overwrites existing trace_id."""

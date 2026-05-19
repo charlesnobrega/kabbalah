@@ -215,7 +215,7 @@ class TestCogneeBackend:
 
     def test_cognee_backend_initialization_no_cognee(self):
         """Test Cognee backend initialization when Cognee not available."""
-        with patch("kabbalah.memory_subsystem.cognee", side_effect=ImportError):
+        with patch("builtins.__import__", side_effect=ImportError("No module named 'cognee'")):
             backend = CogneeBackend()
             assert backend.available is False
 

@@ -108,6 +108,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 ```bash
 pip install -r requirements.txt
+pip install -e .
 ```
 
 ### 4. Configure Providers
@@ -139,7 +140,7 @@ pytest tests/ -v --cov=src/kabbalah
 ### 6. Check Configuration
 
 ```bash
-python -m kabbalah config show
+kabbalah config --show
 ```
 
 ## 📚 Documentation

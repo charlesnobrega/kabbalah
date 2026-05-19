@@ -6,9 +6,9 @@ ensuring that bootstrap operations cannot occur in production (DAY2) mode.
 
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
-from datetime import datetime
 from enum import Enum
 import os
+import time
 
 
 class OperationalMode(Enum):
@@ -202,7 +202,7 @@ class FSMEnforcementModule:
             violation = OperationViolation(
                 operation=operation,
                 current_mode=mode,
-                timestamp=datetime.now().timestamp(),
+                timestamp=time.time(),
                 violation_type=violation_type,
                 message=message
             )
@@ -235,7 +235,7 @@ class FSMEnforcementModule:
             record = ModeTransitionRecord(
                 from_mode=from_mode,
                 to_mode=to_mode,
-                timestamp=datetime.now().timestamp(),
+                timestamp=time.time(),
                 reason=reason,
                 success=False,
                 error_message=error_msg
@@ -249,7 +249,7 @@ class FSMEnforcementModule:
             record = ModeTransitionRecord(
                 from_mode=from_mode,
                 to_mode=to_mode,
-                timestamp=datetime.now().timestamp(),
+                timestamp=time.time(),
                 reason=reason,
                 success=False,
                 error_message=error_msg
@@ -262,7 +262,7 @@ class FSMEnforcementModule:
         record = ModeTransitionRecord(
             from_mode=from_mode,
             to_mode=to_mode,
-            timestamp=datetime.now().timestamp(),
+            timestamp=time.time(),
             reason=reason,
             success=True
         )

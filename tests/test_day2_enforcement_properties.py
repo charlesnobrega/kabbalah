@@ -167,9 +167,9 @@ class TestDAY2EnforcementProperty:
         module = FSMEnforcementModule()
         all_operations = [first_operation] + remaining_operations
         
-        # Check all operations
+        # Check all operations using logging version to capture violations
         for operation in all_operations:
-            is_allowed = module.check_operation_allowed(
+            is_allowed, error_msg = module.check_operation_allowed_with_logging(
                 operation,
                 OperationalMode.DAY2
             )

@@ -926,14 +926,14 @@ class TestIntakeNodeCoverageGaps:
         
         # Verify exact format
         parts = run_id.split("_")
-        assert len(parts) == 4
+        assert len(parts) == 5  # run, YYYY, MM, DD, NNN
         assert parts[0] == "run"
         assert len(parts[1]) == 4  # YYYY
         assert len(parts[2]) == 2  # MM
         assert len(parts[3]) == 2  # DD
-        assert len(parts[4]) == 3  # NNN (wait, this is wrong in my analysis)
+        assert len(parts[4]) == 3  # NNN
         
-        # Actually verify the correct format
+        # Verify regex format
         assert re.match(r"^run_\d{4}_\d{2}_\d{2}_\d{3}$", run_id)
     
     def test_specification_metadata_preserved_when_none(self):

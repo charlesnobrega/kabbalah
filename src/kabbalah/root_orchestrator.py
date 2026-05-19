@@ -3,7 +3,12 @@
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
 import uuid
+import logging
 from datetime import datetime
+
+from kabbalah.domain_orchestrator import DomainOrchestrator
+
+logger = logging.getLogger(__name__)
 
 
 class DecompositionError(Exception):
@@ -133,8 +138,8 @@ class RootOrchestrator:
             raise ExecutionError("Branches list cannot be empty")
         
         try:
-            # Build dependency graph
-            dep_graph = self._build_dependency_graph(branches)
+            # Build a mapping from domain name to branch_id
+            domain_to_branch = {b.domain_name: b.branch_id for b in branches}
             
             # Execute branches respecting dependencies
             results = {}
@@ -145,7 +150,8 @@ class RootOrchestrator:
                 ready_branches = [
                     b for b in branches
                     if b.branch_id not in executed and
-                    all(dep in executed for dep in b.dependencies)
+                    all(domain_to_branch.get(dep) in executed or dep not in domain_to_branch 
+                        for dep in b.dependencies)
                 ]
                 
                 if not ready_branches:
@@ -265,21 +271,54 @@ class RootOrchestrator:
         return graph
     
     def _execute_branch(self, branch: DomainBranch) -> BranchResult:
-        """Execute a single branch."""
+        """Execute a single branch using DomainOrchestrator."""
         import time
         
         start_time = time.time()
         
         try:
-            # FAIL-FAST: Removed silent mock success.
-            # Must implement actual LLM spawning and DomainOrchestrator logic here.
-            raise NotImplementedError(
-                f"LLM Provider integration '{branch.provider}' is missing. "
-                "Cannot simulate execution securely."
+            # Create domain orchestrator for this branch
+            domain_orch = DomainOrchestrator()
+            
+            # Spawn leaf nodes for the branch
+            leaf_nodes = domain_orch.spawn_leaf_nodes(
+                branch=branch,
+                run_id=branch.run_id,
+                branch_id=branch.branch_id
+            )
+            
+            # Execute the leaf nodes
+            leaf_results = domain_orch.execute_leaf_nodes(leaf_nodes)
+            
+            # Convert leaf results to artifacts
+            artifacts = [
+                {
+                    "leaf_id": result.leaf_id,
+                    "task_id": result.task_id,
+                    "status": result.status,
+                    "artifacts": result.artifacts,
+                    "metadata": result.metadata
+                }
+                for result in leaf_results
+            ]
+            
+            end_time = time.time()
+            
+            return BranchResult(
+                run_id=branch.run_id,
+                branch_id=branch.branch_id,
+                domain_name=branch.domain_name,
+                status="success",
+                artifacts=artifacts,
+                metadata={"provider": branch.provider},
+                start_time=start_time,
+                end_time=end_time,
+                duration=end_time - start_time
             )
         
         except Exception as e:
             end_time = time.time()
+            logger.error(f"Branch execution failed for {branch.branch_id}: {str(e)}")
             return BranchResult(
                 run_id=branch.run_id,
                 branch_id=branch.branch_id,

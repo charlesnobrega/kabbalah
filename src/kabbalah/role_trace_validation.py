@@ -74,6 +74,7 @@ class RoleTraceValidationModule:
             OperationCategory.PARSE_REQUEST,
             OperationCategory.QUERY_ARTIFACT,
             OperationCategory.ATTACH_METADATA,
+            OperationCategory.PROPAGATE_TRACE,
         },
         CanonicalRole.ROOT_PLANNER: {
             OperationCategory.DECOMPOSE_SPECIFICATION,

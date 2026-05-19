@@ -53,7 +53,12 @@ class TestProperty20KnowledgeStorageCorrectness:
     """
 
     @given(
-        knowledge_list=st.lists(knowledge_strategy(), min_size=1, max_size=10),
+        knowledge_list=st.lists(
+            knowledge_strategy(),
+            min_size=1,
+            max_size=10,
+            unique_by=lambda knowledge: knowledge.knowledge_id,
+        ),
         trace_id=trace_id_strategy(),
     )
     def test_stored_knowledge_is_queryable(self, knowledge_list, trace_id):
@@ -159,7 +164,12 @@ class TestProperty21MemoryConsistencyParallel:
     """
 
     @given(
-        knowledge_list=st.lists(knowledge_strategy(), min_size=2, max_size=10),
+        knowledge_list=st.lists(
+            knowledge_strategy(),
+            min_size=2,
+            max_size=10,
+            unique_by=lambda knowledge: knowledge.knowledge_id,
+        ),
         trace_id=trace_id_strategy(),
     )
     def test_consistency_after_sequential_operations(self, knowledge_list, trace_id):

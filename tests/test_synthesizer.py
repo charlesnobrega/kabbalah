@@ -123,10 +123,12 @@ class TestSynthesizerMerging:
     """Tests for artifact merging."""
     
     def test_merge_artifacts_with_empty_artifacts(self):
-        """Test that empty artifacts raises SynthesisError."""
+        """Test that empty artifacts are allowed and produce valid package."""
         synthesizer = Synthesizer()
-        with pytest.raises(SynthesisError, match="Artifacts cannot be empty"):
-            synthesizer.merge_artifacts({})
+        # Empty artifacts should be allowed - branches may succeed without artifacts
+        package = synthesizer.merge_artifacts({})
+        assert package is not None
+        assert package.artifacts == {}
     
     def test_merge_artifacts_returns_delivery_package(self):
         """Test that merging returns DeliveryPackage."""

@@ -1,6 +1,7 @@
 """Intake Node - Parses user requests and generates premium specifications."""
 
 import re
+import time
 from datetime import datetime
 from typing import Tuple
 from kabbalah.models import UserRequest, Specification
@@ -102,6 +103,11 @@ class IntakeNode:
         
         # Increment counter
         IntakeNode._run_counter += 1
+        
+        # Cap counter at 999 to maintain format
+        if IntakeNode._run_counter > 999:
+            IntakeNode._run_counter = 1
+        
         counter_str = str(IntakeNode._run_counter).zfill(3)
         
         run_id = f"run_{date_str}_{counter_str}"
@@ -122,14 +128,27 @@ class IntakeNode:
             SpecificationError: If specification generation fails
         """
         try:
-            # Infer scope from description if not provided
-            scope = request.scope or self._infer_scope(request.project_description)
+            # Preserve explicit empty values, only infer if None
+            if request.scope is None:
+                scope = self._infer_scope(request.project_description)
+            else:
+                scope = request.scope
             
-            # Use provided constraints or generate defaults
-            constraints = request.constraints or self._generate_default_constraints()
+            # Preserve explicit empty lists, only generate defaults if None
+            if request.constraints is None:
+                constraints = self._generate_default_constraints()
+            else:
+                constraints = request.constraints
             
-            # Use provided resources or generate defaults
-            resources = request.resources or self._generate_default_resources()
+            # Preserve explicit empty dicts, only generate defaults if None
+            if request.resources is None:
+                resources = self._generate_default_resources()
+            else:
+                resources = request.resources
+            
+            # Ensure scope is not empty after inference
+            if not scope or not scope.strip():
+                scope = "general"
             
             # Infer domains from scope and description
             domains = self._infer_domains(scope, request.project_description)
@@ -147,7 +166,7 @@ class IntakeNode:
                 domains=domains,
                 dependencies=dependencies,
                 metadata=request.metadata or {},
-                created_at=datetime.utcnow().timestamp(),
+                created_at=time.time(),
                 version="1.0"
             )
             
