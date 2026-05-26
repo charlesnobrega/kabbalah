@@ -10,6 +10,7 @@ from typing import Dict, Optional, Iterator
 from openai import OpenAI
 
 from .base import BaseProvider, ProviderResponse
+from ..secrets_vault import get_api_key
 
 
 class DeepSeekProvider(BaseProvider):
@@ -38,17 +39,20 @@ class DeepSeekProvider(BaseProvider):
         Initialize DeepSeek provider.
         
         Args:
-            api_key: DeepSeek API key (or use DEEPSEEK_API_KEY env var)
+            api_key: DeepSeek API key (or use vault/secrets_vault.py)
             **kwargs: Additional options
         """
         super().__init__(api_key, **kwargs)
         
-        # Get API key from parameter or environment
+        # Get API key: parameter > vault > environment
         if not self.api_key:
-            self.api_key = os.getenv("DEEPSEEK_API_KEY")
+            try:
+                self.api_key = get_api_key('deepseek')
+            except (KeyError, FileNotFoundError):
+                self.api_key = os.getenv("DEEPSEEK_API_KEY")
         
         if not self.api_key:
-            raise ValueError("DEEPSEEK_API_KEY not provided and not in environment")
+            raise ValueError("DEEPSEEK_API_KEY not found in vault or environment")
         
         # Initialize DeepSeek client (uses OpenAI-compatible API)
         self.client = OpenAI(

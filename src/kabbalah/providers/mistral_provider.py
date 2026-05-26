@@ -10,6 +10,7 @@ from typing import Dict, Optional, Iterator
 from mistralai.client import Mistral
 
 from .base import BaseProvider, ProviderResponse
+from ..secrets_vault import get_api_key
 
 
 class MistralProvider(BaseProvider):
@@ -43,17 +44,20 @@ class MistralProvider(BaseProvider):
         Initialize Mistral provider.
         
         Args:
-            api_key: Mistral API key (or use MISTRAL_API_KEY env var)
+            api_key: Mistral API key (or use vault/secrets_vault.py)
             **kwargs: Additional options
         """
         super().__init__(api_key, **kwargs)
         
-        # Get API key from parameter or environment
+        # Get API key: parameter > vault > environment
         if not self.api_key:
-            self.api_key = os.getenv("MISTRAL_API_KEY")
+            try:
+                self.api_key = get_api_key('mistral')
+            except (KeyError, FileNotFoundError):
+                self.api_key = os.getenv("MISTRAL_API_KEY")
         
         if not self.api_key:
-            raise ValueError("MISTRAL_API_KEY not provided and not in environment")
+            raise ValueError("MISTRAL_API_KEY not found in vault or environment")
         
         # Initialize Mistral client
         self.client = Mistral(api_key=self.api_key)

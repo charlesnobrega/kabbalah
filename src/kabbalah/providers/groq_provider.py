@@ -10,6 +10,7 @@ from typing import Dict, Optional, Iterator
 from groq import Groq, APIError
 
 from .base import BaseProvider, ProviderResponse
+from ..secrets_vault import get_api_key
 
 
 class GroqProvider(BaseProvider):
@@ -43,17 +44,20 @@ class GroqProvider(BaseProvider):
         Initialize Groq provider.
         
         Args:
-            api_key: Groq API key (or use GROQ_API_KEY env var)
+            api_key: Groq API key (or use vault/secrets_vault.py)
             **kwargs: Additional options
         """
         super().__init__(api_key, **kwargs)
         
-        # Get API key from parameter or environment
+        # Get API key: parameter > vault > environment
         if not self.api_key:
-            self.api_key = os.getenv("GROQ_API_KEY")
+            try:
+                self.api_key = get_api_key('groq')
+            except (KeyError, FileNotFoundError):
+                self.api_key = os.getenv("GROQ_API_KEY")
         
         if not self.api_key:
-            raise ValueError("GROQ_API_KEY not provided and not in environment")
+            raise ValueError("GROQ_API_KEY not found in vault or environment")
         
         # Initialize Groq client
         self.client = Groq(api_key=self.api_key)
