@@ -10,6 +10,7 @@ from typing import Dict, Optional, Iterator
 from openai import OpenAI, APIError
 
 from .base import BaseProvider, ProviderResponse
+from ..secrets_vault import get_api_key
 
 
 class OpenAIProvider(BaseProvider):
@@ -48,17 +49,20 @@ class OpenAIProvider(BaseProvider):
         Initialize OpenAI provider.
         
         Args:
-            api_key: OpenAI API key (or use OPENAI_API_KEY env var)
+            api_key: OpenAI API key (or use vault/secrets_vault.py)
             **kwargs: Additional options
         """
         super().__init__(api_key, **kwargs)
         
-        # Get API key from parameter or environment
+        # Get API key: parameter > vault > environment
         if not self.api_key:
-            self.api_key = os.getenv("OPENAI_API_KEY")
+            try:
+                self.api_key = get_api_key('openai')
+            except (KeyError, FileNotFoundError):
+                self.api_key = os.getenv("OPENAI_API_KEY")
         
         if not self.api_key:
-            raise ValueError("OPENAI_API_KEY not provided and not in environment")
+            raise ValueError("OPENAI_API_KEY not found in vault or environment")
         
         # Initialize OpenAI client
         self.client = OpenAI(api_key=self.api_key)
