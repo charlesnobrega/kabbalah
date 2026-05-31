@@ -4,7 +4,9 @@
 [![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-Kabbalah is a sophisticated multi-agent orchestration system that combines tree-based orchestration with runtime hardening, semantic memory sharing, and complete observability. It enables autonomous, compliant, and observable multi-agent workflows with complete governance, memory sharing, and hierarchical tracing.
+Kabbalah is an alpha-stage multi-agent orchestration project. The repository currently contains a tree-based orchestration skeleton, runtime hardening primitives, provider abstractions, memory modules, tool execution primitives, observability primitives, and a broad test suite.
+
+Important status note: the codebase is not yet a production-ready autonomous runtime. Several core paths are intentionally classified as partial or prototype, including real leaf execution, Cognee semantic retrieval, MCP execution, centralized policy orchestration, skill registry, and graph runtime.
 
 ## 🎯 Core Vision
 
@@ -48,12 +50,14 @@ Delivery Package
 - Memory governance with access control
 
 ### 4. Multi-Provider LLM Abstraction
-- Support for 12+ LLM providers:
-  - OpenAI (GPT-4, GPT-3.5)
-  - Anthropic (Claude)
+- Runtime provider factory currently supports:
+  - OpenAI
   - Google Gemini
-  - Ollama (local)
-  - DeepSeek, Mistral, Groq, Together, Replicate, Hugging Face, Azure OpenAI
+  - Groq
+  - Mistral
+  - Together
+  - DeepSeek
+- A gated `MockProvider` exists for tests only.
 - 4 configuration modes:
   - **Unified**: Same provider for all roles
   - **Explicit**: Define provider for each role
@@ -61,11 +65,13 @@ Delivery Package
   - **Hybrid**: Default + role-specific overrides
 - Automatic fallback chains
 
-### 5. Complete Observability
+### 5. Observability
 - Hierarchical trace_id tracking (run_id:branch_id:leaf_id)
 - Structured logging with full context
 - Metrics collection (latency, error rate, provider usage)
-- OpenTelemetry integration
+- In-memory trace/log/metric collection
+
+External telemetry export is not yet implemented.
 
 ### 6. Tool Execution
 - Bash command execution
@@ -145,6 +151,13 @@ kabbalah config --show
 
 ## 📚 Documentation
 
+- **[Repository Audit](docs/specs/REPOSITORY_AUDIT.md)** - Current implementation status and risks
+- **[Current Architecture](docs/architecture/CURRENT_ARCHITECTURE.md)** - Source-of-truth architecture map
+- **[Repository Structure](docs/architecture/REPOSITORY_STRUCTURE.md)** - Documentation and project layout
+- **[Governance](docs/governance/GOVERNANCE.md)** - Execution, tool, approval, security, rollback, and audit policy
+- **[Git Workflow](docs/development/GIT_WORKFLOW.md)** - Branch, PR, commit, release, and rollback rules
+- **[Roadmap](docs/roadmap/ROADMAP.md)** - Forward-looking roadmap
+- **[Project Recovery Report](docs/specs/PROJECT_RECOVERY_REPORT.md)** - Recovery priorities and time horizons
 - **[Requirements](docs/specs/requirements.md)** - 16 detailed requirements with acceptance criteria
 - **[Design](docs/specs/design.md)** - Architecture, components, and interfaces
 - **[Tasks](docs/specs/tasks.md)** - 167 implementation tasks organized by phase
@@ -278,23 +291,13 @@ kabbalah/
 └── .gitignore
 ```
 
-## 🎯 Implementation Phases
+## 🎯 Current Recovery Priorities
 
-1. **Phase 1**: Core Orchestration (Weeks 1-2)
-2. **Phase 2**: Runtime Hardening (Weeks 3-4)
-3. **Phase 3**: Memory Subsystem (Weeks 5-6)
-4. **Phase 4**: Provider Abstraction (Weeks 7-8)
-5. **Phase 5**: Tool Execution (Weeks 9-10)
-6. **Phase 6**: Observability (Weeks 11-12)
-7. **Phase 7**: Parser/Pretty Printer (Weeks 13-14)
-8. **Phase 8**: Configuration (Weeks 15-16)
-9. **Phase 9**: Day 2 Operations (Weeks 17-18)
-10. **Phase 10**: Integration Testing (Weeks 19-20)
-11. **Phase 11**: Documentation (Weeks 21-22)
-
-**Estimated Duration**: 22 weeks
-**Estimated Team Size**: 4-6 developers
-**Test Coverage Goal**: >80%
+1. Keep documentation aligned with actual code.
+2. Wire policy checks into orchestration and tool execution.
+3. Replace placeholder leaf execution with real, policy-gated provider/tool execution.
+4. Implement or explicitly downgrade semantic memory claims.
+5. Add external telemetry only after runtime behavior is stable.
 
 ## 🔐 Security
 
@@ -366,5 +369,5 @@ For support, email support@example.com or open an issue on GitHub.
 
 ---
 
-**Status**: 🚀 Development in Progress
-**Last Updated**: 2026-04-09
+**Status**: Alpha / recovery and professionalization
+**Last Updated**: 2026-05-31

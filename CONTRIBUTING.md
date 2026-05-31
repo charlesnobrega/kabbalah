@@ -32,6 +32,15 @@ pip install -e ".[dev]"
 
 ## Development Workflow
 
+Before starting feature work, read:
+
+- `docs/specs/REPOSITORY_AUDIT.md`
+- `docs/architecture/CURRENT_ARCHITECTURE.md`
+- `docs/governance/GOVERNANCE.md`
+- `docs/development/GIT_WORKFLOW.md`
+
+Do not rely on historical phase reports as proof that a capability is implemented. Source code and tests are the source of truth.
+
 ### Code Style
 
 - Follow PEP 8 style guide
@@ -149,6 +158,8 @@ git commit -m "feat: add FSM enforcement module
    - Description of what was changed and why
    - Reference to related issues
    - Screenshots/examples if applicable
+   - Accurate implementation status: implemented, partially implemented, prototype, documentation only, or follow-up required
+   - Risk and rollback notes
 
 6. **Address review feedback**:
    - Make requested changes
