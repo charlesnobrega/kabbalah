@@ -7,7 +7,7 @@ Implements the BaseProvider interface for Mistral's models.
 import os
 import time
 from typing import Dict, Optional, Iterator
-from mistralai.client import Mistral
+from mistralai.client import MistralClient as Mistral
 
 from .base import BaseProvider, ProviderResponse
 from ..secrets_vault import get_api_key

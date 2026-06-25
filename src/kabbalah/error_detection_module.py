@@ -112,11 +112,11 @@ class ErrorDetectionModule:
 
         # Extract file and line number from traceback
         file_path = "unknown"
-        line_number = 0
+        line_number = 1
         tb = traceback.extract_tb(exception.__traceback__)
         if tb:
             file_path = tb[-1].filename
-            line_number = tb[-1].lineno
+            line_number = max(1, tb[-1].lineno)
 
         # Classify severity
         severity = self.classify_severity(
@@ -211,7 +211,7 @@ class ErrorDetectionModule:
             context=context,
             stack_trace=failure_message,  # Test failure message as stack trace
             file_path=test_context.get("file_path", "unknown"),
-            line_number=test_context.get("line_number", 0),
+            line_number=max(1, test_context.get("line_number", 1)),
             occurrence_count=1,
             status="DETECTED",
         )
@@ -263,6 +263,10 @@ class ErrorDetectionModule:
         if affected_components is None:
             affected_components = [component]
 
+        # Check for informational error types before component escalation.
+        if error_type in ("DeprecationWarning", "UserWarning"):
+            return ErrorSeverity.INFO
+
         # Check for critical components
         if component in self.critical_components:
             return ErrorSeverity.CRITICAL
@@ -278,10 +282,6 @@ class ErrorDetectionModule:
         # Check for medium-impact components
         if component in self.medium_impact_components:
             return ErrorSeverity.MEDIUM
-
-        # Check for informational error types
-        if error_type in ("DeprecationWarning", "UserWarning"):
-            return ErrorSeverity.INFO
 
         # Default to MEDIUM for unknown components
         return ErrorSeverity.MEDIUM
@@ -322,11 +322,17 @@ class ErrorDetectionModule:
                 break
 
             # Check if error is identical
-            if (
+            same_error = (
                 existing_report.error_type == error_report.error_type
                 and existing_report.message == error_report.message
                 and existing_report.component == error_report.component
-            ):
+            )
+            same_test = (
+                error_report.error_type != "TestFailure"
+                or existing_report.context.get("test_name")
+                == error_report.context.get("test_name")
+            )
+            if same_error and same_test:
                 # Increment occurrence counter
                 existing_report.occurrence_count += 1
                 logger.debug(
