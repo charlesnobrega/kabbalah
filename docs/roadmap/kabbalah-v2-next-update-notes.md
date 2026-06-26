@@ -8,29 +8,30 @@ These notes capture implementation findings that should be reviewed after the
 current "implement as documented" pass. They are not blockers for the current
 implementation.
 
-## Security clarification required: `qlipot`
+## Security clarification received: `qlipot`
 
 The source document describes the module as a fallback for false refusals and
 legitimate requests that were poorly phrased by non-technical users. That goal
 is valid and was implemented as safe intent recovery:
 
-- recover legitimate low-risk intent;
+- receive a request that was refused by the LLM;
+- analyze whether the refusal is a false positive;
+- if false positive, reformulate the request technically and retry with the same LLM;
 - route uncertain requests to dialogue/HITL;
-- block critical-risk requests;
+- block real critical-risk requests (`risk > 0.95`) without retrying;
 - keep an audit log of recovery decisions.
 
-The document also uses wording around guardrail contour/bypass. That wording
-needs explicit clarification from the responsible cybersecurity team before
-any provider-routing or refusal-recovery logic is expanded beyond safe intent
-recovery.
+The original document used wording around guardrail contour/bypass. That wording
+was confirmed as unfortunate wording for AI interpretation. The intended meaning
+is not evasion; it is correction of LLM misinterpretation when the local/system
+risk layer has already classified the request as legitimate.
 
-Questions for cybersecurity:
+Follow-up questions for cybersecurity/product hardening:
 
-1. What specific false-positive scenarios motivated the guardrail-contour wording?
-2. Which requests are considered legal/legitimate but commonly blocked by upstream models?
-3. What audit evidence must be captured before retrying a refused request?
-4. Should recovery be limited to rephrasing into technical language, or may it choose a different approved provider?
-5. What are the hard-stop categories where recovery must never be attempted?
+1. Which false-positive scenarios should become regression tests?
+2. What audit evidence must be captured before retrying a refused request?
+3. Which risk signals should force dialogue/HITL instead of retry?
+4. Which categories should remain hard-stop, with no recovery attempt?
 
 ## Implementation improvements to evaluate
 
@@ -46,5 +47,4 @@ Questions for cybersecurity:
 ## Current intentional constraint
 
 `Qlipot` does not implement guardrail evasion. It implements audited safe intent
-recovery and blocks high-risk requests while the cybersecurity clarification is
-pending.
+recovery for LLM false positives and blocks high-risk requests.

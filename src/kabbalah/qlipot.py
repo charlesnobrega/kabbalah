@@ -1,10 +1,9 @@
-"""Safe intent recovery for likely false refusals.
+"""Safe intent recovery for likely LLM false refusals.
 
-This module intentionally does not implement guardrail evasion. It preserves the
-documented operational intent: recover legitimate low-risk user intent, route
-uncertain cases to dialogue/HITL, and block real high-risk requests. The original
-wording around bypass/contour should be clarified with the responsible security
-team before any lower-level provider routing behavior is expanded.
+Qlipot receives a request refused by an LLM, checks whether the refusal is a
+false positive under the local/system risk classification, reformulates
+legitimate requests technically, and blocks real critical-risk requests. It does
+not override the risk layer or attempt guardrail evasion.
 """
 
 from dataclasses import dataclass, field
@@ -29,7 +28,7 @@ class QlipotResult:
 
 
 class Qlipot:
-    """Recover legitimate intent without bypassing safety controls."""
+    """Recover legitimate LLM false positives without bypassing risk controls."""
 
     def __init__(self):
         self._audit_log: List[QlipotResult] = []
