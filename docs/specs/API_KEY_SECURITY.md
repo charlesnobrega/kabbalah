@@ -87,7 +87,7 @@ echo ".env.*.local" >> .gitignore
 1. **Store in .env file** (never commit to git)
 ```bash
 # .env
-OPENAI_API_KEY=sk-proj-...
+OPENAI_API_KEY=<openai-api-key>
 GOOGLE_API_KEY=...
 ```
 
@@ -111,13 +111,13 @@ client = OpenAI(api_key=api_key)
 1. **Never hardcode keys**
 ```python
 # ❌ WRONG
-api_key = "REDACTED_OPENAI_API_KEY"
+hardcoded_provider_secret = "<provider-secret>"
 ```
 
 2. **Never share in chat/email/Slack**
 ```
 # ❌ WRONG
-"Here's my API key: sk-proj-..."
+"Here's my API key: <openai-api-key>"
 ```
 
 3. **Never commit to git**
@@ -153,25 +153,25 @@ nano .env
 
 ```
 # OpenAI
-OPENAI_API_KEY=sk-proj-YOUR_NEW_KEY_HERE
+OPENAI_API_KEY=<openai-api-key>
 
 # Google Gemini
-GOOGLE_API_KEY=YOUR_NEW_KEY_HERE
+GOOGLE_API_KEY=<google-api-key>
 
 # Groq
-GROQ_API_KEY=gsk-YOUR_NEW_KEY_HERE
+GROQ_API_KEY=<groq-api-key>
 
 # Together
-TOGETHER_API_KEY=YOUR_NEW_KEY_HERE
+TOGETHER_API_KEY=<together-api-key>
 
 # DeepSeek
-DEEPSEEK_API_KEY=sk-YOUR_NEW_KEY_HERE
+DEEPSEEK_API_KEY=<deepseek-api-key>
 
 # Mistral
-MISTRAL_API_KEY=YOUR_NEW_KEY_HERE
+MISTRAL_API_KEY=<mistral-api-key>
 
 # Anthropic (for later)
-ANTHROPIC_API_KEY=sk-ant-YOUR_NEW_KEY_HERE
+ANTHROPIC_API_KEY=<anthropic-api-key>
 ```
 
 ### .gitignore Setup
@@ -229,7 +229,7 @@ client = OpenAI(api_key=openai_key)
 
 ```bash
 # Set in terminal
-export OPENAI_API_KEY=sk-proj-...
+export OPENAI_API_KEY=<openai-api-key>
 export GOOGLE_API_KEY=...
 
 # Or in .env and load with:
