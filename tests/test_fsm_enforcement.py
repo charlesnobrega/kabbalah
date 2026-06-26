@@ -235,6 +235,47 @@ class TestModeTransition:
         assert error is None
         assert module.current_mode == OperationalMode.DAY2
 
+    def test_valid_transition_day1_to_waiting_approval(self):
+        """Test valid transition from DAY1 to WAITING_APPROVAL."""
+        module = FSMEnforcementModule()
+        module.transition_mode(OperationalMode.BOOTSTRAP, OperationalMode.DAY1)
+        success, error = module.transition_mode(
+            OperationalMode.DAY1,
+            OperationalMode.WAITING_APPROVAL,
+            reason="High risk MCP request requires approval"
+        )
+        assert success is True
+        assert error is None
+        assert module.current_mode == OperationalMode.WAITING_APPROVAL
+
+    def test_valid_transition_waiting_approval_to_day2(self):
+        """Test approved transition from WAITING_APPROVAL to DAY2."""
+        module = FSMEnforcementModule()
+        module.transition_mode(OperationalMode.BOOTSTRAP, OperationalMode.DAY1)
+        module.transition_mode(OperationalMode.DAY1, OperationalMode.WAITING_APPROVAL)
+        success, error = module.transition_mode(
+            OperationalMode.WAITING_APPROVAL,
+            OperationalMode.DAY2,
+            reason="Human approval granted"
+        )
+        assert success is True
+        assert error is None
+        assert module.current_mode == OperationalMode.DAY2
+
+    def test_valid_transition_waiting_approval_to_day1_after_denial(self):
+        """Test denied approval returns to DAY1 for replanning/dialogue."""
+        module = FSMEnforcementModule()
+        module.transition_mode(OperationalMode.BOOTSTRAP, OperationalMode.DAY1)
+        module.transition_mode(OperationalMode.DAY1, OperationalMode.WAITING_APPROVAL)
+        success, error = module.transition_mode(
+            OperationalMode.WAITING_APPROVAL,
+            OperationalMode.DAY1,
+            reason="Human approval denied"
+        )
+        assert success is True
+        assert error is None
+        assert module.current_mode == OperationalMode.DAY1
+
     def test_invalid_transition_same_mode(self):
         """Test that transitioning to same mode fails."""
         module = FSMEnforcementModule()
@@ -531,6 +572,9 @@ class TestModeTransitionProperties:
         (OperationalMode.BOOTSTRAP, OperationalMode.DAY2),
         (OperationalMode.DAY1, OperationalMode.DAY2),
         (OperationalMode.DAY1, OperationalMode.BOOTSTRAP),
+        (OperationalMode.DAY1, OperationalMode.WAITING_APPROVAL),
+        (OperationalMode.WAITING_APPROVAL, OperationalMode.DAY1),
+        (OperationalMode.WAITING_APPROVAL, OperationalMode.DAY2),
     ])
 
     # Strategy for generating invalid mode transitions
@@ -540,6 +584,7 @@ class TestModeTransitionProperties:
         (OperationalMode.DAY2, OperationalMode.DAY2),  # Same mode
         (OperationalMode.DAY2, OperationalMode.DAY1),  # Backward transition
         (OperationalMode.DAY2, OperationalMode.BOOTSTRAP),  # Backward transition
+        (OperationalMode.BOOTSTRAP, OperationalMode.WAITING_APPROVAL),
     ])
 
     # Strategy for generating optional reasons

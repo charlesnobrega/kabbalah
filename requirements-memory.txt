@@ -1,0 +1,6 @@
+# Optional semantic memory dependencies.
+#
+# Install only when enabling Cognee-backed retrieval:
+#   python -m pip install -r requirements-memory.txt
+
+cognee==1.2.1

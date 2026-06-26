@@ -15,6 +15,7 @@ class OperationalMode(Enum):
     """Operational modes for the system."""
     BOOTSTRAP = "BOOTSTRAP"
     DAY1 = "DAY1"
+    WAITING_APPROVAL = "WAITING_APPROVAL"
     DAY2 = "DAY2"
 
 
@@ -97,6 +98,11 @@ class FSMEnforcementModule:
             OperationType.QUERY_OPERATION,
             OperationType.READ_OPERATION,
             OperationType.TOOL_EXECUTION,
+            OperationType.PROJECT_REQUEST,
+        },
+        OperationalMode.WAITING_APPROVAL: {
+            OperationType.QUERY_OPERATION,
+            OperationType.READ_OPERATION,
             OperationType.PROJECT_REQUEST,
         },
         OperationalMode.DAY2: {
@@ -281,6 +287,9 @@ class FSMEnforcementModule:
         - BOOTSTRAP -> DAY2
         - DAY1 -> DAY2
         - DAY1 -> BOOTSTRAP (for testing/reset)
+        - DAY1 -> WAITING_APPROVAL
+        - WAITING_APPROVAL -> DAY1
+        - WAITING_APPROVAL -> DAY2
         - DAY2 -> DAY1 (not allowed in production)
         - DAY2 -> BOOTSTRAP (not allowed in production)
         
@@ -301,6 +310,9 @@ class FSMEnforcementModule:
             (OperationalMode.BOOTSTRAP, OperationalMode.DAY2),
             (OperationalMode.DAY1, OperationalMode.DAY2),
             (OperationalMode.DAY1, OperationalMode.BOOTSTRAP),
+            (OperationalMode.DAY1, OperationalMode.WAITING_APPROVAL),
+            (OperationalMode.WAITING_APPROVAL, OperationalMode.DAY1),
+            (OperationalMode.WAITING_APPROVAL, OperationalMode.DAY2),
         }
 
         return (from_mode, to_mode) in valid_transitions

@@ -7,6 +7,7 @@ import logging
 from datetime import datetime
 
 from kabbalah.domain_orchestrator import DomainOrchestrator
+from kabbalah.autonomy_loop import AutonomyLoop, LoopResult
 
 logger = logging.getLogger(__name__)
 
@@ -330,3 +331,29 @@ class RootOrchestrator:
                 end_time=end_time,
                 duration=end_time - start_time
             )
+
+    def execute_with_success_contract(
+        self,
+        *,
+        plan,
+        executor,
+        contract,
+        trace_id: str,
+        max_retries: int = 3,
+    ) -> LoopResult:
+        """Execute a plan through bounded replanning and validate success."""
+
+        def contract_executor(current_plan):
+            result = executor(current_plan)
+            if result.get("success") is not True:
+                return result
+            valid, error = contract.validar(result)
+            if not valid:
+                checked = dict(result)
+                checked["success"] = False
+                checked["error"] = error
+                checked["trace_id"] = trace_id
+                return checked
+            return result
+
+        return AutonomyLoop(max_retries=max_retries).executar(plan, contract_executor)

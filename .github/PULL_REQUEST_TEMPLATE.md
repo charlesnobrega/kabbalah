@@ -1,37 +1,27 @@
-# Pull Request
+## Summary
 
-## Objetivo
+-
 
-Descreva de forma objetiva o que esta PR entrega.
+## Implementation Status
 
-## Tipo de mudança
+Select the most accurate status:
 
-- [ ] Correção
-- [ ] Nova funcionalidade
-- [ ] Refatoração
-- [ ] Documentação
-- [ ] Testes
-- [ ] Governança/segurança
+- [ ] Implemented
+- [ ] Partially implemented
+- [ ] Prototype
+- [ ] Documentation only
+- [ ] Follow-up required
 
-## Checklist
+## Tests
 
-- [ ] A mudança está ligada a uma issue ou fase do roadmap
-- [ ] Testes foram adicionados ou atualizados
-- [ ] Documentação foi atualizada
-- [ ] Rollback foi considerado
-- [ ] Logs/auditoria continuam preservados
-- [ ] Não quebra compatibilidade com o fluxo atual
+- [ ] `pytest`
+- [ ] Targeted tests:
+- [ ] Not run:
 
-## Risco
+## Risk Notes
 
-- [ ] Baixo
-- [ ] Médio
-- [ ] Alto
+-
 
-## Plano de rollback
+## Rollback
 
-Explique como voltar atrás se esta mudança causar problema.
-
-## Evidências
-
-Inclua logs, screenshots, comandos executados ou resumo dos testes.
+-

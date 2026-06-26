@@ -7,7 +7,7 @@ Implements the BaseProvider interface for Together's models.
 import os
 import time
 from typing import Dict, Optional, Iterator
-from together import Client
+import together
 
 from .base import BaseProvider, ProviderResponse
 from ..secrets_vault import get_api_key
@@ -65,7 +65,8 @@ class TogetherProvider(BaseProvider):
             raise ValueError("TOGETHER_API_KEY not found in vault or environment")
         
         # Initialize Together client
-        self.client = Client(api_key=self.api_key)
+        together.api_key = self.api_key
+        self.client = together.Together()
     
     def execute_request(
         self,

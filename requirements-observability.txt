@@ -1,0 +1,8 @@
+# Optional external telemetry exporters.
+#
+# Install only when Jaeger/Prometheus export is being enabled:
+#   python -m pip install -r requirements-observability.txt
+
+opentelemetry-exporter-jaeger==1.20.0
+opentelemetry-exporter-prometheus==0.41b0
+prometheus-client==0.18.0

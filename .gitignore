@@ -72,3 +72,10 @@ Thumbs.db
 .kiro/
 workspace/
 openclaude/
+
+# Local tool/runtime artifacts
+.ruff_cache/
+.mypy_cache/
+.coverage.*
+coverage.xml
+pytest.log
