@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 from typing import Tuple
 from kabbalah.models import UserRequest, Specification
+from kabbalah.tradutor_local import TradutorLocal
 
 
 class InvalidRequestError(Exception):
@@ -32,6 +33,10 @@ class IntakeNode:
     # Counter for generating unique run_ids within a day
     _run_counter = 0
     _last_date = None
+
+    def __init__(self, tradutor_local: TradutorLocal | None = None):
+        """Initialize intake node with optional local intent translator."""
+        self.tradutor_local = tradutor_local or TradutorLocal()
     
     def parse_request(self, request: UserRequest) -> Tuple[Specification, str]:
         """
@@ -49,12 +54,21 @@ class IntakeNode:
         """
         # Validate pre-conditions
         self._validate_request(request)
+
+        traducao = self.tradutor_local.traduzir(
+            request.project_description,
+            contexto=request.metadata or {},
+        )
+        if traducao.bloqueado:
+            raise InvalidRequestError(
+                "Request blocked by local translator risk classification"
+            )
         
         # Generate run_id
         run_id = self._generate_run_id()
         
         # Generate specification
-        specification = self._generate_specification(request, run_id)
+        specification = self._generate_specification(request, run_id, traducao)
         
         # Validate post-conditions
         self._validate_specification(specification, run_id)
@@ -113,7 +127,7 @@ class IntakeNode:
         run_id = f"run_{date_str}_{counter_str}"
         return run_id
     
-    def _generate_specification(self, request: UserRequest, run_id: str) -> Specification:
+    def _generate_specification(self, request: UserRequest, run_id: str, traducao=None) -> Specification:
         """
         Generate a premium project specification from the request.
         
@@ -156,6 +170,16 @@ class IntakeNode:
             # Infer dependencies between domains
             dependencies = self._infer_dependencies(domains)
             
+            metadata = dict(request.metadata or {})
+            translation_info = {}
+            if traducao is not None:
+                translation_info["tradutor_local"] = {
+                    "pedido_tecnico": traducao.pedido_tecnico,
+                    "risco": traducao.risco,
+                    "zona": traducao.zona.value,
+                    "motivos": list(traducao.motivos),
+                }
+
             specification = Specification(
                 run_id=run_id,
                 project_name=request.project_name,
@@ -165,9 +189,10 @@ class IntakeNode:
                 resources=resources,
                 domains=domains,
                 dependencies=dependencies,
-                metadata=request.metadata or {},
+                metadata=metadata,
                 created_at=time.time(),
-                version="1.0"
+                version="1.0",
+                translation_info=translation_info,
             )
             
             return specification

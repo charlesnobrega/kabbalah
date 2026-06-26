@@ -256,12 +256,12 @@ class MemoryGovernanceModule:
 
                 # Log appropriately
                 if allowed:
-                    logger.info(
+                    logger.debug(
                         f"Memory access allowed: {agent_role} {operation} {memory_category} "
                         f"(trace_id: {trace_id})"
                     )
                 else:
-                    logger.warning(
+                    logger.debug(
                         f"Memory access denied: {agent_role} {operation} {memory_category} "
                         f"(trace_id: {trace_id})"
                     )
@@ -273,7 +273,7 @@ class MemoryGovernanceModule:
     def _write_audit_log(self, log_entry: MemoryAccessLog) -> None:
         """Write audit log entry to file."""
         try:
-            with open(self.audit_log_file, "a") as f:
+            with open(self.audit_log_file, "a", encoding="utf-8") as f:
                 f.write(json.dumps(asdict(log_entry)) + "\n")
         except Exception as e:
             logger.error(f"Failed to write audit log: {e}")
@@ -305,7 +305,7 @@ class MemoryGovernanceModule:
                 if not self.audit_log_file.exists():
                     return logs
 
-                with open(self.audit_log_file, "r") as f:
+                with open(self.audit_log_file, "r", encoding="utf-8") as f:
                     for line in f:
                         if line.strip():
                             data = json.loads(line)

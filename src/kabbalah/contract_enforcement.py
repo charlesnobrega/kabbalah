@@ -60,6 +60,7 @@ class ContractEnforcementModule:
         """Initialize the Contract Enforcement Module."""
         self._violation_log: List[ContractViolation] = []
         self._contracts: Dict[str, OperationContract] = {}
+        self._success_contracts: Dict[str, Any] = {}
         self._violation_counter = 0
 
     @property
@@ -74,6 +75,35 @@ class ContractEnforcementModule:
             contract: Operation contract specification
         """
         self._contracts[contract.operation_name] = contract
+
+    def register_success_contract(self, operation_name: str, contract: Any) -> None:
+        """Register a success contract for final result validation."""
+        self._success_contracts[operation_name] = contract
+
+    def validate_success_contract(
+        self,
+        operation_name: str,
+        outputs: Dict[str, Any],
+        trace_id: str,
+        inputs: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[bool, Optional[str]]:
+        """Validate outputs against a registered success contract."""
+        contract = self._success_contracts.get(operation_name)
+        if contract is None:
+            return True, None
+
+        is_valid, error_message = contract.validar(outputs)
+        if not is_valid:
+            self._log_violation(
+                operation_name=operation_name,
+                violation_type="success_contract",
+                trace_id=trace_id,
+                inputs=inputs or {},
+                outputs=outputs,
+                error_message=error_message or "Success contract failed",
+            )
+            return False, error_message
+        return True, None
 
     def validate_preconditions(
         self,

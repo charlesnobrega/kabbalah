@@ -30,3 +30,4 @@ class Specification:
     metadata: Dict[str, Any]
     created_at: float
     version: str = "1.0"
+    translation_info: Dict[str, Any] = field(default_factory=dict)

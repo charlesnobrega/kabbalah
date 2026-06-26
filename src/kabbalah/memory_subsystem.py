@@ -143,28 +143,27 @@ class JSONLBackend(MemoryBackend):
         self.knowledge_file = self.storage_path / "knowledge.jsonl"
         self.lock = threading.RLock()
         self.available = True  # JSONL is always available
+        self._known_ids = {k.knowledge_id for k in self._read_all_knowledge()}
         logger.info(f"JSONL backend initialized at {self.storage_path}")
 
     def store(self, knowledge: Knowledge) -> bool:
         """Store knowledge in JSONL file."""
         try:
             with self.lock:
-                # Read existing knowledge
-                existing = self._read_all_knowledge()
-
-                # Update or add knowledge
-                existing_ids = {k.knowledge_id for k in existing}
-                if knowledge.knowledge_id in existing_ids:
+                if knowledge.knowledge_id in self._known_ids:
                     existing = [
                         k
-                        for k in existing
+                        for k in self._read_all_knowledge()
                         if k.knowledge_id != knowledge.knowledge_id
                     ]
-
-                existing.append(knowledge)
-
-                # Write back to file
-                self._write_all_knowledge(existing)
+                    existing.append(knowledge)
+                    self._write_all_knowledge(existing)
+                else:
+                    # Append-only fast path for new IDs keeps property-based
+                    # storage tests inside Hypothesis deadlines.
+                    with open(self.knowledge_file, "a", encoding="utf-8") as f:
+                        f.write(json.dumps(asdict(knowledge)) + "\n")
+                    self._known_ids.add(knowledge.knowledge_id)
                 logger.debug(f"Stored knowledge {knowledge.knowledge_id} in JSONL")
                 return True
         except Exception as e:
@@ -200,7 +199,7 @@ class JSONLBackend(MemoryBackend):
                     return True
 
                 # Try to read and validate all entries
-                with open(self.knowledge_file, "r") as f:
+                with open(self.knowledge_file, "r", encoding="utf-8") as f:
                     for line in f:
                         if line.strip():
                             json.loads(line)
@@ -220,21 +219,22 @@ class JSONLBackend(MemoryBackend):
         if not self.knowledge_file.exists():
             return []
 
-        knowledge_list = []
+        latest_by_id: Dict[str, Knowledge] = {}
         try:
-            with open(self.knowledge_file, "r") as f:
+            with open(self.knowledge_file, "r", encoding="utf-8") as f:
                 for line in f:
                     if line.strip():
                         data = json.loads(line)
-                        knowledge_list.append(Knowledge(**data))
+                        knowledge = Knowledge(**data)
+                        latest_by_id[knowledge.knowledge_id] = knowledge
         except Exception as e:
             logger.error(f"Error reading JSONL file: {e}")
 
-        return knowledge_list
+        return list(latest_by_id.values())
 
     def _write_all_knowledge(self, knowledge_list: List[Knowledge]) -> None:
         """Write all knowledge to JSONL file."""
-        with open(self.knowledge_file, "w") as f:
+        with open(self.knowledge_file, "w", encoding="utf-8") as f:
             for k in knowledge_list:
                 f.write(json.dumps(asdict(k)) + "\n")
 
@@ -363,6 +363,27 @@ class MemorySubsystem:
         except Exception as e:
             logger.error(f"Error querying knowledge: {e}", exc_info=True)
             return []
+
+    def record_antiprompt(
+        self,
+        *,
+        content: str,
+        reason: str,
+        trace_id: str,
+    ) -> Knowledge:
+        """Record an anti-prompt rule for reducing repeated false refusals.
+
+        Anti-prompts are stored as operational guidance, not as raw conversation
+        history. They should describe stable correction behavior in short form.
+        """
+        knowledge = Knowledge(
+            knowledge_id=f"antiprompt_{int(datetime.now().timestamp() * 1000)}",
+            content=content,
+            category="anti-prompt",
+            metadata={"reason": reason},
+        )
+        self.store_knowledge(knowledge, trace_id)
+        return knowledge
 
     def ensure_consistency(self) -> bool:
         """
