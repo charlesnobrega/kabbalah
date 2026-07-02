@@ -128,6 +128,43 @@ async def test_bridge_authorization_denial_returns_mcp_error(monkeypatch, tmp_pa
 
 
 @pytest.mark.asyncio
+async def test_bridge_hitl_pending_returns_ticket_contract(monkeypatch):
+    import kabbalah_mcp_bridge as bridge
+
+    def hitl_required(_: MCPRequest) -> MCPDecision:
+        return MCPDecision(
+            autorizado=False,
+            motivo="HITL approval required or denied: No approval provider configured",
+            trace_id="trace-hitl",
+            agente_id="agent",
+            ferramenta=AcaoMCP.EXECUTE_COMMAND.value,
+            risk_level=MCPRiskLevel.HIGH,
+            risk_score=0.8,
+            hitl_required=True,
+        )
+
+    monkeypatch.setattr(bridge.firewall, "autorizar", hitl_required)
+
+    response = await bridge._authorize_and_execute(
+        acao=AcaoMCP.EXECUTE_COMMAND,
+        agente_id="agent",
+        papel_agente="operator",
+        argumentos={"command": "pytest"},
+        executor=lambda: "should not execute",
+    )
+    payload = json.loads(response)
+
+    assert payload["error"] == "HITL_REQUIRED"
+    assert payload["ticket_id"].startswith("hitl_")
+    assert payload["message"] == "Ação requer aprovação humana. Use o endpoint de consulta para verificar status."
+
+    status_response = await bridge.hitl_status(bridge.HITLStatusInput(ticket_id=payload["ticket_id"]))
+    status_payload = json.loads(status_response)
+    assert status_payload["ok"] is True
+    assert status_payload["status"] == "pending"
+
+
+@pytest.mark.asyncio
 async def test_bridge_read_file_happy_path(tmp_path):
     import kabbalah_mcp_bridge as bridge
 

@@ -53,6 +53,7 @@ hitl = HITL()
 cofre = CofreBitwarden(use_cache=True)
 qlipot = Qlipot()
 firewall = FirewallMCP(hitl=hitl)
+_hitl_tickets: Dict[str, Dict[str, Any]] = {}
 
 
 class BridgeBaseInput(BaseModel):
@@ -92,6 +93,14 @@ class NetworkRequestInput(BridgeBaseInput):
     secret_field: str = Field(default="api_key", description="Bitwarden field name to inject.")
     secret_header: str = Field(default="Authorization", description="Header name receiving the secret value.")
     secret_prefix: str = Field(default="Bearer ", description="Prefix before the secret in the header.")
+
+
+class HITLStatusInput(BaseModel):
+    """Input for HITL ticket status lookup."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    ticket_id: str = Field(..., description="HITL ticket ID returned by a blocked tool call.", min_length=1)
 
 
 def _json_response(payload: Mapping[str, Any]) -> str:
@@ -134,6 +143,35 @@ def _error(
             "error": message,
             "code": code,
             "details": dict(details or {}),
+        }
+    )
+
+
+def _hitl_required(
+    *,
+    trace_id: str,
+    agente_id: str,
+    acao: AcaoMCP,
+    argumentos: Mapping[str, Any],
+    decision: Any,
+) -> str:
+    ticket_id = f"hitl_{uuid.uuid4().hex[:12]}"
+    _hitl_tickets[ticket_id] = {
+        "ticket_id": ticket_id,
+        "status": "pending",
+        "trace_id": trace_id,
+        "agente_id": agente_id,
+        "acao": acao.value,
+        "argumentos": dict(argumentos),
+        "risk_score": decision.risk_score,
+        "risk_level": decision.risk_level.value,
+        "motivo": decision.motivo,
+    }
+    return _json_response(
+        {
+            "error": "HITL_REQUIRED",
+            "ticket_id": ticket_id,
+            "message": "Ação requer aprovação humana. Use o endpoint de consulta para verificar status.",
         }
     )
 
@@ -190,6 +228,14 @@ async def _authorize_and_execute(
         )
         decision = firewall.autorizar(request)
         if not decision.autorizado:
+            if decision.hitl_required:
+                return _hitl_required(
+                    trace_id=trace_id,
+                    agente_id=agente_id,
+                    acao=acao,
+                    argumentos=argumentos,
+                    decision=decision,
+                )
             return _error(
                 "Acesso Bloqueado: Zona de Isolamento",
                 trace_id=trace_id,
@@ -304,6 +350,26 @@ async def network_request(params: NetworkRequestInput) -> str:
         argumentos=params.model_dump(exclude={"secret_item", "secret_field"}),
         executor=lambda: asyncio.to_thread(_execute),
     )
+
+
+@mcp.tool(
+    name="hitl_status",
+    annotations={"title": "Kabbalah HITL Status", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+)
+async def hitl_status(params: HITLStatusInput) -> str:
+    """Return the current status of a pending HITL ticket."""
+
+    ticket = _hitl_tickets.get(params.ticket_id)
+    if ticket is None:
+        return _json_response(
+            {
+                "ok": False,
+                "error": "HITL_TICKET_NOT_FOUND",
+                "ticket_id": params.ticket_id,
+                "message": "Ticket HITL não encontrado.",
+            }
+        )
+    return _json_response({"ok": True, **ticket})
 
 
 if __name__ == "__main__":
