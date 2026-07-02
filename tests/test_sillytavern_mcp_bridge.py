@@ -162,6 +162,8 @@ async def test_bridge_hitl_pending_returns_ticket_contract(monkeypatch):
     status_payload = json.loads(status_response)
     assert status_payload["ok"] is True
     assert status_payload["status"] == "pending"
+    assert bridge.hitl.audit_log[-1].status == StatusAprovacao.PENDING
+    assert bridge.hitl.audit_log[-1].trace_id == payload["ticket_id"]
 
 
 @pytest.mark.asyncio
@@ -178,3 +180,51 @@ async def test_bridge_read_file_happy_path(tmp_path):
 
     assert payload["ok"] is True
     assert payload["result"]["content"] == "hello"
+
+
+@pytest.mark.asyncio
+async def test_bridge_records_successful_action_in_temporal_memory(monkeypatch):
+    import kabbalah_mcp_bridge as bridge
+
+    recorded = []
+
+    def record_action(**kwargs):
+        recorded.append(kwargs)
+
+    monkeypatch.setattr(bridge.qlipot, "registrar_acao_agente", record_action)
+    monkeypatch.setattr(
+        bridge.firewall,
+        "autorizar",
+        lambda _: MCPDecision(
+            autorizado=True,
+            motivo="authorized",
+            trace_id="trace-ok",
+            agente_id="agent",
+            ferramenta=AcaoMCP.READ_FILE.value,
+            risk_level=MCPRiskLevel.LOW,
+            risk_score=0.1,
+        ),
+    )
+
+    response = await bridge._authorize_and_execute(
+        acao=AcaoMCP.READ_FILE,
+        agente_id="agent",
+        papel_agente="reader",
+        argumentos={"path": "README.md"},
+        executor=lambda: {"content": "ok"},
+    )
+    payload = json.loads(response)
+
+    assert payload["ok"] is True
+    assert recorded == [
+        {
+            "agente_id": "agent",
+            "acao": AcaoMCP.READ_FILE.value,
+            "parametros": {
+                "argumentos": {"path": "README.md"},
+                "risk_score": 0.1,
+                "risk_level": MCPRiskLevel.LOW.value,
+                "result_type": "dict",
+            },
+        }
+    ]

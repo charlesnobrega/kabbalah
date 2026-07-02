@@ -156,16 +156,28 @@ def _hitl_required(
     decision: Any,
 ) -> str:
     ticket_id = f"hitl_{uuid.uuid4().hex[:12]}"
+    hitl_decision = hitl.solicitar(
+        agente_id=agente_id,
+        acao=acao,
+        risco=decision.risk_score,
+        contexto={
+            "argumentos": dict(argumentos),
+            "motivo": decision.motivo,
+            "risk_level": decision.risk_level.value,
+        },
+        trace_id=ticket_id,
+        urgencia=NivelUrgencia.ALTA,
+    )
     _hitl_tickets[ticket_id] = {
         "ticket_id": ticket_id,
-        "status": "pending",
+        "status": hitl_decision.status.value,
         "trace_id": trace_id,
         "agente_id": agente_id,
         "acao": acao.value,
         "argumentos": dict(argumentos),
         "risk_score": decision.risk_score,
         "risk_level": decision.risk_level.value,
-        "motivo": decision.motivo,
+        "motivo": hitl_decision.motivo,
     }
     return _json_response(
         {
@@ -249,6 +261,16 @@ async def _authorize_and_execute(
             )
 
         result = await _maybe_await(executor())
+        qlipot.registrar_acao_agente(
+            agente_id=agente_id,
+            acao=acao.value,
+            parametros={
+                "argumentos": argumentos,
+                "risk_score": decision.risk_score,
+                "risk_level": decision.risk_level.value,
+                "result_type": type(result).__name__,
+            },
+        )
         return _ok(result, trace_id=trace_id, decision=decision, intent=intent)
     except CofreError as exc:
         logger.exception("Cofre failure")
