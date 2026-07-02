@@ -164,3 +164,18 @@ class HITL:
             trace_id=trace_id,
             urgencia=urgencia,
         )
+
+    def revogar_contrato(self, contrato_id: str, aprovado_por: str, motivo: str) -> ApprovalDecision:
+        """Record a human-approved contract revocation decision."""
+
+        decision = ApprovalDecision(
+            aprovado=True,
+            status=ApprovalStatus.APPROVED,
+            trace_id=f"revogar_contrato:{contrato_id}",
+            motivo=motivo,
+            agente_id=aprovado_por,
+            acao=f"revogar_contrato:{contrato_id}",
+            risco=0.8,
+        )
+        self._audit_log.append(decision)
+        return decision

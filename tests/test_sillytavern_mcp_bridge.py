@@ -79,6 +79,30 @@ def test_qlipot_avaliar_uses_agent_temporal_memory(tmp_path):
     assert result.score_final == min(1.0, result.score_atual + result.score_contexto)
 
 
+def test_qlipot_avaliar_accepts_supplied_high_score_history():
+    qlipot = Qlipot()
+
+    result = qlipot.avaliar(
+        agente_id="agent-1",
+        acao=AcaoMCP.READ_FILE.value,
+        parametros={"path": "README.md"},
+        historico=[{"score": 0.5}, {"score": 0.6}, {"score": 0.7}],
+    )
+
+    assert result.score_contexto >= 0.15
+    assert result.score_final >= result.score_atual + 0.15
+
+
+def test_qlipot_aplicar_correcao_emits_callback():
+    qlipot = Qlipot()
+    events = []
+    qlipot.registrar_callback("correcao", lambda event, data: events.append((event, data)))
+
+    qlipot.aplicar_correcao("signature", -0.1)
+
+    assert events == [("correcao", {"assinatura_acao": "signature", "delta": -0.1, "score": 0.1})]
+
+
 def test_firewall_uses_bridge_risk_metadata():
     firewall = FirewallMCP(hitl=HITL(approval_provider=lambda request: True))
     request = MCPRequest(
@@ -95,6 +119,26 @@ def test_firewall_uses_bridge_risk_metadata():
     assert decision.autorizado is True
     assert decision.hitl_required is True
     assert decision.risk_level == MCPRiskLevel.HIGH
+
+
+def test_firewall_contract_required_for_cross_agent_action():
+    events = []
+    firewall = FirewallMCP(contract_checker=lambda _: (False, "CONTRACT_REQUIRED"))
+    firewall.registrar_callback("bloqueio", lambda event, data: events.append((event, data)))
+
+    request = MCPRequest(
+        agente_id="worker",
+        ferramenta=AcaoMCP.CALL_TOOL.value,
+        argumentos={"name": "other"},
+        contrato_id="bridge",
+        trace_id="trace-contract",
+        metadata={"envolve_outro_agente": True, "risco": 0.2},
+    )
+    decision = firewall.autorizar(request)
+
+    assert decision.autorizado is False
+    assert decision.motivo == "CONTRACT_REQUIRED"
+    assert events[0][0] == "bloqueio"
 
 
 @pytest.mark.asyncio
@@ -228,3 +272,98 @@ async def test_bridge_records_successful_action_in_temporal_memory(monkeypatch):
             },
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_bridge_retry_limit_blocks_fourth_identical_attempt(monkeypatch):
+    import kabbalah_mcp_bridge as bridge
+
+    bridge._retry_attempts.clear()
+    monkeypatch.setattr(
+        bridge.firewall,
+        "autorizar",
+        lambda _: MCPDecision(
+            autorizado=True,
+            motivo="authorized",
+            trace_id="trace-ok",
+            agente_id="agent",
+            ferramenta=AcaoMCP.READ_FILE.value,
+            risk_level=MCPRiskLevel.LOW,
+            risk_score=0.1,
+        ),
+    )
+
+    responses = [
+        json.loads(
+            await bridge._authorize_and_execute(
+                acao=AcaoMCP.READ_FILE,
+                agente_id="retry-agent",
+                papel_agente="reader",
+                argumentos={"path": "same"},
+                executor=lambda: "ok",
+            )
+        )
+        for _ in range(4)
+    ]
+
+    assert responses[0]["ok"] is True
+    assert responses[3]["error"] == "RETRY_LIMIT_EXCEEDED"
+
+
+@pytest.mark.asyncio
+async def test_bridge_contract_tools_enable_cross_agent_call():
+    import kabbalah_mcp_bridge as bridge
+
+    bridge._retry_attempts.clear()
+    contract_response = await bridge.propose_contract(
+        bridge.ProposeContractInput(
+            agente_id="coord",
+            papel_agente="coordinator",
+            papeis=["coordinator"],
+            agente_provedor="worker",
+            acao=AcaoMCP.CALL_TOOL.value,
+            limites={"max_calls": 1},
+            task_id="task-contract",
+        )
+    )
+    contract_payload = json.loads(contract_response)
+    contrato_id = contract_payload["result"]["id"]
+
+    sign_response = await bridge.sign_contract(
+        bridge.ContractIdInput(agente_id="worker", papel_agente="provider", contrato_id=contrato_id)
+    )
+    assert json.loads(sign_response)["result"]["signed"] is True
+
+    call_response = await bridge.call_tool(
+        bridge.CallToolInput(agente_id="worker", papel_agente="provider", name="remote_tool", args={})
+    )
+    assert json.loads(call_response)["ok"] is True
+
+    second_call = await bridge.call_tool(
+        bridge.CallToolInput(agente_id="worker", papel_agente="provider", name="remote_tool_2", args={})
+    )
+    assert json.loads(second_call)["error"] == "Acesso Bloqueado: Zona de Isolamento"
+
+
+@pytest.mark.asyncio
+async def test_bridge_network_stats_tool_returns_sync_stats():
+    import kabbalah_mcp_bridge as bridge
+
+    response = await bridge.get_network_stats(bridge.BridgeBaseInput(agente_id="agent", papel_agente="viewer"))
+    payload = json.loads(response)
+
+    assert payload["ok"] is True
+    assert "hardware_hash" in payload["result"]
+
+
+@pytest.mark.asyncio
+async def test_bridge_read_env_var_blocks_sensitive_value():
+    import kabbalah_mcp_bridge as bridge
+
+    response = await bridge.read_env_var(
+        bridge.ReadEnvVarInput(agente_id="agent", papel_agente="viewer", name="BW_PASSWORD")
+    )
+    payload = json.loads(response)
+
+    assert payload["ok"] is True
+    assert payload["result"]["blocked"] is True

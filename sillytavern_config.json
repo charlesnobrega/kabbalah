@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "kabbalah-firewall": {
+      "command": "python",
+      "args": [
+        "E:\\projetos\\kabbalah\\kabbalah_mcp_bridge.py"
+      ],
+      "env": {
+        "BW_SESSION": "",
+        "BW_EMAIL": "",
+        "BW_PASSWORD": ""
+      }
+    }
+  }
+}

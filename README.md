@@ -17,6 +17,8 @@ This repository is not yet a production autonomous runtime. Current gaps include
 - `LocalLLMProvider` exists for Ollama-style local calls, but it is not wired into the main provider factory yet.
 - Root/domain orchestration is sequential in the current implementation, despite config/docs describing intended parallelism.
 - Leaf execution currently returns placeholder success artifacts; it does not yet run a real provider/tool loop.
+- SillyTavern MCP bridge exists at `kabbalah_mcp_bridge.py` and exposes guarded tools through qlipot, FirewallMCP, HITL tickets, Bitwarden cache, agent contracts, retry limits, and SyncHub stats.
+- Agent contracts and SyncHub are implemented as local in-memory primitives. Network propagation is phase-1/local only; P2P/central federation is not production-wired yet.
 
 ## Repository layout
 
@@ -77,6 +79,31 @@ External telemetry exporters are also optional:
 ```bash
 python -m pip install -r requirements-observability.txt
 ```
+
+Optional MCP bridge dependencies are isolated because the official MCP SDK may
+require newer transitive dependency versions than the legacy provider stack:
+
+```bash
+python -m pip install -r requirements-mcp.txt
+```
+
+## SillyTavern MCP bridge
+
+The example config for SillyTavern is available in:
+
+- `sillytavern_config.json`
+- `sillytavern_mcp_config.json`
+
+Current bridge tools include:
+
+- `read_file`, `write_file`, `execute_command`, `network_request`
+- `read_env_var`, `call_tool`, `database_query`
+- `check_hitl_status`
+- `propose_contract`, `sign_contract`, `reject_contract`, `complete_task`
+- `get_network_stats`
+
+All bridge logging is configured for `stderr`; `stdout` remains reserved for
+MCP/JSON-RPC stdio traffic.
 
 ## Configuration
 

@@ -16,12 +16,15 @@ All logs go to stderr to avoid corrupting stdio JSON-RPC.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import inspect
 import json
 import logging
 import os
+import sqlite3
 import subprocess
 import sys
+import time
 import uuid
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Mapping, Optional
@@ -35,10 +38,12 @@ import requests
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
 
+from kabbalah.contratos import Contratos
 from kabbalah.cofre import CofreBitwarden, CofreError
 from kabbalah.firewall_mcp import AcaoMCP, FirewallMCP, MCPRequest
 from kabbalah.hitl import HITL, NivelUrgencia
 from kabbalah.qlipot import Qlipot
+from kabbalah.sync_hub import SyncHub
 
 logging.basicConfig(
     level=os.environ.get("KABBALAH_LOG_LEVEL", "WARNING").upper(),
@@ -52,8 +57,27 @@ mcp = FastMCP("kabbalah_mcp")
 hitl = HITL()
 cofre = CofreBitwarden(use_cache=True)
 qlipot = Qlipot()
-firewall = FirewallMCP(hitl=hitl)
+contratos = Contratos(qlipot=qlipot, hitl=hitl)
+
+
+def _contract_checker(request: MCPRequest) -> tuple[bool, Optional[str]]:
+    return True, None
+
+
+def _contract_verifier(agente_id: str, acao: str) -> bool:
+    allowed = contratos.verificar(agente_id, acao)
+    if not allowed:
+        contratos.registrar_violacao(agente_id, acao, "Ação entre agentes sem contrato ativo")
+    return allowed
+
+
+firewall = FirewallMCP(hitl=hitl, contract_checker=_contract_checker, contract_verifier=_contract_verifier)
+contratos.firewall = firewall
+sync = SyncHub(qlipot=qlipot, contratos=contratos, firewall=firewall)
 _hitl_tickets: Dict[str, Dict[str, Any]] = {}
+_retry_attempts: Dict[tuple[str, str, str], tuple[int, float]] = {}
+MAX_RETRIES = 3
+RETRY_WINDOW_SECONDS = 60
 
 
 class BridgeBaseInput(BaseModel):
@@ -71,6 +95,14 @@ class ReadFileInput(BridgeBaseInput):
 
     path: str = Field(..., description="Absolute or workspace-relative file path to read.", min_length=1)
     encoding: str = Field(default="utf-8", description="Text encoding used to read the file.")
+
+
+class WriteFileInput(BridgeBaseInput):
+    """Input for write_file."""
+
+    path: str = Field(..., description="Absolute or workspace-relative file path to write.", min_length=1)
+    content: str = Field(..., description="Text content to write.")
+    encoding: str = Field(default="utf-8", description="Text encoding used to write the file.")
 
 
 class ExecuteCommandInput(BridgeBaseInput):
@@ -95,12 +127,57 @@ class NetworkRequestInput(BridgeBaseInput):
     secret_prefix: str = Field(default="Bearer ", description="Prefix before the secret in the header.")
 
 
+class ReadEnvVarInput(BridgeBaseInput):
+    """Input for read_env_var."""
+
+    name: str = Field(..., description="Environment variable name.", min_length=1)
+
+
+class CallToolInput(BridgeBaseInput):
+    """Input for cross-agent tool call authorization."""
+
+    name: str = Field(..., description="Remote or delegated tool name.", min_length=1)
+    args: Dict[str, Any] = Field(default_factory=dict, description="Arguments for the delegated tool.")
+    target_agent: Optional[str] = Field(default=None, description="Provider/remote agent involved in the call.")
+
+
+class DatabaseQueryInput(BridgeBaseInput):
+    """Input for a local SQLite database query."""
+
+    db_path: str = Field(..., description="SQLite database path.", min_length=1)
+    query: str = Field(..., description="SQL query to execute.", min_length=1)
+    parameters: list[Any] = Field(default_factory=list, description="Positional query parameters.")
+
+
 class HITLStatusInput(BaseModel):
     """Input for HITL ticket status lookup."""
 
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
 
     ticket_id: str = Field(..., description="HITL ticket ID returned by a blocked tool call.", min_length=1)
+
+
+class ProposeContractInput(BridgeBaseInput):
+    """Input for propose_contract."""
+
+    agente_provedor: str = Field(..., min_length=1)
+    acao: str = Field(..., min_length=1)
+    limites: Dict[str, Any] = Field(default_factory=dict)
+    task_id: Optional[str] = None
+    papeis: list[str] = Field(default_factory=lambda: ["viewer"])
+
+
+class ContractIdInput(BridgeBaseInput):
+    """Input for sign/reject contract operations."""
+
+    contrato_id: str = Field(..., min_length=1)
+    motivo: str = ""
+
+
+class CompleteTaskInput(BridgeBaseInput):
+    """Input for complete_task."""
+
+    task_id: str = Field(..., min_length=1)
 
 
 def _json_response(payload: Mapping[str, Any]) -> str:
@@ -145,6 +222,31 @@ def _error(
             "details": dict(details or {}),
         }
     )
+
+
+def _hash_parametros(argumentos: Mapping[str, Any]) -> str:
+    serialized = json.dumps(argumentos, ensure_ascii=False, sort_keys=True, default=str)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _check_retry_limit(agente_id: str, ferramenta: str, argumentos: Mapping[str, Any]) -> Optional[str]:
+    now = time.monotonic()
+    key = (agente_id, ferramenta, _hash_parametros(argumentos))
+    count, last_seen = _retry_attempts.get(key, (0, 0.0))
+    if now - last_seen > RETRY_WINDOW_SECONDS:
+        count = 0
+    count += 1
+    _retry_attempts[key] = (count, now)
+    if count > MAX_RETRIES:
+        return _json_response(
+            {
+                "ok": False,
+                "error": "RETRY_LIMIT_EXCEEDED",
+                "message": "Limite de tentativas excedido para esta ação. Aguarde 60s antes de repetir.",
+                "details": {"max_retries": MAX_RETRIES, "window_seconds": RETRY_WINDOW_SECONDS},
+            }
+        )
+    return None
 
 
 def _hitl_required(
@@ -202,11 +304,16 @@ async def _authorize_and_execute(
     argumentos: Dict[str, Any],
     executor: Callable[[], Any | Awaitable[Any]],
     intencao: Optional[str] = None,
+    envolve_outro_agente: bool = False,
 ) -> str:
     """Run the mandatory qlipot -> firewall -> HITL/cofre -> execution pipeline."""
 
     trace_id = f"sillytavern:{uuid.uuid4()}"
     try:
+        retry_error = _check_retry_limit(agente_id, acao.value, argumentos)
+        if retry_error is not None:
+            return retry_error
+
         intent = qlipot.avaliar_intencao(
             pedido=intencao or f"{acao.value} requested by {papel_agente}",
             ferramenta=acao.value,
@@ -236,6 +343,7 @@ async def _authorize_and_execute(
                 "risco": intent.risco,
                 "score_confianca": intent.score_confianca,
                 "intent_status": intent.status.value,
+                "envolve_outro_agente": envolve_outro_agente,
             },
         )
         decision = firewall.autorizar(request)
@@ -303,6 +411,29 @@ async def read_file(params: ReadFileInput) -> str:
 
 
 @mcp.tool(
+    name=AcaoMCP.WRITE_FILE.value,
+    annotations={"title": "Kabbalah Write File", "readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
+)
+async def write_file(params: WriteFileInput) -> str:
+    """Write a text file only after Kabbalah authorization."""
+
+    def _execute() -> Dict[str, Any]:
+        path = Path(params.path).expanduser()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(params.content, encoding=params.encoding)
+        return {"path": str(path), "bytes": len(params.content.encode(params.encoding))}
+
+    return await _authorize_and_execute(
+        acao=AcaoMCP.WRITE_FILE,
+        agente_id=params.agente_id,
+        papel_agente=params.papel_agente,
+        intencao=params.intencao,
+        argumentos=params.model_dump(),
+        executor=_execute,
+    )
+
+
+@mcp.tool(
     name=AcaoMCP.EXECUTE_COMMAND.value,
     annotations={"title": "Kabbalah Execute Command", "readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
 )
@@ -333,6 +464,77 @@ async def execute_command(params: ExecuteCommandInput) -> str:
         intencao=params.intencao,
         argumentos=params.model_dump(),
         executor=_execute,
+    )
+
+
+@mcp.tool(
+    name=AcaoMCP.READ_ENV_VAR.value,
+    annotations={"title": "Kabbalah Read Env Var", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+)
+async def read_env_var(params: ReadEnvVarInput) -> str:
+    """Read a non-sensitive environment variable after authorization."""
+
+    def _execute() -> Dict[str, Any]:
+        sensitive_terms = ("SECRET", "TOKEN", "PASSWORD", "KEY", "SESSION")
+        if any(term in params.name.upper() for term in sensitive_terms):
+            return {"name": params.name, "blocked": True, "reason": "SENSITIVE_ENV_BLOCKED"}
+        return {"name": params.name, "value": os.environ.get(params.name)}
+
+    return await _authorize_and_execute(
+        acao=AcaoMCP.READ_ENV_VAR,
+        agente_id=params.agente_id,
+        papel_agente=params.papel_agente,
+        intencao=params.intencao,
+        argumentos=params.model_dump(),
+        executor=_execute,
+    )
+
+
+@mcp.tool(
+    name=AcaoMCP.CALL_TOOL.value,
+    annotations={"title": "Kabbalah Call Tool", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+)
+async def call_tool(params: CallToolInput) -> str:
+    """Authorize a cross-agent/delegated tool call without bypassing contracts."""
+
+    def _execute() -> Dict[str, Any]:
+        return {"name": params.name, "target_agent": params.target_agent, "args": params.args, "authorized": True}
+
+    return await _authorize_and_execute(
+        acao=AcaoMCP.CALL_TOOL,
+        agente_id=params.agente_id,
+        papel_agente=params.papel_agente,
+        intencao=params.intencao,
+        argumentos=params.model_dump(),
+        executor=_execute,
+        envolve_outro_agente=True,
+    )
+
+
+@mcp.tool(
+    name=AcaoMCP.DATABASE_QUERY.value,
+    annotations={"title": "Kabbalah Database Query", "readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
+)
+async def database_query(params: DatabaseQueryInput) -> str:
+    """Execute a local SQLite query after Kabbalah authorization."""
+
+    def _execute() -> Dict[str, Any]:
+        with sqlite3.connect(params.db_path) as conn:
+            cursor = conn.execute(params.query, params.parameters)
+            if cursor.description:
+                columns = [column[0] for column in cursor.description]
+                rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+                return {"rows": rows, "rowcount": len(rows)}
+            conn.commit()
+            return {"rows": [], "rowcount": cursor.rowcount}
+
+    return await _authorize_and_execute(
+        acao=AcaoMCP.DATABASE_QUERY,
+        agente_id=params.agente_id,
+        papel_agente=params.papel_agente,
+        intencao=params.intencao,
+        argumentos=params.model_dump(),
+        executor=lambda: asyncio.to_thread(_execute),
     )
 
 
@@ -375,10 +577,10 @@ async def network_request(params: NetworkRequestInput) -> str:
 
 
 @mcp.tool(
-    name="hitl_status",
+    name=AcaoMCP.CHECK_HITL_STATUS.value,
     annotations={"title": "Kabbalah HITL Status", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
 )
-async def hitl_status(params: HITLStatusInput) -> str:
+async def check_hitl_status(params: HITLStatusInput) -> str:
     """Return the current status of a pending HITL ticket."""
 
     ticket = _hitl_tickets.get(params.ticket_id)
@@ -392,6 +594,109 @@ async def hitl_status(params: HITLStatusInput) -> str:
             }
         )
     return _json_response({"ok": True, **ticket})
+
+
+hitl_status = check_hitl_status
+
+
+@mcp.tool(
+    name=AcaoMCP.PROPOSE_CONTRACT.value,
+    annotations={"title": "Kabbalah Propose Contract", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
+)
+async def propose_contract(params: ProposeContractInput) -> str:
+    """Propose an agent contract. Only coordinator roles are allowed."""
+
+    def _execute() -> Dict[str, Any]:
+        contrato = contratos.propor(
+            requisitante=params.agente_id,
+            provedor=params.agente_provedor,
+            acao=params.acao,
+            limites=params.limites,
+            papeis=params.papeis,
+            task_id=params.task_id,
+        )
+        return contrato.__dict__
+
+    return await _authorize_and_execute(
+        acao=AcaoMCP.PROPOSE_CONTRACT,
+        agente_id=params.agente_id,
+        papel_agente=params.papel_agente,
+        intencao=params.intencao,
+        argumentos=params.model_dump(),
+        executor=_execute,
+    )
+
+
+@mcp.tool(
+    name=AcaoMCP.SIGN_CONTRACT.value,
+    annotations={"title": "Kabbalah Sign Contract", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
+)
+async def sign_contract(params: ContractIdInput) -> str:
+    """Sign a proposed agent contract as the provider."""
+
+    return await _authorize_and_execute(
+        acao=AcaoMCP.SIGN_CONTRACT,
+        agente_id=params.agente_id,
+        papel_agente=params.papel_agente,
+        intencao=params.intencao,
+        argumentos=params.model_dump(),
+        executor=lambda: {"signed": contratos.assinar(params.contrato_id, params.agente_id), "contrato_id": params.contrato_id},
+    )
+
+
+@mcp.tool(
+    name=AcaoMCP.REJECT_CONTRACT.value,
+    annotations={"title": "Kabbalah Reject Contract", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
+)
+async def reject_contract(params: ContractIdInput) -> str:
+    """Reject a proposed agent contract as the provider."""
+
+    return await _authorize_and_execute(
+        acao=AcaoMCP.REJECT_CONTRACT,
+        agente_id=params.agente_id,
+        papel_agente=params.papel_agente,
+        intencao=params.intencao,
+        argumentos=params.model_dump(),
+        executor=lambda: {"rejected": contratos.rejeitar(params.contrato_id, params.agente_id, params.motivo), "contrato_id": params.contrato_id},
+    )
+
+
+@mcp.tool(
+    name=AcaoMCP.COMPLETE_TASK.value,
+    annotations={"title": "Kabbalah Complete Task", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
+)
+async def complete_task(params: CompleteTaskInput) -> str:
+    """Mark a task complete and close all associated contracts."""
+
+    def _execute() -> Dict[str, Any]:
+        completed = contratos.complete_task(params.task_id, params.agente_id)
+        return {"task_id": params.task_id, "completed_contracts": [contrato.__dict__ for contrato in completed]}
+
+    return await _authorize_and_execute(
+        acao=AcaoMCP.COMPLETE_TASK,
+        agente_id=params.agente_id,
+        papel_agente=params.papel_agente,
+        intencao=params.intencao,
+        argumentos=params.model_dump(),
+        executor=_execute,
+    )
+
+
+@mcp.tool(
+    name=AcaoMCP.GET_NETWORK_STATS.value,
+    annotations={"title": "Kabbalah Network Stats", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+)
+async def get_network_stats(params: BridgeBaseInput) -> str:
+    """Return Sync Hub local network statistics."""
+
+    return await _authorize_and_execute(
+        acao=AcaoMCP.GET_NETWORK_STATS,
+        agente_id=params.agente_id,
+        papel_agente=params.papel_agente,
+        intencao=params.intencao,
+        argumentos=params.model_dump(),
+        executor=lambda: sync.get_network_stats(),
+    )
 
 
 if __name__ == "__main__":

@@ -25,8 +25,18 @@ class AcaoMCP(Enum):
     """Canonical MCP actions exposed by the Kabbalah/SillyTavern bridge."""
 
     READ_FILE = "read_file"
+    WRITE_FILE = "write_file"
     EXECUTE_COMMAND = "execute_command"
     NETWORK_REQUEST = "network_request"
+    READ_ENV_VAR = "read_env_var"
+    CALL_TOOL = "call_tool"
+    DATABASE_QUERY = "database_query"
+    CHECK_HITL_STATUS = "check_hitl_status"
+    PROPOSE_CONTRACT = "propose_contract"
+    SIGN_CONTRACT = "sign_contract"
+    REJECT_CONTRACT = "reject_contract"
+    COMPLETE_TASK = "complete_task"
+    GET_NETWORK_STATS = "get_network_stats"
 
 
 @dataclass(frozen=True)
@@ -69,6 +79,7 @@ class MCPDecision:
 CheckResult = Tuple[bool, Optional[str]]
 RequestChecker = Callable[[MCPRequest], CheckResult]
 RiskAssessor = Callable[[MCPRequest], Tuple[MCPRiskLevel, float, str]]
+ContractVerifier = Callable[[str, str], bool]
 
 
 def _allow_all(_: MCPRequest) -> CheckResult:
@@ -109,14 +120,17 @@ class FirewallMCP:
         self,
         rbac_checker: Optional[RequestChecker] = None,
         contract_checker: Optional[RequestChecker] = None,
+        contract_verifier: Optional[ContractVerifier] = None,
         risk_assessor: Optional[RiskAssessor] = None,
         hitl: Optional[HITL] = None,
     ):
         self._rbac_checker = rbac_checker or _allow_all
         self._contract_checker = contract_checker or _allow_all
+        self._contract_verifier = contract_verifier
         self._risk_assessor = risk_assessor or _default_risk_assessor
         self._hitl = hitl or HITL()
         self._audit_log: List[MCPDecision] = []
+        self._callbacks: Dict[str, List[Callable[[str, Dict[str, Any]], Any]]] = {}
 
     @property
     def audit_log(self) -> List[MCPDecision]:
@@ -139,14 +153,27 @@ class FirewallMCP:
             )
 
         contract_ok, contract_reason = self._contract_checker(request)
+        if contract_ok and request.metadata.get("envolve_outro_agente"):
+            contract_ok = self.verificar_contrato(request.agente_id, request.ferramenta)
+            contract_reason = None if contract_ok else "CONTRACT_REQUIRED"
         if not contract_ok:
-            return self._record(
+            decision = self._record(
                 request,
                 autorizado=False,
                 motivo=contract_reason or "Contract denied request",
                 risk_level=risk_level,
                 risk_score=risk_score,
             )
+            self._emit(
+                "bloqueio",
+                {
+                    "agente_id": request.agente_id,
+                    "acao": request.ferramenta,
+                    "motivo": decision.motivo,
+                    "score": risk_score,
+                },
+            )
+            return decision
 
         hitl_required = risk_level in {MCPRiskLevel.HIGH, MCPRiskLevel.CRITICAL}
         if hitl_required:
@@ -205,3 +232,26 @@ class FirewallMCP:
         )
         self._audit_log.append(decision)
         return decision
+
+    def verificar_contrato(self, agente_id: str, acao: str) -> bool:
+        """Check the configured contract checker for an agent/action pair."""
+
+        if self._contract_verifier is not None:
+            return bool(self._contract_verifier(agente_id, acao))
+        request = MCPRequest(
+            agente_id=agente_id,
+            ferramenta=acao,
+            argumentos={},
+            contrato_id="contract-check",
+            trace_id="contract-check",
+            metadata={},
+        )
+        ok, _ = self._contract_checker(request)
+        return ok
+
+    def registrar_callback(self, evento: str, fn: Callable[[str, Dict[str, Any]], Any]) -> None:
+        self._callbacks.setdefault(evento, []).append(fn)
+
+    def _emit(self, evento: str, dados: Dict[str, Any]) -> None:
+        for callback in self._callbacks.get(evento, []):
+            callback(evento, dict(dados))
