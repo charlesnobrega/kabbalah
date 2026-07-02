@@ -6,7 +6,9 @@
         "E:\\projetos\\kabbalah\\kabbalah_mcp_bridge.py"
       ],
       "env": {
-        "BW_SESSION": "seu_token_bitwarden"
+        "BW_SESSION": "",
+        "BW_EMAIL": "",
+        "BW_PASSWORD": ""
       }
     }
   }
