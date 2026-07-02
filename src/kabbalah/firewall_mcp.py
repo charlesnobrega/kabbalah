@@ -30,6 +30,16 @@ class AcaoMCP(Enum):
 
 
 @dataclass(frozen=True)
+class RegraMCP:
+    """Compatibility rule model for bridge-level MCP policy definitions."""
+
+    acao: AcaoMCP
+    allowed_roles: set[str] = field(default_factory=set)
+    precisa_hitl: bool = False
+    max_risk: float = 1.0
+
+
+@dataclass(frozen=True)
 class MCPRequest:
     """Authorization request for an MCP/tool call."""
 

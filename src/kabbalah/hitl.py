@@ -21,6 +21,9 @@ class ApprovalStatus(Enum):
     ERROR = "error"
 
 
+StatusAprovacao = ApprovalStatus
+
+
 class NivelUrgencia(Enum):
     """Urgency level for HITL requests."""
 
@@ -40,6 +43,9 @@ class ApprovalRequest:
     contexto: Dict[str, Any]
     trace_id: str
     created_at: float = field(default_factory=lambda: datetime.utcnow().timestamp())
+
+
+SolicitacaoHITL = ApprovalRequest
 
 
 @dataclass(frozen=True)

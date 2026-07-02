@@ -91,7 +91,7 @@ class MemoryGovernanceModule:
         # Initialize default access control policies
         self.policies = self._initialize_default_policies()
 
-        logger.info(f"MemoryGovernanceModule initialized with audit log at {self.audit_log_path}")
+        logger.debug(f"MemoryGovernanceModule initialized with audit log at {self.audit_log_path}")
 
     def _initialize_default_policies(self) -> Dict[str, AccessControlPolicy]:
         """Initialize default access control policies."""
@@ -254,17 +254,9 @@ class MemoryGovernanceModule:
                 # Write to audit log
                 self._write_audit_log(log_entry)
 
-                # Log appropriately
-                if allowed:
-                    logger.debug(
-                        f"Memory access allowed: {agent_role} {operation} {memory_category} "
-                        f"(trace_id: {trace_id})"
-                    )
-                else:
-                    logger.debug(
-                        f"Memory access denied: {agent_role} {operation} {memory_category} "
-                        f"(trace_id: {trace_id})"
-                    )
+                # Per-access audit evidence is persisted to JSONL above. Avoid
+                # emitting one log record per access here; property tests and
+                # batch agent runs can produce hundreds of accesses per second.
 
         except Exception as e:
             logger.error(f"Error logging memory access: {e}", exc_info=True)

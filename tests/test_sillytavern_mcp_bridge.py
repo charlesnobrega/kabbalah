@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from kabbalah.firewall_mcp import AcaoMCP, FirewallMCP, MCPDecision, MCPRequest, MCPRiskLevel
-from kabbalah.hitl import HITL, NivelUrgencia
+from kabbalah.firewall_mcp import AcaoMCP, FirewallMCP, MCPDecision, MCPRequest, MCPRiskLevel, RegraMCP
+from kabbalah.hitl import HITL, NivelUrgencia, SolicitacaoHITL, StatusAprovacao
 from kabbalah.qlipot import Qlipot
 
 
@@ -31,6 +31,19 @@ def test_hitl_solicitar_sync_wrapper_denies_without_provider():
     assert "approval provider" in decision.motivo.lower()
 
 
+def test_compatibility_aliases_exist_for_documented_bridge_names():
+    assert StatusAprovacao.PENDING.value == "pending"
+    assert RegraMCP(acao=AcaoMCP.READ_FILE, allowed_roles={"reader"}).acao == AcaoMCP.READ_FILE
+    request = SolicitacaoHITL(
+        agente_id="agent",
+        acao=AcaoMCP.READ_FILE.value,
+        risco=0.2,
+        contexto={},
+        trace_id="trace",
+    )
+    assert request.agente_id == "agent"
+
+
 def test_qlipot_avaliar_intencao_exposes_confidence_and_risk():
     result = Qlipot().avaliar_intencao(
         pedido="ler o arquivo README para análise",
@@ -41,6 +54,29 @@ def test_qlipot_avaliar_intencao_exposes_confidence_and_risk():
     assert 0 <= result.score_confianca <= 1
     assert result.risco < 0.45
     assert result.bloqueado is False
+
+
+def test_qlipot_avaliar_uses_agent_temporal_memory(tmp_path):
+    from kabbalah.memory_subsystem import MemorySubsystem
+
+    memory = MemorySubsystem(jsonl_storage_path=str(tmp_path))
+    qlipot = Qlipot(memory=memory)
+
+    for idx in range(5):
+        qlipot.registrar_acao_agente(
+            agente_id="agent-1",
+            acao="execute_command",
+            parametros={"command": f"echo {idx}"},
+        )
+
+    result = qlipot.avaliar(
+        agente_id="agent-1",
+        acao="execute_command",
+        parametros={"command": "echo final"},
+    )
+
+    assert result.score_contexto > 0
+    assert result.score_final == min(1.0, result.score_atual + result.score_contexto)
 
 
 def test_firewall_uses_bridge_risk_metadata():

@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from kabbalah.cofre import CofreBitwarden, CofreError, CofreSecretNotFound
+from kabbalah.cofre import CACHE_TTL, CofreBitwarden, CofreError, CofreSecretNotFound, Segredo
 
 
 class FakeRunner:
@@ -67,3 +67,23 @@ def test_cofre_testar_conexao_returns_false_on_cli_failure(monkeypatch):
     cofre = CofreBitwarden(runner=FakeRunner("", returncode=1, stderr="not logged in"))
 
     assert cofre.testar_conexao() is False
+
+
+def test_cofre_cache_enabled_reuses_secret_until_ttl(monkeypatch):
+    payload = json.dumps({"fields": [{"name": "api_key", "value": "cached-secret"}]})
+    runner = FakeRunner(payload)
+    monkeypatch.setenv("BW_SESSION", "session-token")
+    cofre = CofreBitwarden(runner=runner, use_cache=True)
+
+    assert cofre.get_chave("service") == "cached-secret"
+    assert cofre.get_chave("service") == "cached-secret"
+
+    assert len(runner.calls) == 1
+    assert CACHE_TTL == 300
+
+
+def test_segredo_model_does_not_expose_value_in_repr():
+    segredo = Segredo(item_name="service", field_name="api_key", value="real-secret")
+
+    assert segredo.value == "real-secret"
+    assert "real-secret" not in repr(segredo)

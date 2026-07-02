@@ -37,7 +37,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from kabbalah.cofre import CofreBitwarden, CofreError
 from kabbalah.firewall_mcp import AcaoMCP, FirewallMCP, MCPRequest
-from kabbalah.hitl import HITL
+from kabbalah.hitl import HITL, NivelUrgencia
 from kabbalah.qlipot import Qlipot
 
 logging.basicConfig(
@@ -50,7 +50,7 @@ logger = logging.getLogger("kabbalah_mcp_bridge")
 mcp = FastMCP("kabbalah_mcp")
 
 hitl = HITL()
-cofre = CofreBitwarden()
+cofre = CofreBitwarden(use_cache=True)
 qlipot = Qlipot()
 firewall = FirewallMCP(hitl=hitl)
 
@@ -161,6 +161,7 @@ async def _authorize_and_execute(
             pedido=intencao or f"{acao.value} requested by {papel_agente}",
             ferramenta=acao.value,
             argumentos=argumentos,
+            agente_id=agente_id,
         )
         if intent.bloqueado:
             return _error(
