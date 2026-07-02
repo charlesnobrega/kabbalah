@@ -21,6 +21,15 @@ class ApprovalStatus(Enum):
     ERROR = "error"
 
 
+class NivelUrgencia(Enum):
+    """Urgency level for HITL requests."""
+
+    BAIXA = "baixa"
+    MEDIA = "media"
+    ALTA = "alta"
+    CRITICA = "critica"
+
+
 @dataclass(frozen=True)
 class ApprovalRequest:
     """Request requiring human/operator approval."""
@@ -103,3 +112,49 @@ class HITL:
 
         self._audit_log.append(decision)
         return decision
+
+    def solicitar(
+        self,
+        *,
+        agente_id: str,
+        acao: Any,
+        risco: float,
+        contexto: Dict[str, Any],
+        trace_id: str,
+        urgencia: NivelUrgencia = NivelUrgencia.MEDIA,
+    ) -> ApprovalDecision:
+        """Synchronous bridge-friendly approval wrapper."""
+
+        action_value = getattr(acao, "value", str(acao))
+        request_context = dict(contexto)
+        request_context["urgencia"] = urgencia.value
+        return self.solicitar_aprovacao(
+            ApprovalRequest(
+                agente_id=agente_id,
+                acao=action_value,
+                risco=risco,
+                contexto=request_context,
+                trace_id=trace_id,
+            )
+        )
+
+    async def solicitar_async(
+        self,
+        *,
+        agente_id: str,
+        acao: Any,
+        risco: float,
+        contexto: Dict[str, Any],
+        trace_id: str,
+        urgencia: NivelUrgencia = NivelUrgencia.MEDIA,
+    ) -> ApprovalDecision:
+        """Async wrapper for MCP servers that need awaitable HITL calls."""
+
+        return self.solicitar(
+            agente_id=agente_id,
+            acao=acao,
+            risco=risco,
+            contexto=contexto,
+            trace_id=trace_id,
+            urgencia=urgencia,
+        )

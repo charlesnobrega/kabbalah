@@ -1,0 +1,9 @@
+# Optional dependencies for the SillyTavern stdio MCP bridge.
+#
+# Install in a dedicated bridge environment when provider SDK compatibility
+# matters, because recent MCP SDK releases require anyio/httpx versions newer
+# than the current legacy provider pins in requirements.txt:
+#
+#   python -m pip install -r requirements.txt -r requirements-mcp.txt
+#
+mcp>=1.9.0,<2.0.0

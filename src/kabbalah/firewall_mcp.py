@@ -21,6 +21,14 @@ class MCPRiskLevel(Enum):
     CRITICAL = "critical"
 
 
+class AcaoMCP(Enum):
+    """Canonical MCP actions exposed by the Kabbalah/SillyTavern bridge."""
+
+    READ_FILE = "read_file"
+    EXECUTE_COMMAND = "execute_command"
+    NETWORK_REQUEST = "network_request"
+
+
 @dataclass(frozen=True)
 class MCPRequest:
     """Authorization request for an MCP/tool call."""
@@ -59,6 +67,16 @@ def _allow_all(_: MCPRequest) -> CheckResult:
 
 def _default_risk_assessor(request: MCPRequest) -> Tuple[MCPRiskLevel, float, str]:
     """Conservative keyword-based risk estimator for the initial implementation."""
+    metadata_risk = request.metadata.get("risco")
+    if metadata_risk is not None:
+        risk_score = float(metadata_risk)
+        if risk_score > 0.95:
+            return MCPRiskLevel.CRITICAL, risk_score, "Intent evaluator marked request as critical risk"
+        if risk_score > 0.60:
+            return MCPRiskLevel.HIGH, risk_score, "Intent evaluator marked request as high risk"
+        if risk_score > 0.45:
+            return MCPRiskLevel.MEDIUM, risk_score, "Intent evaluator marked request for audit"
+        return MCPRiskLevel.LOW, risk_score, "Intent evaluator marked request as low risk"
 
     tool = request.ferramenta.lower()
     serialized_args = " ".join(str(value).lower() for value in request.argumentos.values())
