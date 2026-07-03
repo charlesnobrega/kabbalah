@@ -105,6 +105,20 @@ Current bridge tools include:
 All bridge logging is configured for `stderr`; `stdout` remains reserved for
 MCP/JSON-RPC stdio traffic.
 
+Wave-1 hardening defaults:
+
+- Contracts are required by default before non-bootstrap MCP tools run. Flow:
+  `propose_contract` with `papeis=["coordinator"]` → `sign_contract` → target
+  tool. Temporary escape hatch: `KABBALAH_BRIDGE_REQUIRE_CONTRACTS=0`.
+- `execute_command` is disabled by default in the bridge. Enable only when
+  operationally required with `KABBALAH_BRIDGE_ENABLE_SHELL=1`.
+- File/database paths are restricted by `KABBALAH_BRIDGE_ALLOWED_DIRS`
+  (defaults to this repository root).
+- `read_env_var` only returns variables listed in
+  `KABBALAH_BRIDGE_ENV_ALLOWLIST`.
+- Private, loopback, link-local, reserved and unspecified network destinations
+  are blocked unless `KABBALAH_BRIDGE_ALLOW_PRIVATE_NETWORKS=1`.
+
 ## Configuration
 
 Use `.env.example` as a template only. Do not commit real credentials.

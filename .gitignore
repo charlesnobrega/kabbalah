@@ -79,3 +79,4 @@ openclaude/
 .coverage.*
 coverage.xml
 pytest.log
+.kabbalah_bridge_state.sqlite3

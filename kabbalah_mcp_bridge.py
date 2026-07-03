@@ -17,17 +17,21 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import ipaddress
 import inspect
 import json
 import logging
 import os
+import socket
 import sqlite3
 import subprocess
 import sys
+import threading
 import time
 import uuid
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Mapping, Optional
+from urllib.parse import urlparse
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 SRC_ROOT = PROJECT_ROOT / "src"
@@ -53,15 +57,73 @@ logging.basicConfig(
 logger = logging.getLogger("kabbalah_mcp_bridge")
 
 mcp = FastMCP("kabbalah_mcp")
+CONTRACT_EXEMPT_ACTIONS = {
+    "propose_contract",
+    "sign_contract",
+    "reject_contract",
+    "complete_task",
+    "check_hitl_status",
+    "get_network_stats",
+}
+
+
+class BridgePolicyError(Exception):
+    """Bridge policy denied a request before execution."""
+
+
+class TicketStore:
+    """SQLite-backed HITL ticket store."""
+
+    def __init__(self, db_path: Path):
+        self.db_path = db_path
+        self._lock = threading.Lock()
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS hitl_tickets (
+                    ticket_id TEXT PRIMARY KEY,
+                    payload TEXT NOT NULL,
+                    created_at REAL NOT NULL
+                )
+                """
+            )
+
+    def put(self, ticket_id: str, payload: Mapping[str, Any]) -> None:
+        serialized = json.dumps(dict(payload), ensure_ascii=False, sort_keys=True, default=str)
+        with self._lock, sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO hitl_tickets(ticket_id, payload, created_at) VALUES (?, ?, ?)",
+                (ticket_id, serialized, time.time()),
+            )
+
+    def get(self, ticket_id: str) -> Optional[Dict[str, Any]]:
+        with self._lock, sqlite3.connect(self.db_path) as conn:
+            row = conn.execute("SELECT payload FROM hitl_tickets WHERE ticket_id = ?", (ticket_id,)).fetchone()
+        if row is None:
+            return None
+        return json.loads(row[0])
 
 hitl = HITL()
 cofre = CofreBitwarden(use_cache=True)
 qlipot = Qlipot()
 contratos = Contratos(qlipot=qlipot, hitl=hitl)
+tickets = TicketStore(Path(os.environ.get("KABBALAH_BRIDGE_STATE_DB", str(PROJECT_ROOT / ".kabbalah_bridge_state.sqlite3"))))
 
 
 def _contract_checker(request: MCPRequest) -> tuple[bool, Optional[str]]:
-    return True, None
+    if os.environ.get("KABBALAH_BRIDGE_REQUIRE_CONTRACTS", "1") == "0":
+        return True, None
+    if request.ferramenta in CONTRACT_EXEMPT_ACTIONS:
+        return True, None
+    try:
+        if contratos.verificar(request.agente_id, request.ferramenta):
+            request.metadata["contract_checked"] = True
+            return True, None
+    except Exception:
+        logger.exception("Contract verification failed")
+        return False, "Falha interna na verificação de contrato (negado por padrão)"
+    return False, "Nenhum contrato ativo autoriza esta ação para este agente. Use propose_contract/sign_contract primeiro."
 
 
 def _contract_verifier(agente_id: str, acao: str) -> bool:
@@ -74,7 +136,6 @@ def _contract_verifier(agente_id: str, acao: str) -> bool:
 firewall = FirewallMCP(hitl=hitl, contract_checker=_contract_checker, contract_verifier=_contract_verifier)
 contratos.firewall = firewall
 sync = SyncHub(qlipot=qlipot, contratos=contratos, firewall=firewall)
-_hitl_tickets: Dict[str, Dict[str, Any]] = {}
 _retry_attempts: Dict[tuple[str, str, str], tuple[int, float]] = {}
 MAX_RETRIES = 3
 RETRY_WINDOW_SECONDS = 60
@@ -229,6 +290,51 @@ def _hash_parametros(argumentos: Mapping[str, Any]) -> str:
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
+def _allowed_dirs() -> list[Path]:
+    raw = os.environ.get("KABBALAH_BRIDGE_ALLOWED_DIRS") or str(PROJECT_ROOT)
+    parts = []
+    for chunk in raw.split(os.pathsep):
+        parts.extend(item for item in chunk.split(",") if item)
+    return [Path(item).expanduser().resolve() for item in parts]
+
+
+def _resolve_allowed_path(raw_path: str, *, must_exist: bool) -> Path:
+    path = Path(raw_path).expanduser()
+    if must_exist and not path.exists():
+        raise BridgePolicyError(f"Caminho não existe: {raw_path}")
+    resolved = path.resolve(strict=must_exist)
+    for allowed in _allowed_dirs():
+        if resolved == allowed or allowed in resolved.parents:
+            return resolved
+    raise BridgePolicyError(f"Caminho fora dos diretórios permitidos: {raw_path}")
+
+
+def _env_allowlist() -> set[str]:
+    raw = os.environ.get(
+        "KABBALAH_BRIDGE_ENV_ALLOWLIST",
+        "KABBALAH_PROVIDER,KABBALAH_PROVIDER_MODE,KABBALAH_MODEL,KABBALAH_LOG_LEVEL,PATH,HOME,LANG,TZ",
+    )
+    return {item.strip() for item in raw.split(",") if item.strip()}
+
+
+def _assert_url_allowed(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        raise BridgePolicyError(f"Esquema de URL não permitido: {parsed.scheme}")
+    if not parsed.hostname:
+        raise BridgePolicyError("URL sem hostname válido")
+    if os.environ.get("KABBALAH_BRIDGE_ALLOW_PRIVATE_NETWORKS") == "1":
+        return
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise BridgePolicyError(f"Falha ao resolver hostname: {parsed.hostname}") from exc
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+            raise BridgePolicyError(f"Destino de rede bloqueado por política anti-SSRF: {ip}")
+
+
 def _check_retry_limit(agente_id: str, ferramenta: str, argumentos: Mapping[str, Any]) -> Optional[str]:
     now = time.monotonic()
     key = (agente_id, ferramenta, _hash_parametros(argumentos))
@@ -270,7 +376,7 @@ def _hitl_required(
         trace_id=ticket_id,
         urgencia=NivelUrgencia.ALTA,
     )
-    _hitl_tickets[ticket_id] = {
+    ticket_payload = {
         "ticket_id": ticket_id,
         "status": hitl_decision.status.value,
         "trace_id": trace_id,
@@ -281,6 +387,7 @@ def _hitl_required(
         "risk_level": decision.risk_level.value,
         "motivo": hitl_decision.motivo,
     }
+    tickets.put(ticket_id, ticket_payload)
     return _json_response(
         {
             "error": "HITL_REQUIRED",
@@ -383,6 +490,9 @@ async def _authorize_and_execute(
     except CofreError as exc:
         logger.exception("Cofre failure")
         return _error("Cofre bloqueado ou indisponível", trace_id=trace_id, code="COFRE_ERROR", details={"error": str(exc)})
+    except BridgePolicyError as exc:
+        logger.warning("Bridge policy denied request: %s", exc)
+        return _error(str(exc), trace_id=trace_id, code="POLICY_DENIED")
     except Exception as exc:
         logger.exception("Bridge execution failure")
         return _error("Erro interno no Kabbalah MCP Bridge", trace_id=trace_id, code="BRIDGE_ERROR", details={"error": str(exc)})
@@ -396,7 +506,10 @@ async def read_file(params: ReadFileInput) -> str:
     """Read a text file only after qlipot, FirewallMCP, RBAC, and HITL checks."""
 
     def _execute() -> Dict[str, Any]:
-        path = Path(params.path).expanduser()
+        path = _resolve_allowed_path(params.path, must_exist=True)
+        max_bytes = int(os.environ.get("KABBALAH_BRIDGE_MAX_READ_BYTES", "2097152"))
+        if path.stat().st_size > max_bytes:
+            raise BridgePolicyError(f"Arquivo excede limite de leitura de {max_bytes} bytes")
         content = path.read_text(encoding=params.encoding)
         return {"path": str(path), "content": content, "bytes": len(content.encode(params.encoding))}
 
@@ -406,7 +519,7 @@ async def read_file(params: ReadFileInput) -> str:
         papel_agente=params.papel_agente,
         intencao=params.intencao,
         argumentos=params.model_dump(),
-        executor=_execute,
+        executor=lambda: asyncio.to_thread(_execute),
     )
 
 
@@ -418,7 +531,7 @@ async def write_file(params: WriteFileInput) -> str:
     """Write a text file only after Kabbalah authorization."""
 
     def _execute() -> Dict[str, Any]:
-        path = Path(params.path).expanduser()
+        path = _resolve_allowed_path(params.path, must_exist=False)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(params.content, encoding=params.encoding)
         return {"path": str(path), "bytes": len(params.content.encode(params.encoding))}
@@ -429,7 +542,7 @@ async def write_file(params: WriteFileInput) -> str:
         papel_agente=params.papel_agente,
         intencao=params.intencao,
         argumentos=params.model_dump(),
-        executor=_execute,
+        executor=lambda: asyncio.to_thread(_execute),
     )
 
 
@@ -441,10 +554,13 @@ async def execute_command(params: ExecuteCommandInput) -> str:
     """Execute a local command only after qlipot, FirewallMCP, RBAC, and HITL checks."""
 
     def _execute() -> Dict[str, Any]:
+        if os.environ.get("KABBALAH_BRIDGE_ENABLE_SHELL") != "1":
+            raise BridgePolicyError("execute_command requer KABBALAH_BRIDGE_ENABLE_SHELL=1")
+        cwd = str(_resolve_allowed_path(params.cwd, must_exist=True)) if params.cwd else None
         completed = subprocess.run(
             params.command,
             shell=True,
-            cwd=params.cwd,
+            cwd=cwd,
             timeout=params.timeout_seconds,
             capture_output=True,
             text=True,
@@ -463,7 +579,7 @@ async def execute_command(params: ExecuteCommandInput) -> str:
         papel_agente=params.papel_agente,
         intencao=params.intencao,
         argumentos=params.model_dump(),
-        executor=_execute,
+        executor=lambda: asyncio.to_thread(_execute),
     )
 
 
@@ -475,9 +591,13 @@ async def read_env_var(params: ReadEnvVarInput) -> str:
     """Read a non-sensitive environment variable after authorization."""
 
     def _execute() -> Dict[str, Any]:
-        sensitive_terms = ("SECRET", "TOKEN", "PASSWORD", "KEY", "SESSION")
-        if any(term in params.name.upper() for term in sensitive_terms):
-            return {"name": params.name, "blocked": True, "reason": "SENSITIVE_ENV_BLOCKED"}
+        if params.name not in _env_allowlist():
+            return {
+                "name": params.name,
+                "blocked": True,
+                "reason": "ENV_NOT_ALLOWLISTED",
+                "hint": "Adicione a variável em KABBALAH_BRIDGE_ENV_ALLOWLIST se ela puder ser exposta.",
+            }
         return {"name": params.name, "value": os.environ.get(params.name)}
 
     return await _authorize_and_execute(
@@ -486,7 +606,7 @@ async def read_env_var(params: ReadEnvVarInput) -> str:
         papel_agente=params.papel_agente,
         intencao=params.intencao,
         argumentos=params.model_dump(),
-        executor=_execute,
+        executor=lambda: asyncio.to_thread(_execute),
     )
 
 
@@ -519,7 +639,8 @@ async def database_query(params: DatabaseQueryInput) -> str:
     """Execute a local SQLite query after Kabbalah authorization."""
 
     def _execute() -> Dict[str, Any]:
-        with sqlite3.connect(params.db_path) as conn:
+        db_path = _resolve_allowed_path(params.db_path, must_exist=True)
+        with sqlite3.connect(db_path) as conn:
             cursor = conn.execute(params.query, params.parameters)
             if cursor.description:
                 columns = [column[0] for column in cursor.description]
@@ -546,6 +667,7 @@ async def network_request(params: NetworkRequestInput) -> str:
     """Perform an HTTP request after Kabbalah authorization and optional vault lookup."""
 
     def _execute() -> Dict[str, Any]:
+        _assert_url_allowed(params.url)
         headers = dict(params.headers)
         if params.secret_item:
             secret = cofre.get_chave(params.secret_item, field_name=params.secret_field)
@@ -557,6 +679,7 @@ async def network_request(params: NetworkRequestInput) -> str:
             headers=headers,
             data=params.body,
             timeout=params.timeout_seconds,
+            allow_redirects=False,
         )
         return {
             "url": params.url,
@@ -583,7 +706,7 @@ async def network_request(params: NetworkRequestInput) -> str:
 async def check_hitl_status(params: HITLStatusInput) -> str:
     """Return the current status of a pending HITL ticket."""
 
-    ticket = _hitl_tickets.get(params.ticket_id)
+    ticket = await asyncio.to_thread(tickets.get, params.ticket_id)
     if ticket is None:
         return _json_response(
             {

@@ -153,7 +153,7 @@ class FirewallMCP:
             )
 
         contract_ok, contract_reason = self._contract_checker(request)
-        if contract_ok and request.metadata.get("envolve_outro_agente"):
+        if contract_ok and request.metadata.get("envolve_outro_agente") and not request.metadata.get("contract_checked"):
             contract_ok = self.verificar_contrato(request.agente_id, request.ferramenta)
             contract_reason = None if contract_ok else "CONTRACT_REQUIRED"
         if not contract_ok:

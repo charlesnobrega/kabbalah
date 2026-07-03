@@ -20,13 +20,17 @@ import time
 import json
 import logging
 import hashlib
+import ipaddress
+import socket
 from typing import Dict, Optional, Iterator, List, Any, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 import threading
 import queue
 import psutil
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 
 
 # Configure logging
@@ -215,6 +219,8 @@ class ToolExecutionEngine:
         allowed_domains: Optional[List[str]] = None,
         enable_cache: bool = True,
         max_cache_size: int = 100,
+        enable_bash: Optional[bool] = None,
+        allow_private_networks: Optional[bool] = None,
     ):
         """
         Initialize the tool execution engine.
@@ -232,6 +238,16 @@ class ToolExecutionEngine:
         self.execution_history: List[Dict] = []
         self.enable_cache = enable_cache
         self.max_cache_size = max_cache_size
+        self.enable_bash = (
+            os.environ.get("KABBALAH_TOOLS_ENABLE_BASH", "1") == "1"
+            if enable_bash is None
+            else bool(enable_bash)
+        )
+        self.allow_private_networks = (
+            os.environ.get("KABBALAH_TOOLS_ALLOW_PRIVATE_NETWORKS", "0") == "1"
+            if allow_private_networks is None
+            else bool(allow_private_networks)
+        )
         self._cache: Dict[str, Tuple[ToolResponse, float]] = {}
         self._metrics: Dict[str, List[float]] = {}
         self._lock = threading.Lock()
@@ -465,6 +481,8 @@ class ToolExecutionEngine:
     
     def _execute_bash(self, request: ToolRequest) -> ToolResponse:
         """Execute a bash command with resource monitoring and error handling"""
+        if not self.enable_bash:
+            raise ToolAccessDeniedError("Bash execution is disabled by policy")
         # Check resource limits before execution
         resource_error = self._check_resource_limits()
         if resource_error:
@@ -519,6 +537,14 @@ class ToolExecutionEngine:
         start_time: float
     ) -> Iterator[ToolResponse]:
         """Stream bash command output"""
+        if not self.enable_bash:
+            yield ToolResponse(
+                success=False,
+                output="",
+                error="Bash execution is disabled by policy",
+                duration_ms=(time.time() - start_time) * 1000,
+            )
+            return
         try:
             process = subprocess.Popen(
                 request.command,
@@ -654,14 +680,13 @@ class ToolExecutionEngine:
             
             # Use findstr on Windows, grep on Unix-like systems
             if platform.system() == "Windows":
-                # findstr syntax: findstr /S /C:"pattern" path
-                cmd = f'findstr /S /C:"{pattern}" "{path}\\*"'
+                cmd = ["findstr", "/S", f"/C:{pattern}", os.path.join(path, "*")]
             else:
-                cmd = f"grep -r '{pattern}' {path}"
+                cmd = ["grep", "-r", "--", pattern, path]
             
             result = subprocess.run(
                 cmd,
-                shell=True,
+                shell=False,
                 capture_output=True,
                 text=True,
                 timeout=request.timeout,
@@ -711,13 +736,13 @@ class ToolExecutionEngine:
         try:
             # Use findstr on Windows, grep on Unix-like systems
             if platform.system() == "Windows":
-                cmd = f'findstr /S /C:"{pattern}" "{path}\\*"'
+                cmd = ["findstr", "/S", f"/C:{pattern}", os.path.join(path, "*")]
             else:
-                cmd = f"grep -r '{pattern}' {path}"
+                cmd = ["grep", "-r", "--", pattern, path]
             
             process = subprocess.Popen(
                 cmd,
-                shell=True,
+                shell=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -851,28 +876,45 @@ class ToolExecutionEngine:
     
     def _is_path_allowed(self, path: str) -> bool:
         """Check if a path is allowed"""
-        abs_path = os.path.abspath(path)
-        
-        for allowed_path in self.allowed_paths:
-            allowed_abs = os.path.abspath(allowed_path)
-            if abs_path.startswith(allowed_abs):
-                return True
-        
+        try:
+            resolved = Path(path).expanduser().resolve()
+            for allowed_path in self.allowed_paths:
+                allowed = Path(allowed_path).expanduser().resolve()
+                if resolved == allowed or allowed in resolved.parents:
+                    return True
+        except OSError:
+            return False
         return False
     
     def _is_domain_allowed(self, url: str) -> bool:
         """Check if a domain is allowed"""
-        if "*" in self.allowed_domains:
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+            return False
+
+        hostname = parsed.hostname.lower().rstrip(".")
+        wildcard_allowed = "*" in self.allowed_domains
+        domain_allowed = wildcard_allowed
+        if not wildcard_allowed:
+            for allowed_domain in self.allowed_domains:
+                allowed = allowed_domain.lower().rstrip(".")
+                if hostname == allowed or hostname.endswith("." + allowed):
+                    domain_allowed = True
+                    break
+        if not domain_allowed:
+            return False
+
+        if self.allow_private_networks:
             return True
-        
-        from urllib.parse import urlparse
-        domain = urlparse(url).netloc
-        
-        for allowed_domain in self.allowed_domains:
-            if domain.endswith(allowed_domain):
-                return True
-        
-        return False
+        try:
+            infos = socket.getaddrinfo(hostname, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
+        except socket.gaierror:
+            return False
+        for info in infos:
+            ip = ipaddress.ip_address(info[4][0])
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+                return False
+        return True
     
     def _check_resource_limits(self) -> Optional[str]:
         """Check if resource limits are exceeded

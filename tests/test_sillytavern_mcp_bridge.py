@@ -211,9 +211,11 @@ async def test_bridge_hitl_pending_returns_ticket_contract(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_bridge_read_file_happy_path(tmp_path):
+async def test_bridge_read_file_happy_path(monkeypatch, tmp_path):
     import kabbalah_mcp_bridge as bridge
 
+    monkeypatch.setenv("KABBALAH_BRIDGE_REQUIRE_CONTRACTS", "0")
+    monkeypatch.setenv("KABBALAH_BRIDGE_ALLOWED_DIRS", str(tmp_path))
     file_path = tmp_path / "sample.txt"
     file_path.write_text("hello", encoding="utf-8")
 
@@ -357,9 +359,10 @@ async def test_bridge_network_stats_tool_returns_sync_stats():
 
 
 @pytest.mark.asyncio
-async def test_bridge_read_env_var_blocks_sensitive_value():
+async def test_bridge_read_env_var_blocks_sensitive_value(monkeypatch):
     import kabbalah_mcp_bridge as bridge
 
+    monkeypatch.setenv("KABBALAH_BRIDGE_REQUIRE_CONTRACTS", "0")
     response = await bridge.read_env_var(
         bridge.ReadEnvVarInput(agente_id="agent", papel_agente="viewer", name="BW_PASSWORD")
     )
