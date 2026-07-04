@@ -274,7 +274,13 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
 
 ---
 
-### ONDA 8 — Features visíveis (M8+M9+config) — esforço: 7-10 dias — depende das Ondas 5 e 7
+### ONDA 8 — Features visíveis + AJUSTES FINOS (M8+M9+config+polimento) — esforço: 2-3 semanas — depende das Ondas 5 e 7
+
+> Decisão do Charles (2026-07-04): esta é a **onda do acabamento**. As ondas
+> anteriores são o grosso; o propósito final é um sistema **limpo e belo** —
+> instalável em 5 minutos, com toda mensagem de erro dizendo o que fazer, e
+> cara de produto no GitHub. Cada onda continua entregando limpo (regra §2),
+> mas o passe de vitrine concentrado é aqui.
 
 - [ ] **8.0 Configuração e onboarding (menu de configurações)** — chaves são
   **por instalação e solicitadas ao usuário**, nunca embutidas no projeto:
@@ -303,6 +309,44 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
 - [ ] **8.1 (M8) Model Comparison** — nova tool `compare_models` no bridge: mesma task despachada a N providers (via gateway, respeitando budget), retorna tabela JSON: provider, latência, tokens, custo, resposta. Passa pelo pipeline de segurança normal (contrato + firewall + qlipot) como qualquer tool. Sem API keys live configuradas → erro honesto por provider, não mock.
   *Aceite*: teste com MockProvider gated simulando 2 "providers"; entrada documentada no README.
 - [ ] **8.2 (M9) Group Chat SillyTavern** — mapear orquestração para sala ST: cada domain = um bot; decisões do Firewall/HITL aparecem como mensagens. Item mais aberto — **produza primeiro um design doc curto** (`docs/specs/st-group-chat-design.md`) com o mapeamento proposto e critérios, e só então implemente. Se o esforço explodir (>5 dias), pare no design doc e reporte.
+- [ ] **8.3 CLI e experiência de uso** — a interface tem que ser bonita e
+  consistente:
+  1. `kabbalah status` — painel único: perfil de hardware ativo, providers e
+     saúde das chaves (sem valores), gasto do dia (ledger), contratos ativos,
+     tickets HITL pendentes.
+  2. Toda mensagem de erro no formato **o que aconteceu → por quê → o que
+     fazer** (com o comando sugerido). Vale para CLI, bridge e exceções públicas.
+  3. Saída com cores/tabelas legíveis (lib `rich`) + flag `--json` em todo
+     comando para consumo por máquina; exit codes documentados e consistentes.
+  4. Logging estruturado: silencioso por padrão, `-v/-vv` progressivo, nunca
+     poluir stdout do bridge (stdio MCP é sagrado).
+- [ ] **8.4 Empacotamento moderno** — migrar `setup.py` → `pyproject.toml`
+  (PEP 621), single-source da versão (`kabbalah.__version__`), criar
+  `CHANGELOG.md` retroativo por ondas (semver: 0.x enquanto alpha), extras
+  opcionais formalizados (`pip install kabbalah[mcp,memory,observability]`)
+  substituindo os requirements-*.txt na documentação (mantê-los como espelho).
+  *Aceite*: `pip install -e .` e extras funcionam; versão única em um lugar.
+- [ ] **8.5 CI no GitHub** — hoje `.github/` só tem templates. Criar workflows:
+  1. `ci.yml`: suíte completa em push/PR (Windows + Ubuntu, Python 3.9 e 3.11),
+     ruff check, e job de gitleaks.
+  2. Badges REAIS no README (build, versão, licença) — badge verde de verdade,
+     não decorativo.
+  *Aceite*: pipeline verde no primeiro push; PR sem testes falha o check.
+- [ ] **8.6 Qualidade de código fina** — ampliar `ruff.toml` além de F401/F841
+  (adicionar `E`, `W`, `I` para ordenação de imports, `B` bugbear), corrigir o
+  que apontar; type hints completos nos módulos públicos (gateway, contratos,
+  firewall, cofre, profiler); docstring em toda classe/função pública seguindo
+  o padrão do repo. Sem reescrever lógica — só acabamento.
+- [ ] **8.7 Documentação-vitrine** — o README é a cara do produto:
+  1. Reescrever o README como pitch honesto: o que é (kernel de governance),
+     demo em 5 minutos (quickstart testado do zero numa máquina limpa),
+     diagrama de arquitetura renderizado (mermaid), GIF/asciinema do
+     `kabbalah setup` + um run governado de exemplo.
+  2. `docs/ARCHITECTURE.md` ganha os diagramas atualizados pós-Onda 5
+     (gateway, registro, profiler).
+  3. Guia "instalando em 5 minutos" validado por execução real em clone limpo.
+  *Aceite*: um dev que nunca viu o projeto instala e roda o demo só com o
+  README, sem perguntar nada.
 
 ---
 
