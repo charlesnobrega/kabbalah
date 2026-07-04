@@ -129,6 +129,18 @@ Wave-2 hardening (persistent contracts):
 - Absence of a contract is audited as `ausencia_contrato` and is no longer
   conflated with a real violation of an active contract.
 
+Wave-3 hardening (scoring and vault):
+
+- Risk scoring normalizes unicode (NFKC, zero-width stripping, homoglyph
+  folding), matches real destructive command patterns beyond keywords, and
+  decodes plausible base64 payloads before evaluation.
+- `qlipot.aplicar_correcao` is restricted to authorized origins, clamps the
+  delta to ±0.30, and keeps an append-only correction audit trail stamped
+  with `RISK_ASSESSOR_VERSION`.
+- Vault: `BITWARDEN_CLI_PATH` pins the `bw` binary path, `KABBALAH_BW_SHA256`
+  optionally pins its hash, and `clear_on_read=True` makes cached secrets
+  single-use.
+
 ## Configuration
 
 Use `.env.example` as a template only. Do not commit real credentials.

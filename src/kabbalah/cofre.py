@@ -1,12 +1,26 @@
 """Bitwarden-backed secret access wrapper.
 
-This module never stores secrets and never reads repository `.env` files. It
-expects an authenticated Bitwarden CLI session through the `BW_SESSION`
-environment variable and returns only the requested field value to callers.
+This module never stores secrets on disk and never reads repository `.env`
+files. It expects an authenticated Bitwarden CLI session through the
+`BW_SESSION` environment variable and returns only the requested field value
+to callers.
+
+Security tradeoffs (wave-3 hardening):
+
+* The optional cache keeps secret values in process RAM for up to
+  ``cache_ttl`` seconds. This is a deliberate performance tradeoff: it avoids
+  repeated CLI round-trips but widens the window in which a memory dump or
+  debugger could read the value. Use ``clear_on_read=True`` for critical
+  secrets (each cached value is served once), or disable the cache entirely.
+* ``BITWARDEN_CLI_PATH`` pins the `bw` binary to an absolute path, removing
+  the PATH lookup an attacker could poison.
+* ``KABBALAH_BW_SHA256`` optionally pins the SHA-256 of the `bw` binary; a
+  mismatch aborts before any invocation.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -62,13 +76,40 @@ class CofreBitwarden:
         env: Optional[Mapping[str, str]] = None,
         use_cache: bool = False,
         cache_ttl: int = CACHE_TTL,
+        clear_on_read: bool = False,
     ):
         self._runner = runner or subprocess.run
         self._timeout = timeout
         self._env = dict(env) if env is not None else None
         self._use_cache = use_cache
         self._cache_ttl = cache_ttl
+        self._clear_on_read = clear_on_read
         self._cache: Dict[Tuple[str, str], Segredo] = {}
+        self._bw_binary = os.environ.get("BITWARDEN_CLI_PATH", "bw")
+        self._binary_verified = False
+
+    def limpar_cache(self) -> None:
+        """Drop every cached secret value immediately."""
+
+        self._cache.clear()
+
+    def _verificar_binario(self) -> None:
+        """Pin the `bw` binary hash when KABBALAH_BW_SHA256 is configured."""
+
+        expected = os.environ.get("KABBALAH_BW_SHA256")
+        if not expected or self._binary_verified:
+            return
+        try:
+            with open(self._bw_binary, "rb") as handle:
+                digest = hashlib.sha256(handle.read()).hexdigest()
+        except OSError as exc:
+            raise CofreError(
+                "KABBALAH_BW_SHA256 is set but the bw binary could not be read; "
+                "set BITWARDEN_CLI_PATH to the absolute binary path"
+            ) from exc
+        if digest.lower() != expected.lower():
+            raise CofreError("Bitwarden CLI binary hash mismatch; refusing to execute")
+        self._binary_verified = True
 
     def testar_conexao(self) -> bool:
         """Return whether the Bitwarden CLI session is usable."""
@@ -98,6 +139,8 @@ class CofreBitwarden:
         cache_key = (item_name, field_name)
         cached = self._cache.get(cache_key) if self._use_cache else None
         if cached and time.time() - cached.created_at <= self._cache_ttl:
+            if self._clear_on_read:
+                self._cache.pop(cache_key, None)
             return cached.value
 
         result = self._run(["bw", "get", "item", item_name])
@@ -131,8 +174,10 @@ class CofreBitwarden:
         return env
 
     def _run(self, args: Sequence[str]):
+        self._verificar_binario()
+        resolved = [self._bw_binary, *list(args)[1:]] if args and args[0] == "bw" else list(args)
         return self._runner(
-            list(args),
+            resolved,
             timeout=self._timeout,
             env=self._effective_env(),
         )

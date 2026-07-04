@@ -87,3 +87,67 @@ def test_segredo_model_does_not_expose_value_in_repr():
 
     assert segredo.value == "real-secret"
     assert "real-secret" not in repr(segredo)
+
+
+def test_bitwarden_cli_path_pins_the_binary(monkeypatch):
+    payload = json.dumps({"fields": [{"name": "api_key", "value": "s"}]})
+    runner = FakeRunner(payload)
+    monkeypatch.setenv("BW_SESSION", "session-token")
+    monkeypatch.setenv("BITWARDEN_CLI_PATH", "C:/pinned/bw.exe")
+    cofre = CofreBitwarden(runner=runner)
+
+    cofre.get_chave("service")
+
+    assert runner.calls[0][0][0] == "C:/pinned/bw.exe"
+
+
+def test_bw_binary_hash_mismatch_refuses_execution(monkeypatch, tmp_path):
+    fake_bw = tmp_path / "bw.exe"
+    fake_bw.write_bytes(b"not the real binary")
+    monkeypatch.setenv("BW_SESSION", "session-token")
+    monkeypatch.setenv("BITWARDEN_CLI_PATH", str(fake_bw))
+    monkeypatch.setenv("KABBALAH_BW_SHA256", "0" * 64)
+    cofre = CofreBitwarden(runner=FakeRunner("{}"))
+
+    with pytest.raises(CofreError, match="hash mismatch"):
+        cofre.get_chave("service")
+
+
+def test_bw_binary_hash_match_allows_execution(monkeypatch, tmp_path):
+    import hashlib
+
+    fake_bw = tmp_path / "bw.exe"
+    fake_bw.write_bytes(b"binary content")
+    payload = json.dumps({"fields": [{"name": "api_key", "value": "s"}]})
+    monkeypatch.setenv("BW_SESSION", "session-token")
+    monkeypatch.setenv("BITWARDEN_CLI_PATH", str(fake_bw))
+    monkeypatch.setenv("KABBALAH_BW_SHA256", hashlib.sha256(b"binary content").hexdigest())
+    cofre = CofreBitwarden(runner=FakeRunner(payload))
+
+    assert cofre.get_chave("service") == "s"
+
+
+def test_clear_on_read_serves_cached_secret_once(monkeypatch):
+    payload = json.dumps({"fields": [{"name": "api_key", "value": "critical"}]})
+    runner = FakeRunner(payload)
+    monkeypatch.setenv("BW_SESSION", "session-token")
+    cofre = CofreBitwarden(runner=runner, use_cache=True, clear_on_read=True)
+
+    assert cofre.get_chave("service") == "critical"
+    assert cofre.get_chave("service") == "critical"
+    assert cofre.get_chave("service") == "critical"
+
+    assert len(runner.calls) == 2
+
+
+def test_limpar_cache_drops_cached_values(monkeypatch):
+    payload = json.dumps({"fields": [{"name": "api_key", "value": "v"}]})
+    runner = FakeRunner(payload)
+    monkeypatch.setenv("BW_SESSION", "session-token")
+    cofre = CofreBitwarden(runner=runner, use_cache=True)
+
+    cofre.get_chave("service")
+    cofre.limpar_cache()
+    cofre.get_chave("service")
+
+    assert len(runner.calls) == 2

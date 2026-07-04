@@ -35,19 +35,39 @@ Status: implementada (branch `hardening/wave-2`).
 
 ## Onda 3 — Scoring e aprendizado
 
-- Normalizar unicode antes da avaliação de risco.
-- Cobrir comandos perigosos reais além de keywords simples.
-- Adicionar testes contra encoding/base64/homoglyph/sinônimos.
-- Restringir `qlipot.aplicar_correcao()` por origem autorizada/capability.
-- Limitar faixa de delta e registrar correções em auditoria.
-- Versionar risk assessor para rastrear decisões históricas.
+Status: implementada (branch `hardening/wave-2`).
+
+- [x] Normalizar unicode antes da avaliação de risco (NFKC + remoção de
+      zero-width + fold de homoglyphs cirílicos/gregos, `_normalizar_texto`).
+- [x] Cobrir comandos perigosos reais além de keywords simples (padrões
+      regex: `rm -rf`, `dd if=`, `drop table`, `curl|sh`, fork bomb, etc.).
+- [x] Adicionar testes contra encoding/base64/homoglyph/sinônimos
+      (`tests/test_qlipot_hardening_wave3.py`; payloads base64 são
+      decodificados e re-avaliados).
+- [x] Restringir `qlipot.aplicar_correcao()` por origem autorizada
+      (`origens_autorizadas`, default `{"sync_hub"}`; origem não autorizada
+      levanta `PermissionError` e fica registrada).
+- [x] Limitar faixa de delta (clamp ±0.30) e registrar correções em
+      auditoria append-only (`correcoes_log`).
+- [x] Versionar risk assessor (`RISK_ASSESSOR_VERSION` em toda
+      `IntentEvaluation` e em cada correção).
+
+Nota de comportamento: nomes contendo `password`/`senha` agora pontuam no
+tier de auditoria (0.50), então `read_env_var` de variáveis como
+`BW_PASSWORD` escala para HITL antes do allowlist.
 
 ## Cofre
 
-- Documentar explicitamente que cache em RAM é um tradeoff de performance.
-- Avaliar `BITWARDEN_CLI_PATH` fixo para reduzir risco de PATH injection.
-- Avaliar validação opcional de hash/assinatura do binário `bw`.
-- Considerar TTL menor ou clear-on-read para segredos críticos.
+Status: implementado (branch `hardening/wave-2`).
+
+- [x] Documentar explicitamente que cache em RAM é um tradeoff de performance
+      (docstring do módulo).
+- [x] `BITWARDEN_CLI_PATH` fixa o binário `bw` por caminho absoluto,
+      eliminando lookup de PATH.
+- [x] Validação opcional de hash do binário via `KABBALAH_BW_SHA256`
+      (mismatch aborta antes de executar).
+- [x] `clear_on_read=True` para segredos críticos (cache serve uma única
+      vez) e `limpar_cache()` explícito.
 
 ## Observação estratégica
 

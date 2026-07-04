@@ -368,5 +368,8 @@ async def test_bridge_read_env_var_blocks_sensitive_value(monkeypatch):
     )
     payload = json.loads(response)
 
-    assert payload["ok"] is True
-    assert payload["result"]["blocked"] is True
+    # Wave-3: password-named variables raise audit-tier risk, so the firewall
+    # escalates to HITL before the env allowlist is even consulted.
+    assert payload["error"] == "HITL_REQUIRED"
+    assert "ticket_id" in payload
+    assert "BW_PASSWORD" not in json.dumps(payload)
