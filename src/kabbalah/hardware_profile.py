@@ -348,6 +348,7 @@ def _probe_vendor_gpus() -> list[GPUInfo]:
     gpus: list[GPUInfo] = []
     gpus.extend(_probe_nvml())
     gpus.extend(_probe_amdsmi())
+    gpus.extend(_probe_level_zero())
     return gpus
 
 
@@ -446,6 +447,73 @@ def _amdsmi_vram_total_mb(handle: object, amdsmi_module: object) -> int:
         return int(total_bytes // (1024 * 1024))
     except Exception:
         return 0
+
+
+def _probe_level_zero() -> list[GPUInfo]:
+    executable = shutil.which("zeinfo")
+    if executable is None:
+        return []
+
+    try:
+        result = subprocess.run(
+            [executable],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+
+    if result.returncode != 0:
+        return []
+
+    gpus: list[GPUInfo] = []
+    current_model: Optional[str] = None
+    current_vram_mb = 0
+    for raw_line in result.stdout.splitlines():
+        line = raw_line.strip()
+        lower = line.lower()
+        if "device name" in lower:
+            if current_model and current_vram_mb > 0:
+                gpus.append(
+                    GPUInfo(
+                        model=current_model,
+                        vendor=_infer_vendor(current_model),
+                        vram_total_mb=current_vram_mb,
+                        backend="level-zero",
+                    )
+                )
+            current_model = line.split(":", 1)[-1].strip() or "Level Zero GPU"
+            current_vram_mb = 0
+        elif "global memory size" in lower or "total memory" in lower:
+            current_vram_mb = _parse_memory_mb(line)
+
+    if current_model and current_vram_mb > 0:
+        gpus.append(
+            GPUInfo(
+                model=current_model,
+                vendor=_infer_vendor(current_model),
+                vram_total_mb=current_vram_mb,
+                backend="level-zero",
+            )
+        )
+    return gpus
+
+
+def _parse_memory_mb(line: str) -> int:
+    digits = "".join(character for character in line if character.isdigit())
+    if not digits:
+        return 0
+    value = int(digits)
+    lowered = line.lower()
+    if "gib" in lowered or "gb" in lowered:
+        return value * 1024
+    if "kib" in lowered or "kb" in lowered:
+        return value // 1024
+    if "mib" in lowered or "mb" in lowered:
+        return value
+    return value // (1024 * 1024)
 
 
 def _probe_nvidia_smi() -> list[GPUInfo]:

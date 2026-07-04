@@ -149,6 +149,18 @@ def test_default_gpu_probe_prefers_vendor_api_before_fallbacks(monkeypatch):
     assert calls == ["vendor"]
 
 
+def test_vendor_gpu_probe_aggregates_nvml_amdsmi_and_level_zero(monkeypatch):
+    nvml_gpu = GPUInfo(model="NVIDIA", vendor="nvidia", vram_total_mb=6144, backend="cuda")
+    amd_gpu = GPUInfo(model="AMD", vendor="amd", vram_total_mb=4096, backend="rocm")
+    intel_gpu = GPUInfo(model="Intel", vendor="intel", vram_total_mb=2048, backend="level-zero")
+
+    monkeypatch.setattr(hardware_profile, "_probe_nvml", lambda: [nvml_gpu])
+    monkeypatch.setattr(hardware_profile, "_probe_amdsmi", lambda: [amd_gpu])
+    monkeypatch.setattr(hardware_profile, "_probe_level_zero", lambda: [intel_gpu])
+
+    assert hardware_profile._probe_vendor_gpus() == [nvml_gpu, amd_gpu, intel_gpu]
+
+
 def test_profiler_derives_runtime_tiers_from_measured_tokens_per_second(tmp_path):
     registry = CapabilityRegistry(
         [
