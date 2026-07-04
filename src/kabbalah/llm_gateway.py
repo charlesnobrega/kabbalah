@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import os
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Iterable, List, Optional, Protocol, Set
+
+logger = logging.getLogger(__name__)
 
 
 class ProviderFactoryProtocol(Protocol):
@@ -265,10 +268,12 @@ class LLMGateway:
         *,
         factory: Optional[ProviderFactoryProtocol] = None,
         registry: Optional[CapabilityRegistry] = None,
+        budget_manager: Optional[Any] = None,
     ):
         self.providers: List[ProviderCandidate] = list(providers or [])
         self.factory = factory
         self.registry = registry or CapabilityRegistry.default()
+        self.budget_manager = budget_manager
 
     def registrar_provider(self, provider: ProviderCandidate) -> None:
         """Register a legacy provider candidate."""
@@ -284,6 +289,7 @@ class LLMGateway:
         role: str,
         capability: str = "chat",
         budget_hint: Optional[float] = None,
+        trace_id: str = "gateway:selection",
     ) -> ProviderSelection:
         """Select and instantiate a provider by role and capability."""
         if self.factory is None:
@@ -303,8 +309,24 @@ class LLMGateway:
             )
 
         profile = candidates[0]
+        self._enforce_budget(profile, trace_id=trace_id)
         provider = self.factory.create_provider(profile.provider_name, **profile.provider_kwargs())
         return ProviderSelection(profile=profile, provider=provider)
+
+    def _enforce_budget(self, profile: ModelProfile, *, trace_id: str) -> None:
+        if self.budget_manager is None:
+            return
+        decision = self.budget_manager.enforce_call(
+            provider=profile.provider_name,
+            projected_cost=0.0,
+            trace_id=trace_id,
+        )
+        if not decision.allowed:
+            logger.warning(
+                "Budget exceeded in warn mode for provider %s: %s",
+                profile.provider_name,
+                decision.exceeded,
+            )
 
     def selecionar_provider(
         self,
@@ -312,6 +334,7 @@ class LLMGateway:
         *,
         capability: str = "chat",
         budget_hint: Optional[float] = None,
+        trace_id: str = "gateway:selection",
         required_capabilities: Optional[Set[str]] = None,
         risk_score: float = 0.0,
     ) -> Any:
@@ -326,6 +349,7 @@ class LLMGateway:
                 role=role,
                 capability=capability,
                 budget_hint=budget_hint,
+                trace_id=trace_id,
             ).provider
 
         required = required_capabilities or set()

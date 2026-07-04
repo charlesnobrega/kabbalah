@@ -2,6 +2,7 @@
 
 import pytest
 
+from kabbalah.budget_manager import BudgetExceededError, BudgetLedger, BudgetManager
 from kabbalah.llm_gateway import CapabilityRegistry, LLMGateway, ModelProfile
 
 
@@ -203,3 +204,94 @@ def test_default_registry_includes_cloud_profiles_when_api_key_exists(monkeypatc
     provider_names = {profile.provider_name for profile in registry.list_profiles()}
 
     assert "openrouter" in provider_names
+
+
+def test_gateway_warns_budget_excess_but_returns_provider_in_warn_mode(tmp_path):
+    registry = CapabilityRegistry()
+    registry.register(
+        ModelProfile(
+            name="groq",
+            provider_name="groq_compatible",
+            model="llama-3.1-8b-instant",
+            roles={"Leaf_Builder"},
+            capabilities={"chat"},
+            context_window=8192,
+            input_cost_per_1m_tokens=0.05,
+            output_cost_per_1m_tokens=0.08,
+            license_type="agregador",
+            location="cloud",
+            tier="fast",
+        )
+    )
+    ledger = BudgetLedger(tmp_path / "state.sqlite3")
+    ledger.record_call(
+        provider="groq_compatible",
+        model="llama-3.1-8b-instant",
+        input_tokens=1,
+        output_tokens=1,
+        total_tokens=2,
+        cost=0.02,
+        trace_id="run-budget:branch:leaf-a",
+    )
+    manager = BudgetManager(
+        ledger,
+        provider_limits_usd={"groq_compatible": 0.01},
+        mode="warn",
+    )
+
+    selection = LLMGateway(
+        factory=RecordingFactory(),
+        registry=registry,
+        budget_manager=manager,
+    ).select_provider(
+        role="Leaf_Builder",
+        capability="chat",
+        trace_id="run-budget:branch:leaf-b",
+    )
+
+    assert selection.profile.name == "groq"
+
+
+def test_gateway_blocks_budget_excess_in_block_mode(tmp_path):
+    registry = CapabilityRegistry()
+    registry.register(
+        ModelProfile(
+            name="openrouter",
+            provider_name="openrouter",
+            model="openai/gpt-4o-mini",
+            roles={"Leaf_Builder"},
+            capabilities={"chat"},
+            context_window=128000,
+            input_cost_per_1m_tokens=0.15,
+            output_cost_per_1m_tokens=0.60,
+            license_type="agregador",
+            location="cloud",
+            tier="agregador",
+        )
+    )
+    ledger = BudgetLedger(tmp_path / "state.sqlite3")
+    ledger.record_call(
+        provider="openrouter",
+        model="openai/gpt-4o-mini",
+        input_tokens=1,
+        output_tokens=1,
+        total_tokens=2,
+        cost=0.20,
+        trace_id="run-budget:branch:leaf-a",
+    )
+    manager = BudgetManager(
+        ledger,
+        run_limit_usd=0.10,
+        mode="block",
+    )
+
+    with pytest.raises(BudgetExceededError):
+        LLMGateway(
+            factory=RecordingFactory(),
+            registry=registry,
+            budget_manager=manager,
+        ).select_provider(
+            role="Leaf_Builder",
+            capability="chat",
+            trace_id="run-budget:branch:leaf-b",
+        )
