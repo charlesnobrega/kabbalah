@@ -1,5 +1,9 @@
 # Kabbalah Hardening — Próximas Ondas
 
+> **Nota (2026-07-04)**: as 3 ondas deste documento estão completas. A
+> continuação do projeto (ondas 4–10) está especificada em
+> [handoff-execution-plan.md](handoff-execution-plan.md).
+
 Este documento consolida melhorias levantadas após a análise técnica de Qlipot,
 FirewallMCP, Contratos e Cofre. A Onda 1 já tratou o bridge MCP e o
 `ToolExecutionEngine`; os itens abaixo são próximos passos.
