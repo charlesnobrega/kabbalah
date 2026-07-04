@@ -125,7 +125,7 @@ sendo 40 já em archive, 29 em specs (maioria morta), 17 em audit, 6 updates, et
   Referências (ADRs, roadmap). Depois: `git rm` dos 3 arquivos absorvidos.
   Os 6 ADRs em `docs/adr/` PERMANECEM (são registros de decisão datados, padrão
   correto) — o ARCHITECTURE.md aponta para eles.
-- [ ] **D.2** Mover `MELHORIAS_E_APRIMORAMENTOS.md` da raiz para
+- [x] **D.2** Mover `MELHORIAS_E_APRIMORAMENTOS.md` da raiz para
   `docs/analysis/MELHORIAS_E_APRIMORAMENTOS.md` e **atualizá-lo**: marcar nos itens
   M13–M16 o que esta limpeza concluir (✅ + data), corrigir o M15 (o README atual já
   é honesto — o que restava era arquivar relatórios, feito na Fase E) e adicionar no

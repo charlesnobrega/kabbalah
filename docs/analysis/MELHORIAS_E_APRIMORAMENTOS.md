@@ -13,12 +13,14 @@
 > **Premissa do projeto**: a equipe de LLM está parada; o foco tem sido a camada de **controle/governance**, que está mais madura que a de LLM. Este doc parte dessa realidade.
 
 > **Atualização Codex — 2026-07-04**: este documento foi comparado com o estado atual do checkout em `hardening/wave-2`. As afirmações abaixo agora distinguem: (a) achados históricos, (b) pontos já corrigidos pelas Waves 1/2/3, e (c) lacunas ainda abertas.
+>
+> **Status vivo**: a fonte canônica de execução é `docs/roadmap/handoff-execution-plan.md` §0. Este arquivo permanece como análise estratégica de entrada em `docs/analysis/`, não como ordem de implementação.
 
 ---
 
 ## ESTADO ATUAL VERIFICADO — 2026-07-04
 
-Branch local verificada: `hardening/wave-2`.
+Branch local verificada inicialmente: `hardening/wave-2`; limpeza em execução na branch `wave-4-hygiene`.
 
 Histórico recente relevante:
 
@@ -45,6 +47,13 @@ Suíte completa executada nesta revisão:
 pytest tests -q → 1127 passed, 89 skipped em 157.77s
 ```
 
+Validação durante a limpeza da Onda 4:
+
+```text
+ruff check src tests kabbalah_mcp_bridge.py → All checks passed
+pytest tests -q → 1127 passed, 89 skipped
+```
+
 ### Correções já incorporadas desde a versão original deste documento
 
 | Área | Antes no documento | Estado atual verificado |
@@ -55,6 +64,7 @@ pytest tests -q → 1127 passed, 89 skipped em 157.77s
 | Qlipot | Keyword lowercase puro; `aplicar_correcao` sem auth | Wave 3: normalização NFKC/casefold, remoção de format chars, mapeamento parcial de homoglyphs, scan de payload base64, padrões críticos, versão de assessor e correções autorizadas/clampadas/auditadas |
 | Cofre | `bw` via PATH sem validação; cache plaintext sem mitigação | Wave 3: `BITWARDEN_CLI_PATH`, hash opcional `KABBALAH_BW_SHA256`, `clear_on_read`, documentação explícita do tradeoff de cache |
 | CLI | Apontava para `cli.py` inexistente | `src/kabbalah/cli.py` existe e expõe `main()`; a pendência agora é validar UX/contratos da CLI, não criar arquivo inexistente |
+| Higiene de repo | `openclaude/`, specs antigas e exports de mock poluíam o repo/API | Onda 4: `openclaude/` removido do disco local, specs `.kiro` arquivadas, `MockProvider` removido do export público |
 
 ### Lacunas que permanecem abertas
 
@@ -63,7 +73,6 @@ pytest tests -q → 1127 passed, 89 skipped em 157.77s
 - `CogneeBackend` ainda é placeholder; JSONL é o fallback real.
 - `FirewallMCP` ainda tem RBAC default `_allow_all`; precisa política deny-by-default ou modo produtivo explícito.
 - `fsm_enforcement.check_operation_allowed()` ainda precisa garantir log/auditoria no caminho principal.
-- `MockProvider` ainda aparece exportado publicamente em `providers/__init__.py`, embora o README diga que deve ficar restrito a teste.
 - Ainda não há sandbox real tipo E2B/Firecracker/gVisor; o engine foi endurecido, mas continua executando localmente quando habilitado.
 
 ## SUMÁRIO EXECUTIVO
@@ -504,6 +513,7 @@ Rank por **valor ÷ esforço**. Cada item tem: o quê, por quê, como, esforço 
 ### 🧹 BLOCO 5 — HIGIENE (rápido, renova credibilidade)
 
 #### M13. Remover `openclaude/` (repo clonado não integrado)
+- **Status 2026-07-04**: ✅ feito na Onda 4. O diretório local foi removido após verificação de zero referências no runtime/testes/bridge/setup.
 - **Por quê**: não é usado pelo runtime, é risco de supply-chain, aumenta peso do repo. Auditoria 2026-04-11 Medium #14.
 - **Esforço**: 🟢 10 minutos.
 
@@ -513,12 +523,14 @@ Rank por **valor ÷ esforço**. Cada item tem: o quê, por quê, como, esforço 
 - **Esforço**: 🟢 1 dia para validação/ajustes pequenos.
 
 #### M15. Acertar o README e Remover Relatórios Falsos
-- **O quê**: README diz "12+ providers" (são 6). Relatórios "APPROVED FOR PRODUCTION" são falsos. Suporte aponta `support@example.com`.
+- **Status 2026-07-04**: em execução na Onda 4. O README atual já não deve ser tratado como a origem do claim "12+ providers"; a pendência real é arquivar relatórios antigos de status/fase e validar links/layout final.
+- **O quê**: relatórios antigos "APPROVED FOR PRODUCTION" e documentos de fase na raiz não são fonte de verdade.
 - **Por quê**: credibilidade. Qualquer reviewer técnico foi enganado por esses docs.
-- **Como**: corrigir README; mover ~30 relatórios de "PHASE X COMPLETE" para `docs/archive/reports/` (plano já existe em `REPOSITORY_STRUCTURE.md`).
+- **Como**: mover ~30 relatórios de "PHASE X COMPLETE" para `docs/archive/reports/`, manter a raiz mínima e validar links do README.
 - **Esforço**: 🟢 2-3 horas.
 
 #### M16. Tirar MockProvider do Export Público
+- **Status 2026-07-04**: ✅ feito na Onda 4. `MockProvider` e `MockResponseType` continuam disponíveis em `kabbalah.providers.mock_provider`, mas não são exportados por `kabbalah.providers`.
 - **O quê**: remover `MockProvider` de `providers/__init__.py:__all__`.
 - **Por quê**: roadmap proíbe mock em runtime; exportá-lo publicamente é governance mismatch. Mantenha o arquivo, mas não exporte.
 - **Esforço**: 🟢 5 minutos.

@@ -17,6 +17,15 @@ from src.kabbalah.providers import (
 
 class TestProviderFactory:
     """Test Provider Factory"""
+
+    def test_mock_provider_is_not_publicly_exported(self):
+        """MockProvider must remain available only through its dedicated test module."""
+        import src.kabbalah.providers as providers
+
+        assert "MockProvider" not in providers.__all__
+        assert "MockResponseType" not in providers.__all__
+        assert not hasattr(providers, "MockProvider")
+        assert not hasattr(providers, "MockResponseType")
     
     def test_factory_initialization(self):
         """Test that factory initializes correctly"""
