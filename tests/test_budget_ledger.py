@@ -1,6 +1,8 @@
-"""Tests for append-only LLM consumption ledger."""
+"""Tests for append-only LLM consumption ledger and budget enforcement."""
 
-from kabbalah.budget_manager import BudgetLedger
+import pytest
+
+from kabbalah.budget_manager import BudgetExceededError, BudgetLedger, BudgetManager
 from kabbalah.domain_orchestrator import DomainOrchestrator, LeafNode
 from kabbalah.llm_gateway import ModelProfile, ProviderSelection
 from kabbalah.providers.base import ProviderResponse
@@ -97,3 +99,124 @@ def test_leaf_execution_records_budget_ledger_entry(tmp_path):
     assert entries[0]["total_tokens"] == 10
     assert entries[0]["cost"] == 0.0002
     assert entries[0]["trace_id"] == "run:branch:leaf"
+
+
+def test_budget_manager_allows_call_inside_configured_limits(tmp_path):
+    ledger = BudgetLedger(tmp_path / "state.sqlite3")
+    manager = BudgetManager(
+        ledger,
+        run_limit_usd=1.00,
+        daily_limit_usd=2.00,
+        provider_limits_usd={"openrouter": 0.50},
+        mode="block",
+    )
+
+    decision = manager.enforce_call(
+        provider="openrouter",
+        projected_cost=0.10,
+        trace_id="run-1:branch:leaf",
+    )
+
+    assert decision.allowed is True
+    assert decision.exceeded == []
+    assert decision.mode == "block"
+
+
+def test_budget_manager_blocks_when_run_limit_would_be_exceeded(tmp_path):
+    ledger = BudgetLedger(tmp_path / "state.sqlite3")
+    ledger.record_call(
+        provider="openrouter",
+        model="model",
+        input_tokens=1,
+        output_tokens=1,
+        total_tokens=2,
+        cost=0.90,
+        trace_id="run-1:branch:leaf-a",
+    )
+    manager = BudgetManager(ledger, run_limit_usd=1.00, mode="block")
+
+    with pytest.raises(BudgetExceededError, match="run"):
+        manager.enforce_call(
+            provider="openrouter",
+            projected_cost=0.11,
+            trace_id="run-1:branch:leaf-b",
+        )
+
+
+def test_budget_manager_warn_mode_reports_excess_without_raising(tmp_path):
+    ledger = BudgetLedger(tmp_path / "state.sqlite3")
+    ledger.record_call(
+        provider="groq_compatible",
+        model="model",
+        input_tokens=1,
+        output_tokens=1,
+        total_tokens=2,
+        cost=0.06,
+        trace_id="run-2:branch:leaf-a",
+    )
+    manager = BudgetManager(
+        ledger,
+        provider_limits_usd={"groq_compatible": 0.05},
+        mode="warn",
+    )
+
+    decision = manager.enforce_call(
+        provider="groq_compatible",
+        projected_cost=0.01,
+        trace_id="run-2:branch:leaf-b",
+    )
+
+    assert decision.allowed is False
+    assert decision.mode == "warn"
+    assert decision.exceeded == ["provider:groq_compatible"]
+
+
+def test_budget_manager_reads_limits_from_environment(monkeypatch, tmp_path):
+    ledger = BudgetLedger(tmp_path / "state.sqlite3")
+    monkeypatch.setenv("KABBALAH_BUDGET_MODE", "block")
+    monkeypatch.setenv("KABBALAH_BUDGET_RUN_USD", "3.50")
+    monkeypatch.setenv("KABBALAH_BUDGET_DAILY_USD", "7.00")
+    monkeypatch.setenv("KABBALAH_BUDGET_PROVIDER_OPENROUTER_USD", "1.25")
+
+    manager = BudgetManager.from_env(ledger)
+
+    assert manager.mode == "block"
+    assert manager.run_limit_usd == 3.50
+    assert manager.daily_limit_usd == 7.00
+    assert manager.provider_limits_usd == {"openrouter": 1.25}
+
+
+def test_budget_manager_returns_aggregate_stats(tmp_path):
+    ledger = BudgetLedger(tmp_path / "state.sqlite3")
+    ledger.record_call(
+        provider="openrouter",
+        model="model-a",
+        input_tokens=10,
+        output_tokens=5,
+        total_tokens=15,
+        cost=0.20,
+        trace_id="run-a:branch:leaf",
+    )
+    ledger.record_call(
+        provider="groq_compatible",
+        model="model-b",
+        input_tokens=20,
+        output_tokens=5,
+        total_tokens=25,
+        cost=0.30,
+        trace_id="run-b:branch:leaf",
+    )
+
+    stats = BudgetManager(ledger, daily_limit_usd=1.0).get_budget_stats()
+
+    assert stats["mode"] == "warn"
+    assert stats["total_cost"] == pytest.approx(0.50)
+    assert stats["provider_costs"] == {
+        "openrouter": pytest.approx(0.20),
+        "groq_compatible": pytest.approx(0.30),
+    }
+    assert stats["run_costs"] == {
+        "run-a": pytest.approx(0.20),
+        "run-b": pytest.approx(0.30),
+    }
+    assert stats["limits"]["daily_usd"] == 1.0
