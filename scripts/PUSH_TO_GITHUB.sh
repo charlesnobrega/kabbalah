@@ -1,58 +1,67 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Kabbalah - Push to GitHub Script
-# This script pushes the Kabbalah project to GitHub
+# Kabbalah - GitHub publication preflight
+#
+# This script intentionally DOES NOT push.
+# Publishing is a manual decision by Charles after reviewing the current branch,
+# secret-scan evidence, tests, and target remote.
 
-echo "🚀 Kabbalah - Pushing to GitHub"
-echo "================================"
-echo ""
+echo "Kabbalah GitHub publication preflight"
+echo "====================================="
 
-# Check if git is initialized
 if [ ! -d .git ]; then
-    echo "📝 Initializing git repository..."
-    git init
+  echo "ERROR: run this from the repository root." >&2
+  exit 1
 fi
 
-# Add all files
-echo "📦 Adding all files..."
-git add .
+echo
+echo "Current branch:"
+git branch --show-current
 
-# Commit
-echo "💾 Creating initial commit..."
-git commit -m "Initial commit: Kabbalah specification and setup
+echo
+echo "Current HEAD:"
+git --no-pager log -1 --oneline
 
-- Complete specifications (16 requirements, 109 criteria)
-- Comprehensive design (14 components)
-- Detailed implementation tasks (167 tasks, 11 phases)
-- Full documentation and guides
-- Configuration templates
-- Contribution guidelines"
+echo
+echo "Working tree status:"
+git status --short
 
-# Add remote
-echo "🔗 Adding GitHub remote..."
-git remote add origin https://github.com/charlesnobrega/kabbalah.git 2>/dev/null || git remote set-url origin https://github.com/charlesnobrega/kabbalah.git
+if [ -n "$(git status --short)" ]; then
+  echo
+  echo "ERROR: working tree is not clean. Commit or discard intentional changes before publication." >&2
+  exit 1
+fi
 
-# Rename branch to main
-echo "🌿 Renaming branch to main..."
-git branch -M main
+echo
+echo "Tracked sensitive-file check:"
+if git ls-files | grep -iE '\.env$|sqlite|secret|credential|apikey'; then
+  echo "ERROR: suspicious tracked sensitive path found. Review before publishing." >&2
+  exit 1
+fi
+echo "OK"
 
-# Push to GitHub
-echo "🚀 Pushing to GitHub..."
-git push -u origin main
+if command -v gitleaks >/dev/null 2>&1; then
+  echo
+  echo "History secret scan:"
+  gitleaks detect --source . --log-opts="--all" --redact=100
+else
+  echo
+  echo "WARN: gitleaks not found in PATH. Run an equivalent full-history scan before pushing." >&2
+fi
 
-echo ""
-echo "✅ Successfully pushed to GitHub!"
-echo ""
-echo "📊 Next steps:"
-echo "1. Go to https://github.com/charlesnobrega/kabbalah"
-echo "2. Configure GitHub settings (see GITHUB_SETUP.md)"
-echo "3. Create project board and milestones"
-echo "4. Start Phase 1 implementation"
-echo ""
-echo "📚 Documentation:"
-echo "- README.md - Project overview"
-echo "- CONTRIBUTING.md - Contribution guidelines"
-echo "- docs/specs/requirements.md - Requirements"
-echo "- docs/specs/design.md - Architecture"
-echo "- docs/specs/tasks.md - Implementation tasks"
-echo ""
+echo
+echo "Recommended validation:"
+echo "  python -m pytest tests -q"
+echo "  python -m pip install -e ."
+echo "  python -m kabbalah.cli --help"
+
+echo
+echo "Manual publication only after approval:"
+echo "  git push origin <branch>"
+echo
+echo "Important docs:"
+echo "  README.md"
+echo "  docs/ARCHITECTURE.md"
+echo "  docs/roadmap/handoff-execution-plan.md"
+echo "  docs/roadmap/cleanup-execution-plan.md"

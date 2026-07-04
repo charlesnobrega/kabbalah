@@ -162,13 +162,15 @@ sendo 40 já em archive, 29 em specs (maioria morta), 17 em audit, 6 updates, et
 
 ## FASE E — Higiene de git
 
-- [ ] **E.1** Criar `.gitattributes` com `* text=auto` (elimina os warnings CRLF/LF
+- [x] **E.1** Criar `.gitattributes` com `* text=auto` (elimina os warnings CRLF/LF
   constantes no Windows). Em commit separado: `git add --renormalize .` — o diff
   será grande porém só de line endings; não misturar com nenhuma outra mudança.
-- [ ] **E.2** Revisar `.github/` (3 arquivos): workflows/templates apontam para
+- [x] **E.2** Revisar `.github/` (3 arquivos): workflows/templates apontam para
   caminhos que a limpeza moveu? Corrigir.
-- [ ] **E.3** `scripts/PUSH_TO_GITHUB.sh`: ler; se contiver URL de remoto pessoal ou
+- [x] **E.3** `scripts/PUSH_TO_GITHUB.sh`: ler; se contiver URL de remoto pessoal ou
   passos obsoletos, atualizar ou remover (o push é decisão manual do Charles).
+  - Resultado Codex 2026-07-04: `.github/` não exigiu ajuste; `git add --renormalize .`
+    não produziu diff; `PUSH_TO_GITHUB.sh` virou preflight sem push automático.
 
 ---
 
