@@ -114,7 +114,7 @@ Pedido explícito do Charles: **deve existir um único documento de arquitetura*
 repo não pode ter "arquivo solto sem sentido". Estado atual de `docs/`: 109 arquivos,
 sendo 40 já em archive, 29 em specs (maioria morta), 17 em audit, 6 updates, etc.
 
-- [ ] **D.1** Criar **`docs/ARCHITECTURE.md`** — o documento único — consolidando:
+- [x] **D.1** Criar **`docs/ARCHITECTURE.md`** — o documento único — consolidando:
   1. `docs/architecture/CURRENT_ARCHITECTURE.md` (estado atual),
   2. `docs/architecture/REPOSITORY_STRUCTURE.md` (estrutura alvo),
   3. `docs/PROJECT_STRUCTURE.md`,
