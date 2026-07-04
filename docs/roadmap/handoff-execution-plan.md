@@ -129,7 +129,13 @@ Ordem obrigatória: 4 → 5 → 6 → 7. Depois, 8 e 9 podem intercalar. Onda 10
 
 ---
 
-### ONDA 4 — Higiene do repositório (M13+M15+M16+M14) — esforço: ~1 dia
+### ONDA 4 — Higiene do repositório (M13+M15+M16+M14) — esforço: ~2 dias
+
+> **⚠️ SUBSTITUÍDA por especificação detalhada**: execute
+> [cleanup-execution-plan.md](cleanup-execution-plan.md), que expande esta onda com
+> inventário verificado (duplicatas, código órfão, consolidação de docs em um único
+> `docs/ARCHITECTURE.md`, higiene de git e checklist pré-GitHub). Os itens 4.1–4.4
+> abaixo estão contidos nele — ficam aqui só como resumo.
 
 Objetivo: repo honesto e navegável. Baixo risco, serve de calibração do executor.
 
