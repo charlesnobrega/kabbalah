@@ -6,17 +6,17 @@
 
 Kabbalah is an alpha-stage Python project for multi-agent orchestration. The repository contains a tree-based orchestration skeleton, provider abstractions, runtime hardening primitives, memory modules, tool execution primitives, observability primitives, and tests.
 
-This repository is not yet a production autonomous runtime. Current gaps include real leaf execution, full LLM gateway integration, Cognee-backed semantic retrieval, skill registry wiring, graph runtime wiring, and true parallel execution in the main orchestration path.
+This repository is not yet a production autonomous runtime. Current gaps include root-level gateway wiring, budget enforcement, Cognee-backed semantic retrieval, skill registry wiring, graph runtime wiring, and true parallel execution in the main orchestration path.
 
 ## Current runtime reality
 
 - Main package: `src/kabbalah`.
 - Packaging: `setup.py`, `requirements.txt`.
-- Runtime provider factory currently supports OpenAI, Google Gemini, Groq, Mistral, Together, and DeepSeek.
+- Runtime provider factory currently supports native OpenAI, Google Gemini, Groq, Mistral, Together, and DeepSeek, plus OpenAI-compatible entries for Ollama local, OpenRouter, Groq-compatible, Cerebras, and SambaNova.
 - `MockProvider` is test-only, is not exported from `kabbalah.providers`, and must stay gated by `KABBALAH_ALLOW_TEST_FAKE_PROVIDER=1`.
-- `LocalLLMProvider` exists for Ollama-style HTTP local calls through `requests`, but it is not wired into the main provider factory yet.
+- `LocalLLMProvider` exists as legacy code; the main local route is `ollama_local` through the generic OpenAI-compatible adapter.
 - Root/domain orchestration is sequential in the current implementation, despite config/docs describing intended parallelism.
-- Leaf execution currently returns placeholder success artifacts; it does not yet run a real provider/tool loop.
+- Leaf execution runs a real provider loop only when `DomainOrchestrator` is constructed with an injected `LLMGateway`; without a gateway it returns explicit `status="skipped"`, not fake success.
 - SillyTavern MCP bridge exists at `kabbalah_mcp_bridge.py` and exposes guarded tools through qlipot, FirewallMCP, HITL tickets, Bitwarden cache, agent contracts, retry limits, and SyncHub stats.
 - Agent contracts are persisted in SQLite by the bridge. SyncHub network propagation is phase-1/local only; P2P/central federation is not production-wired yet.
 
@@ -146,6 +146,14 @@ Wave-3 hardening (scoring and vault):
   optionally pins its hash, and `clear_on_read=True` makes cached secrets
   single-use.
 
+Wave-5 LLM loop:
+
+- `LLMGateway` is the canonical provider selector by role, capability, and budget hint.
+- `OpenAICompatibleProvider` covers Ollama local, OpenRouter, Groq-compatible, Cerebras, and SambaNova without provider-specific SDKs.
+- `DomainOrchestrator` can execute leaf work through an injected gateway and returns `llm_response` artifacts on real provider success.
+- `BudgetLedger` records provider/model tokens and cost in append-only SQLite when injected; budget limits are a later roadmap item.
+- `HardwareProfiler` fingerprints local CPU/GPU/RAM, stores hardware profiles in the bridge state DB, and classifies local model fit/tier without vendor-based assumptions.
+
 ## Configuration
 
 Use `.env.example` as a template only. Do not commit real credentials.
@@ -158,6 +166,11 @@ Supported provider names in the current factory:
 - `mistral`
 - `together`
 - `deepseek`
+- `ollama_local`
+- `openrouter`
+- `groq_compatible`
+- `cerebras`
+- `sambanova`
 
 Example:
 
@@ -172,6 +185,12 @@ OPENAI_API_KEY=your_key_here
 
 ```bash
 python -m pytest tests -q
+```
+
+On Windows/PowerShell, prefer the project virtual environment explicitly:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests -q
 ```
 
 If collection fails with missing dependencies, install the project dependencies in an isolated virtual environment first:

@@ -22,14 +22,18 @@ UserRequest / MCP client / CLI
   -> RootOrchestrator
   -> DomainOrchestrator
   -> LeafNode
-  -> LLMGateway / ProviderFactory
+  -> LLMGateway / CapabilityRegistry
+  -> ProviderFactory
+  -> BudgetLedger when injected
   -> Synthesizer
   -> DeliveryPackage
 ```
 
-The historical tree-shaped flow is implemented and tested, but not every leaf
-currently executes real provider work. The handoff roadmap tracks the remaining
-integration work, especially the LLM loop and LeafNode execution.
+The historical tree-shaped flow is implemented and tested. Leaf execution now
+performs real provider work when `DomainOrchestrator` is constructed with an
+`LLMGateway`; without an injected gateway it returns explicit
+`status="skipped"` rather than fake success. Root-level orchestration still
+constructs `DomainOrchestrator` without a gateway by default.
 
 ## Layers
 
@@ -55,8 +59,10 @@ Orchestration       | Intake -> Root -> Domain -> Leaf      |
                                        |
                                        v
                     +--------------------------------------+
-LLM layer           | LLMGateway -> ProviderFactory         |
-                    | Provider adapters / Mock only gated   |
+LLM layer           | LLMGateway -> CapabilityRegistry      |
+                    | ProviderFactory -> provider adapters  |
+                    | Mock only gated; BudgetLedger records |
+                    | HardwareProfiler classifies local fit |
                     +------------------+-------------------+
                                        |
                                        v
@@ -78,9 +84,11 @@ Persistence/audit   | SQLite state DB and append-only logs  |
 | `src/kabbalah/tools/execution_engine.py` | Tool execution boundary for filesystem, command, and network-style actions. |
 | `src/kabbalah/intake_node.py` | User request validation and conversion to a canonical specification. |
 | `src/kabbalah/root_orchestrator.py` | Decomposes specifications into domain branches. |
-| `src/kabbalah/domain_orchestrator.py` | Converts domain branch work into leaf nodes and executes leaf work. |
-| `src/kabbalah/llm_gateway.py` | Intended canonical provider selector. It delegates provider construction to `ProviderFactory`. |
-| `src/kabbalah/providers/` | Provider abstraction and adapters for external/local LLM providers. Runtime mock use is gated. |
+| `src/kabbalah/domain_orchestrator.py` | Converts domain branch work into leaf nodes. With an injected `LLMGateway`, leaf execution calls a provider, returns an `llm_response` artifact, and can record ledger usage. |
+| `src/kabbalah/llm_gateway.py` | Canonical provider selector by role, capability, and budget hint. It delegates provider construction to `ProviderFactory`. |
+| `src/kabbalah/providers/` | Provider abstraction and adapters for native and OpenAI-compatible external/local LLM providers. Runtime mock use is gated. |
+| `src/kabbalah/budget_manager.py` | Append-only `BudgetLedger` for provider/model token and cost records. Limit enforcement is deferred to the roadmap Budget Manager wave. |
+| `src/kabbalah/hardware_profile.py` | Local hardware fingerprinting, GPU/CPU/RAM detection, static model fit classification, and measured-token tier classification for local profiles. |
 | `src/kabbalah/memory_subsystem.py` and `src/kabbalah/memory_governance.py` | Memory storage, fallback behavior, and memory access governance. |
 | `src/kabbalah/observability/` and `src/kabbalah/trace_id_tracking.py` | Logs, trace IDs, and operational observability. |
 
@@ -104,9 +112,9 @@ Persistence/audit   | SQLite state DB and append-only logs  |
 
 The MCP bridge uses a single SQLite state database selected by
 `KABBALAH_BRIDGE_STATE_DB` and defaulting to `.kabbalah_bridge_state.sqlite3`.
-Current tables include HITL tickets and contract state/events. Future stores
-should reuse the same database unless the architecture document and ADRs justify
-a different boundary.
+Current tables include HITL tickets, contract state/events, `budget_ledger`,
+and `hardware_profiles`. Future stores should reuse the same database unless
+the architecture document and ADRs justify a different boundary.
 
 SQLite stores should use short-lived connections, a busy timeout, and explicit
 append-only event tables for audit trails.

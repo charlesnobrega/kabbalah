@@ -80,3 +80,4 @@ openclaude/
 coverage.xml
 pytest.log
 .kabbalah_bridge_state.sqlite3
+.kabbalah_hardware_profiles.sqlite3

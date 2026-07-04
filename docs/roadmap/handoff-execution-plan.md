@@ -9,7 +9,8 @@
 
 ## 0. ESTADO REAL DO REPOSITÓRIO (verificado em 2026-07-04)
 
-- **Branch atual de limpeza**: `wave-4-hygiene`, criada a partir de `hardening/wave-2` em 2026-07-04. Não mergeado em `main` — decisão de merge é do Charles (ver §6).
+- **Branch atual de limpeza**: `wave-4-hygiene`, criada a partir de `hardening/wave-2` em 2026-07-04.
+- **Branch atual da Onda 5**: `wave-5-llm-loop`, criada a partir de `wave-4-hygiene` em 2026-07-04.
 - **Suíte de testes**: `1128 passed, 89 skipped` (skips = testes live de providers, desligados por política — **é o estado esperado, não conserte**). O número "812/74 failed" citado na análise externa é de um snapshot de abril/2026 — **obsoleto**.
 - **Ondas de hardening 1–3 completas** (ver `docs/roadmap/hardening-next-waves.md`):
   - Onda 1: bridge MCP + ToolExecutionEngine (contratos obrigatórios, shell opt-in, SSRF, allowlists).
@@ -24,25 +25,27 @@
 | M7 (contratos SQLite + race) | ✅ Feito na onda 2 |
 | `aplicar_correcao` sem auth (Parte 3.1) | ✅ Feito na onda 3 |
 | Cofre PATH/cache (Parte 3.4) | ✅ Feito na onda 3 |
-| M1 (LeafNode mudo) | ❌ Pendente — `src/kabbalah/domain_orchestrator.py:215` ainda retorna placeholder |
-| M3 (LLMGateway órfão) | ❌ Pendente — zero imports externos a `llm_gateway.py` em `src/` |
+| M1 (LeafNode mudo) | ✅ Feito na onda 5 — `DomainOrchestrator` executa leaf via `LLMGateway` injetado; sem gateway retorna `status="skipped"` explícito |
+| M3 (LLMGateway órfão) | ✅ Feito na onda 5 — gateway virou seletor canônico por role/capability/budget e é consumido pelo leaf via injeção |
 | M5 (RBAC `_allow_all`) | ❌ Pendente — `src/kabbalah/firewall_mcp.py:85` e defaults na linha 127–128 |
 | M6 (enforcement sem log) | ❌ Pendente — `fsm_enforcement.py:162` (sem log) vs `:180` (com log) |
 | M16 (MockProvider exportado) | ✅ Feito na onda 4 — `MockProvider`/`MockResponseType` ficam em `kabbalah.providers.mock_provider`, não em `kabbalah.providers` |
 | M13 (`openclaude/`) | ✅ Feito na onda 4 — diretório local removido após confirmar zero referências |
 | M14 (CLI) | ✅ Feito na onda 4 — `python -m kabbalah.cli --help` e entrypoint `kabbalah --help` exit 0 |
 | M15 (README/relatórios) | ✅ Feito na onda 4 — README atualizado, links validados, relatórios raiz arquivados/removidos quando duplicados |
-| M2 (fallback memória) | ⚠️ Verificar antes de agir (ver Onda 5.3) |
+| M2 (fallback memória) | ✅ Verificado na onda 5 — com `cognee_present=False`, memória JSONL + Qlipot passaram testes direcionados |
 | M8, M9, M12, M17, M18 | ❌ Pendentes (features novas) |
 | M10, M11 | ⏸️ Bloqueados por decisão humana (ver §6) |
 
 ### APIs reais da camada de providers (verificadas)
 
-- `ProviderFactory` — `src/kabbalah/providers/factory.py:37`; `create_provider(...)` linha 66; `get_provider_for_role(role) -> BaseProvider` linha 172; `get_provider_stats(name)` linha 216.
-- `BaseProvider.execute_request(...)` — `src/kabbalah/providers/base.py:61`. Stats: `total_cost` acumulado em `base.py:57,165`, lido apenas em `get_stats()` (`:152-153`) — ninguém consome (insumo do M12).
+- `ProviderFactory` — `src/kabbalah/providers/factory.py`; constrói providers nativos e OpenAI-compatible, incluindo `ollama_local`, `openrouter`, `groq_compatible`, `cerebras` e `sambanova`.
+- `BaseProvider.execute_request(...)` — `src/kabbalah/providers/base.py`. Stats: `total_cost` segue disponível em `get_stats()`; chamadas de leaf também gravam consumo no `BudgetLedger` quando injetado.
 - `MockProvider` — gated por `KABBALAH_ALLOW_TEST_FAKE_PROVIDER=1`; é a ferramenta correta para testes e2e sem chamadas live.
-- `LLMGateway` / `selecionar_provider` — `src/kabbalah/llm_gateway.py`, órfão (nenhum import externo).
-- Banco de estado: `KABBALAH_BRIDGE_STATE_DB` (default `.kabbalah_bridge_state.sqlite3`), tabelas `hitl_tickets`, `contratos`, `contrato_eventos`. **Use `src/kabbalah/contrato_store.py` como implementação de referência para qualquer novo store SQLite** (lock + conexão por operação + busy_timeout + append-only para auditoria).
+- `LLMGateway` / `CapabilityRegistry` — `src/kabbalah/llm_gateway.py`, seletor canônico por `role`, `capability` e `budget_hint`.
+- `BudgetLedger` — `src/kabbalah/budget_manager.py`, ledger SQLite append-only em modo só-registro; enforcement de limites fica para a Onda 7.
+- `HardwareProfiler` — `src/kabbalah/hardware_profile.py`, perfil local com fingerprint, fit/tier de modelos locais e tabela `hardware_profiles`.
+- Banco de estado: `KABBALAH_BRIDGE_STATE_DB` (default `.kabbalah_bridge_state.sqlite3`), tabelas `hitl_tickets`, `contratos`, `contrato_eventos`, `budget_ledger` e `hardware_profiles`. **Use `src/kabbalah/contrato_store.py` como implementação de referência para qualquer novo store SQLite** (lock + conexão por operação + busy_timeout + append-only para auditoria).
 
 ---
 
@@ -67,7 +70,7 @@
                                      ▼
                      ┌──────────────────────────────────────┐
   ORQUESTRAÇÃO       │  RootOrchestrator → DomainOrchestrator│
-                     │  → LeafNode (Onda 5 conecta ao LLM)   │
+                     │  → LeafNode via LLMGateway injetado   │
                      │  AutonomyLoop → tree search (Onda 9)  │
                      └───────────────┬──────────────────────┘
                                      ▼
@@ -79,13 +82,14 @@
                      │     └→ OpenAI/Gemini/Groq/Mistral/    │
                      │        Together/DeepSeek/Mock(gated)  │
                      │  BudgetManager (Onda 7) intercepta AQUI│
+                     │  HardwareProfiler classifica fit local │
                      └───────────────┬──────────────────────┘
                                      ▼
                      ┌──────────────────────────────────────┐
   PERSISTÊNCIA       │  SQLite único (KABBALAH_BRIDGE_STATE_DB)│
   E AUDITORIA        │  hitl_tickets · contratos ·           │
                      │  contrato_eventos (append-only) ·     │
-                     │  budget_ledger (Onda 7, append-only)  │
+                     │  budget_ledger · hardware_profiles    │
                      └──────────────────────────────────────┘
 ```
 
@@ -175,7 +179,7 @@ Decisões de design fechadas com o Charles em 2026-07-04 — implementar, não r
 pessoal dele. O executor referencia SÓ nomes de variáveis de ambiente, nunca lê o
 cofre, nunca escreve valor de chave em código, teste, log ou commit.
 
-- [ ] **5.1 (M3) Gateway canônico + registro de capacidades** — fazer de `LLMGateway` o único seletor:
+- [x] **5.1 (M3) Gateway canônico + registro de capacidades** — fazer de `LLMGateway` o único seletor:
   1. Leia `src/kabbalah/llm_gateway.py` inteiro e `src/kabbalah/providers/factory.py:37-230`.
   2. Crie o **registro de capacidades**: cada modelo registrado declara
      `capabilities` (ex.: `chat`, `code`, `reasoning`), `context_window`,
@@ -189,7 +193,7 @@ cofre, nunca escreve valor de chave em código, teste, log ou commit.
   4. Construído com `ProviderFactory` injetada (testável com MockProvider gated).
   *Aceite*: testes de seleção por role e por capability; erro claro para
   role/capability desconhecidos; nenhum consumidor chama a factory diretamente.
-- [ ] **5.2 Adaptador genérico OpenAI-compatible** — uma classe
+- [x] **5.2 Adaptador genérico OpenAI-compatible** — uma classe
   `OpenAICompatibleProvider(base_url, api_key_env, model)` cobre a maioria dos
   fornecedores (o protocolo da OpenAI é o padrão de facto). Registrar na factory
   com estas entradas iniciais (nomes de env — valores são do Charles):
@@ -211,13 +215,13 @@ cofre, nunca escreve valor de chave em código, teste, log ou commit.
   endpoint OpenAI-compat do Ollama; não manter dois caminhos para o mesmo destino.
   *Aceite*: teste do adaptador contra servidor HTTP fake; entrada Ollama
   selecionável pelo gateway; base_urls/env configuráveis sem tocar código.
-- [ ] **5.3 (M1) Conectar o LeafNode** — implementar `_execute_leaf_node` em `src/kabbalah/domain_orchestrator.py:215`:
+- [x] **5.3 (M1) Conectar o LeafNode** — implementar `_execute_leaf_node` em `src/kabbalah/domain_orchestrator.py:215`:
   1. `DomainOrchestrator` recebe (injeção opcional no construtor) um `LLMGateway`. Sem gateway injetado → comportamento atual de placeholder MAS com `status="skipped"` e metadata explicando (nunca mais `success` vazio — é mentira de status).
   2. Com gateway: montar prompt do leaf a partir de `leaf_node.description` + contexto do domain; chamar `provider.execute_request(...)` (assinatura real em `base.py:61` — leia antes); empacotar `ProviderResponse.content` como artifact; registrar em metadata: provider usado, tokens, custo, latência.
   3. Erro de provider → `LeafResult(status="failure", ...)` com o erro em metadata — exceção não pode derrubar a árvore inteira (o AutonomyLoop trata replanning).
   4. Teste e2e: com `KABBALAH_ALLOW_TEST_FAKE_PROVIDER=1` e MockProvider via gateway, rodar Root→Domain→Leaf e verificar artifact real no resultado. Teste do caminho sem gateway (status skipped). Teste do caminho de erro.
   *Aceite*: e2e verde com mock gated; `status="success"` só com artifact real; suíte completa verde.
-- [ ] **5.4 Ledger de consumo desde a primeira chamada** — criar já a tabela
+- [x] **5.4 Ledger de consumo desde a primeira chamada** — criar já a tabela
   `budget_ledger` (append-only, mesmo state DB, padrão `contrato_store.py`) em
   modo **só-registro** (sem limites — a Onda 7 adiciona enforcement em cima):
   provider, model, tokens de entrada/saída, custo, trace_id, timestamp. Tokens
@@ -225,7 +229,7 @@ cofre, nunca escreve valor de chave em código, teste, log ou commit.
   por `len/4` (estimativa só para streaming em andamento, marcada como estimada).
   Toda execução de leaf grava uma linha.
   *Aceite*: e2e do 5.3 gera linhas no ledger; tabela sem API de update/delete.
-- [ ] **5.5 HardwareProfiler** — `src/kabbalah/hardware_profile.py`:
+- [x] **5.5 HardwareProfiler** — `src/kabbalah/hardware_profile.py`:
   1. **Detecção em 3 degraus**: API do vendor (NVML para NVIDIA; amdsmi/Level
      Zero se presentes) → fallback neutro (enumeração Vulkan e/ou WMI
      `Win32_VideoController` no Windows) → perfil CPU-only (psutil: núcleos,
@@ -245,8 +249,11 @@ cofre, nunca escreve valor de chave em código, teste, log ou commit.
      para a Onda 7/8 — registrar TODO no código, não implementar agora.
   *Aceite*: perfil gerado em máquina só-CPU (CI) e com GPU; mudança simulada de
   fingerprint dispara re-baseline; registro reflete o fit; suíte verde.
-- [ ] **5.6 (M2) Fallback de memória** — **primeiro verifique** (a claim é da análise externa): induza a ausência de Cognee e rode os testes de memória. Se `ensure_consistency()` de fato falhar sem Cognee (`src/kabbalah/memory_subsystem.py`), separe a consistência por backend: backend opcional ausente = degradação com warning, nunca exceção que envenene o JSONL saudável. Se a claim não se reproduzir, marque este item como "não se reproduz" e siga.
+- [x] **5.6 (M2) Fallback de memória** — **primeiro verifique** (a claim é da análise externa): induza a ausência de Cognee e rode os testes de memória. Se `ensure_consistency()` de fato falhar sem Cognee (`src/kabbalah/memory_subsystem.py`), separe a consistência por backend: backend opcional ausente = degradação com warning, nunca exceção que envenene o JSONL saudável. Se a claim não se reproduzir, marque este item como "não se reproduz" e siga.
   *Aceite*: suíte verde com e sem Cognee instalado; Qlipot continua funcional (scoring temporal usa essa memória).
+  *Resultado 2026-07-04*: claim não se reproduziu com `cognee_present=False`;
+  `tests/test_memory_subsystem.py`, `tests/test_memory_subsystem_properties.py`
+  e `tests/test_qlipot_hardening_wave3.py` passaram via `.venv`.
 
 ---
 
@@ -267,7 +274,7 @@ cofre, nunca escreve valor de chave em código, teste, log ou commit.
 
 Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost` já é acumulado por provider (`base.py:57,165`) e exposto em `get_stats()` — falta quem leia e haja.
 
-- [ ] **7.1** Criar `src/kabbalah/budget_manager.py`: `BudgetLedger` (SQLite, tabela `budget_ledger` append-only no mesmo state DB — siga o padrão de `contrato_store.py`) registrando cada chamada (provider, model, tokens, custo, trace_id, timestamp) + `BudgetManager` com limites configuráveis (por run, por dia, por provider) via env `KABBALAH_BUDGET_*`.
+- [ ] **7.1** Estender `src/kabbalah/budget_manager.py`: o `BudgetLedger` append-only já existe desde a Onda 5; adicionar `BudgetManager` com limites configuráveis (por run, por dia, por provider) via env `KABBALAH_BUDGET_*`.
 - [ ] **7.2** Integração: o **LLMGateway consulta o BudgetManager antes de retornar provider**; estourou → exceção clara `BudgetExceededError` (modo `block`) ou warning logado (modo `warn`). **Default: `warn`** na primeira release; `block` via `KABBALAH_BUDGET_MODE=block`.
 - [ ] **7.3** Expor `get_budget_stats` como tool no bridge (mesmo padrão de `get_network_stats`).
   *Aceite*: teste de limite estourado nos dois modos; ledger append-only (sem API de update/delete); leaf registra custo no ledger a cada execução; suíte verde.
