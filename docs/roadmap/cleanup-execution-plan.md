@@ -50,17 +50,19 @@ push público:
 Cada alvo abaixo foi verificado hoje. Antes de cada remoção, rode a verificação
 indicada; se ela divergir, investigue antes de remover.
 
-- [ ] **B.1** `kabbalah/` (diretório na RAIZ — não confundir com `src/kabbalah/`):
+- [x] **B.1** `kabbalah/` (diretório na RAIZ — não confundir com `src/kabbalah/`):
   3 arquivos tracked, duplicata de `archive/legacy/kabbalah-root-package/`.
   Verificar: `diff -r kabbalah/ archive/legacy/kabbalah-root-package/` (esperado:
   idêntico ou trivial). Então `git rm -r kabbalah/`.
-- [ ] **B.2** `phase_4/` (raiz): 1 arquivo, duplicata de `archive/legacy/phase_4/`.
+- [x] **B.2** `phase_4/` (raiz): 1 arquivo, duplicata de `archive/legacy/phase_4/`.
   Mesmo procedimento. `git rm -r phase_4/`.
-- [ ] **B.3** `tests/test_error_analysis_module_backup.py`: arquivo "backup" que roda
+- [x] **B.3** `tests/test_error_analysis_module_backup.py`: arquivo "backup" que roda
   na suíte duplicando testes; cópia já existe em `archive/legacy/tests/`.
   `git rm tests/test_error_analysis_module_backup.py`. Registrar o novo total de
   `passed` no baseline.
-- [ ] **B.4** Módulos órfãos em `src/kabbalah/` (zero referências em `src/`, `tests/`,
+  - Resultado Codex 2026-07-04 após B.1–B.4: suíte completa permaneceu em
+    `1127 passed, 89 skipped`.
+- [x] **B.4** Módulos órfãos em `src/kabbalah/` (zero referências em `src/`, `tests/`,
   bridge e `setup.py` — verificado por varredura de identificadores):
   - `src/kabbalah/error_detection.py` (o módulo usado é `error_detection_module.py`)
   - `src/kabbalah/self_healing.py` (o usado é `self_healing_models.py`)
