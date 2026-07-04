@@ -142,7 +142,7 @@ sendo 40 já em archive, 29 em specs (maioria morta), 17 em audit, 6 updates, et
   `TURBOQUANT_IMPLEMENTATION.md`. Remover `docs/specs/.config.kiro`.
 - [x] **D.4** `docs/updates/` (6) e `docs/superpowers/` (1): ler por alto; se
   descrevem estado passado → `docs/archive/`; se vivos, integrar ao doc certo.
-- [ ] **D.5** Raiz → `docs/archive/reports/`: `git mv` de TODOS os relatórios de
+- [x] **D.5** Raiz → `docs/archive/reports/`: `git mv` de TODOS os relatórios de
   status/fase da raiz (~30: `PHASE*_*.md`, `FINAL_*.{md,txt}`, `PROJECT_*.md`,
   `SESSION_*.md`, `TASK_*_SUMMARY.md`, `CURRENT_STATUS_REPORT.md`,
   `KABBALAH_PROJECT_STATUS.md`, `QUICK_REFERENCE.md`, `PROVIDER_*.md`,
