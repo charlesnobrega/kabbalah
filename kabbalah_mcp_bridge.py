@@ -42,7 +42,8 @@ import requests
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
 
-from kabbalah.contratos import Contratos
+from kabbalah.contratos import Contratos, VerificationOutcome
+from kabbalah.contrato_store import ContratoStore
 from kabbalah.cofre import CofreBitwarden, CofreError
 from kabbalah.firewall_mcp import AcaoMCP, FirewallMCP, MCPRequest
 from kabbalah.hitl import HITL, NivelUrgencia
@@ -104,11 +105,13 @@ class TicketStore:
             return None
         return json.loads(row[0])
 
+STATE_DB_PATH = Path(os.environ.get("KABBALAH_BRIDGE_STATE_DB", str(PROJECT_ROOT / ".kabbalah_bridge_state.sqlite3")))
+
 hitl = HITL()
 cofre = CofreBitwarden(use_cache=True)
 qlipot = Qlipot()
-contratos = Contratos(qlipot=qlipot, hitl=hitl)
-tickets = TicketStore(Path(os.environ.get("KABBALAH_BRIDGE_STATE_DB", str(PROJECT_ROOT / ".kabbalah_bridge_state.sqlite3"))))
+contratos = Contratos(qlipot=qlipot, hitl=hitl, store=ContratoStore(STATE_DB_PATH))
+tickets = TicketStore(STATE_DB_PATH)
 
 
 def _contract_checker(request: MCPRequest) -> tuple[bool, Optional[str]]:
@@ -117,20 +120,24 @@ def _contract_checker(request: MCPRequest) -> tuple[bool, Optional[str]]:
     if request.ferramenta in CONTRACT_EXEMPT_ACTIONS:
         return True, None
     try:
-        if contratos.verificar(request.agente_id, request.ferramenta):
-            request.metadata["contract_checked"] = True
-            return True, None
+        outcome = contratos.verificar_detalhado(request.agente_id, request.ferramenta)
     except Exception:
         logger.exception("Contract verification failed")
         return False, "Falha interna na verificação de contrato (negado por padrão)"
-    return False, "Nenhum contrato ativo autoriza esta ação para este agente. Use propose_contract/sign_contract primeiro."
+    if outcome == VerificationOutcome.ALLOWED:
+        request.metadata["contract_checked"] = True
+        return True, None
+    if outcome == VerificationOutcome.NO_CONTRACT:
+        contratos.registrar_ausencia(request.agente_id, request.ferramenta, "Chamada MCP sem contrato ativo")
+        return False, "Nenhum contrato ativo autoriza esta ação para este agente. Use propose_contract/sign_contract primeiro."
+    return False, f"Contrato ativo violado ({outcome}). Proponha um novo contrato antes de continuar."
 
 
 def _contract_verifier(agente_id: str, acao: str) -> bool:
-    allowed = contratos.verificar(agente_id, acao)
-    if not allowed:
-        contratos.registrar_violacao(agente_id, acao, "Ação entre agentes sem contrato ativo")
-    return allowed
+    outcome = contratos.verificar_detalhado(agente_id, acao)
+    if outcome == VerificationOutcome.NO_CONTRACT:
+        contratos.registrar_ausencia(agente_id, acao, "Ação entre agentes sem contrato ativo")
+    return outcome == VerificationOutcome.ALLOWED
 
 
 firewall = FirewallMCP(hitl=hitl, contract_checker=_contract_checker, contract_verifier=_contract_verifier)

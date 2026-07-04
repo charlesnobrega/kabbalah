@@ -18,15 +18,20 @@ capitalização. O risco real é a dependência de heurística keyword-based:
 
 ## Onda 2 — Contratos persistentes e auditáveis
 
-Prioridade mais alta.
+Status: implementada (branch `hardening/wave-2`).
 
-- Criar `ContratoStore` SQLite.
-- Persistir contratos ativos, concluídos, violados, revogados e rejeitados.
-- Adicionar índice lógico por `(provedor, acao, status)`.
-- Tornar `max_calls` transacional/thread-safe.
-- Persistir violações em log append-only.
-- Separar ausência de contrato de violação real.
-- Validar restart: contrato ativo antes do restart continua válido depois.
+- [x] Criar `ContratoStore` SQLite (`src/kabbalah/contrato_store.py`).
+- [x] Persistir contratos ativos, concluídos, violados, revogados e rejeitados.
+- [x] Adicionar índice lógico por `(provedor, acao, status)`.
+- [x] Tornar `max_calls` transacional/thread-safe (UPDATE atômico com guarda
+      no WHERE; caminho em memória protegido por lock).
+- [x] Persistir violações em log append-only (`contrato_eventos`, sem API de
+      update/delete).
+- [x] Separar ausência de contrato de violação real
+      (`VerificationOutcome.NO_CONTRACT` + `registrar_ausencia`; ausência não
+      escala HITL nem marca contrato como violado).
+- [x] Validar restart: contrato ativo antes do restart continua válido depois
+      (`tests/test_contrato_store.py`, `tests/test_bridge_hardening_wave2.py`).
 
 ## Onda 3 — Scoring e aprendizado
 

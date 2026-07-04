@@ -119,6 +119,16 @@ Wave-1 hardening defaults:
 - Private, loopback, link-local, reserved and unspecified network destinations
   are blocked unless `KABBALAH_BRIDGE_ALLOW_PRIVATE_NETWORKS=1`.
 
+Wave-2 hardening (persistent contracts):
+
+- Agent contracts are persisted in SQLite (`KABBALAH_BRIDGE_STATE_DB`, same
+  file as HITL tickets). A signed contract survives a bridge restart.
+- `max_calls` consumption is an atomic SQL update, safe under concurrency.
+- Violations and contract-absence attempts are recorded in an append-only
+  audit log (`contrato_eventos` table).
+- Absence of a contract is audited as `ausencia_contrato` and is no longer
+  conflated with a real violation of an active contract.
+
 ## Configuration
 
 Use `.env.example` as a template only. Do not commit real credentials.
