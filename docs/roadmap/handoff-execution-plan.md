@@ -97,6 +97,18 @@
 4. **Nada de mock em runtime** (`docs/specs/NO_MOCK_RUNTIME_POLICY.md`): `MockProvider` só sob `KABBALAH_ALLOW_TEST_FAKE_PROVIDER=1`, e só em testes.
 5. **Código importável só em `src/kabbalah/`**. Nunca criar módulos runtime na raiz.
 6. **Um banco de estado** para o bridge; cada subsistema tem suas tabelas, nunca um arquivo SQLite próprio por módulo.
+7. **Fronteira provider × tool**: o que *raciocina* (texto → texto/estrutura) é
+   provider e entra pelo LLMGateway; o que *gera artefato ou executa ação*
+   (áudio, música, imagem, vídeo, e-mail, comandos) é **tool** e entra pelo
+   pipeline MCP/execution engine com governança por ação. Ex.: ElevenLabs e
+   ComfyUI são tools, nunca providers. Serviços sem API oficial (ex.: Suno) só
+   entram via MCP server de terceiro, como tool externa governada — **nunca**
+   embutir scraper/engenharia reversa no kernel.
+8. **Compatibilidade por medição, não por marca**: suporte a GPU/hardware é
+   herdado do runtime local (Ollama/llama.cpp — CUDA/ROCm/Metal/Vulkan/CPU);
+   o Kabbalah detecta e **mede** (tokens/s), nunca presume por vendor. Perfis
+   de hardware são eventos auditáveis. Workflows de mídia (ComfyUI) são
+   tratados como código: allowlist de templates, agente só injeta parâmetros.
 
 ---
 
@@ -153,22 +165,83 @@ Objetivo: repo honesto e navegável. Baixo risco, serve de calibração do execu
 
 ---
 
-### ONDA 5 — Fechar o loop LLM (M1+M3+M2) — esforço: 3-5 dias — **A ONDA MAIS IMPORTANTE**
+### ONDA 5 — Fechar o loop LLM (M1+M3+M2 + capacidades + hardware) — esforço: 5-8 dias — **A ONDA MAIS IMPORTANTE**
 
-Objetivo: input → orquestração → provider real → artifact, com o kernel no meio. Sem isso o projeto é um motor sem correia.
+Objetivo: input → orquestração → provider real → artifact, com o kernel no meio,
+medindo consumo desde a primeira chamada e adaptado ao hardware da máquina.
+Decisões de design fechadas com o Charles em 2026-07-04 — implementar, não rediscutir.
 
-- [ ] **5.1 (M3) Gateway canônico** — fazer de `LLMGateway` o único seletor:
+**Sobre chaves**: o Charles preenche o `.env` local (gitignorado) a partir do cofre
+pessoal dele. O executor referencia SÓ nomes de variáveis de ambiente, nunca lê o
+cofre, nunca escreve valor de chave em código, teste, log ou commit.
+
+- [ ] **5.1 (M3) Gateway canônico + registro de capacidades** — fazer de `LLMGateway` o único seletor:
   1. Leia `src/kabbalah/llm_gateway.py` inteiro e `src/kabbalah/providers/factory.py:37-230`.
-  2. Refatore o gateway para: `selecionar_provider(role: str, *, budget_hint: float | None = None) -> BaseProvider`, decidindo por role (delegando a `ProviderFactory.get_provider_for_role`, `factory.py:172`) e preparado para custo (M12 injeta o budget depois).
-  3. O gateway é construído com uma `ProviderFactory` injetada (testável com MockProvider gated).
-  *Aceite*: testes unitários do gateway (seleção por role, erro claro para role desconhecido); nenhum consumidor chama `ProviderFactory` diretamente fora do gateway e de testes.
-- [ ] **5.2 (M1) Conectar o LeafNode** — implementar `_execute_leaf_node` em `src/kabbalah/domain_orchestrator.py:215`:
+  2. Crie o **registro de capacidades**: cada modelo registrado declara
+     `capabilities` (ex.: `chat`, `code`, `reasoning`), `context_window`,
+     `custo_por_1m_tokens` (entrada/saída), `licenca` (`paga|open|agregador`),
+     `local|cloud`, e para locais: `backend` (`cuda|rocm|metal|vulkan|cpu`),
+     `quant` (ex.: `q4_K_M`, `qat-int4`), `min_vram_full`, `min_vram_offload`,
+     `max_context_no_perfil`, `tokens_s_medido` (preenchido pelo 5.5).
+  3. Gateway seleciona por `(role, capability, budget_hint)` com política
+     **cheap-first com escalada**: tier local → rápido/barato → premium; escala
+     quando o role exige ou quando a validação do contrato de sucesso falha.
+  4. Construído com `ProviderFactory` injetada (testável com MockProvider gated).
+  *Aceite*: testes de seleção por role e por capability; erro claro para
+  role/capability desconhecidos; nenhum consumidor chama a factory diretamente.
+- [ ] **5.2 Adaptador genérico OpenAI-compatible** — uma classe
+  `OpenAICompatibleProvider(base_url, api_key_env, model)` cobre a maioria dos
+  fornecedores (o protocolo da OpenAI é o padrão de facto). Registrar na factory
+  com estas entradas iniciais (nomes de env — valores são do Charles):
+  | Entrada | base_url | env da chave | Tier |
+  |---|---|---|---|
+  | Ollama local | `http://localhost:11434/v1` | (sem chave) | local |
+  | OpenRouter | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` | agregador universal |
+  | Groq | `https://api.groq.com/openai/v1` | `GROQ_API_KEY` | rápido/barato |
+  | Cerebras | `https://api.cerebras.ai/v1` | `CEREBRAS_API_KEY` | rápido/barato |
+  | SambaNova | `https://api.sambanova.ai/v1` | `SAMBANOVA_API_KEY` | rápido/barato |
+  Notas: DeepSeek e modelos Anthropic/Claude entram **via OpenRouter** (decisão
+  do Charles — não criar providers diretos para eles). Os providers nativos
+  existentes (OpenAI, Gemini, Mistral) permanecem como tier premium.
+  `LocalLLMProvider` legado: substituir pelo adaptador genérico apontando para o
+  endpoint OpenAI-compat do Ollama; não manter dois caminhos para o mesmo destino.
+  *Aceite*: teste do adaptador contra servidor HTTP fake; entrada Ollama
+  selecionável pelo gateway; base_urls/env configuráveis sem tocar código.
+- [ ] **5.3 (M1) Conectar o LeafNode** — implementar `_execute_leaf_node` em `src/kabbalah/domain_orchestrator.py:215`:
   1. `DomainOrchestrator` recebe (injeção opcional no construtor) um `LLMGateway`. Sem gateway injetado → comportamento atual de placeholder MAS com `status="skipped"` e metadata explicando (nunca mais `success` vazio — é mentira de status).
   2. Com gateway: montar prompt do leaf a partir de `leaf_node.description` + contexto do domain; chamar `provider.execute_request(...)` (assinatura real em `base.py:61` — leia antes); empacotar `ProviderResponse.content` como artifact; registrar em metadata: provider usado, tokens, custo, latência.
   3. Erro de provider → `LeafResult(status="failure", ...)` com o erro em metadata — exceção não pode derrubar a árvore inteira (o AutonomyLoop trata replanning).
   4. Teste e2e: com `KABBALAH_ALLOW_TEST_FAKE_PROVIDER=1` e MockProvider via gateway, rodar Root→Domain→Leaf e verificar artifact real no resultado. Teste do caminho sem gateway (status skipped). Teste do caminho de erro.
   *Aceite*: e2e verde com mock gated; `status="success"` só com artifact real; suíte completa verde.
-- [ ] **5.3 (M2) Fallback de memória** — **primeiro verifique** (a claim é da análise externa): induza a ausência de Cognee e rode os testes de memória. Se `ensure_consistency()` de fato falhar sem Cognee (`src/kabbalah/memory_subsystem.py`), separe a consistência por backend: backend opcional ausente = degradação com warning, nunca exceção que envenene o JSONL saudável. Se a claim não se reproduzir, marque este item como "não se reproduz" e siga.
+- [ ] **5.4 Ledger de consumo desde a primeira chamada** — criar já a tabela
+  `budget_ledger` (append-only, mesmo state DB, padrão `contrato_store.py`) em
+  modo **só-registro** (sem limites — a Onda 7 adiciona enforcement em cima):
+  provider, model, tokens de entrada/saída, custo, trace_id, timestamp. Tokens
+  vêm do campo `usage` reportado pelo provider na resposta — **nunca** estimar
+  por `len/4` (estimativa só para streaming em andamento, marcada como estimada).
+  Toda execução de leaf grava uma linha.
+  *Aceite*: e2e do 5.3 gera linhas no ledger; tabela sem API de update/delete.
+- [ ] **5.5 HardwareProfiler** — `src/kabbalah/hardware_profile.py`:
+  1. **Detecção em 3 degraus**: API do vendor (NVML para NVIDIA; amdsmi/Level
+     Zero se presentes) → fallback neutro (enumeração Vulkan e/ou WMI
+     `Win32_VideoController` no Windows) → perfil CPU-only (psutil: núcleos,
+     RAM, flags AVX). Nunca falhar por hardware desconhecido — degradar.
+  2. **Fingerprint** = hash de (GPU modelo+VRAM total, vendor, backend
+     disponível, CPU modelo, RAM total). Boot: fingerprint igual → carrega
+     perfil salvo (partida ~ms). Diferente (upgrade OU downgrade) →
+     **re-baseline**: recalcula fit estático de cada modelo local do registro
+     (cabe inteiro / roda com offload / não roda) e roda micro-benchmark
+     opcional (N tokens no menor modelo local → `tokens_s_medido`).
+  3. **Tiers por medição, não por marca**: `interativo` / `batch` /
+     `indisponivel` derivados de tokens/s medidos — nada de regra por vendor.
+  4. Persistir em tabela `hardware_profiles` (append-only — mudança de hardware
+     é evento auditável). Unificar com o `hardware_hash` do SyncHub: o profiler
+     vira a fonte canônica desse hash.
+  5. Guarda de runtime (VRAM livre antes do dispatch + feedback de OOM) fica
+     para a Onda 7/8 — registrar TODO no código, não implementar agora.
+  *Aceite*: perfil gerado em máquina só-CPU (CI) e com GPU; mudança simulada de
+  fingerprint dispara re-baseline; registro reflete o fit; suíte verde.
+- [ ] **5.6 (M2) Fallback de memória** — **primeiro verifique** (a claim é da análise externa): induza a ausência de Cognee e rode os testes de memória. Se `ensure_consistency()` de fato falhar sem Cognee (`src/kabbalah/memory_subsystem.py`), separe a consistência por backend: backend opcional ausente = degradação com warning, nunca exceção que envenene o JSONL saudável. Se a claim não se reproduzir, marque este item como "não se reproduz" e siga.
   *Aceite*: suíte verde com e sem Cognee instalado; Qlipot continua funcional (scoring temporal usa essa memória).
 
 ---
