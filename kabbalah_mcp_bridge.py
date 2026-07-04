@@ -42,6 +42,7 @@ import requests
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
 
+from kabbalah.budget_manager import BudgetLedger, BudgetManager
 from kabbalah.contratos import Contratos, VerificationOutcome
 from kabbalah.contrato_store import ContratoStore
 from kabbalah.cofre import CofreBitwarden, CofreError
@@ -65,6 +66,7 @@ CONTRACT_EXEMPT_ACTIONS = {
     "complete_task",
     "check_hitl_status",
     "get_network_stats",
+    "get_budget_stats",
 }
 
 
@@ -112,6 +114,8 @@ cofre = CofreBitwarden(use_cache=True)
 qlipot = Qlipot()
 contratos = Contratos(qlipot=qlipot, hitl=hitl, store=ContratoStore(STATE_DB_PATH))
 tickets = TicketStore(STATE_DB_PATH)
+budget_ledger = BudgetLedger(STATE_DB_PATH)
+budget_manager = BudgetManager.from_env(budget_ledger)
 
 
 def _contract_checker(request: MCPRequest) -> tuple[bool, Optional[str]]:
@@ -833,6 +837,23 @@ async def get_network_stats(params: BridgeBaseInput) -> str:
         intencao=params.intencao,
         argumentos=params.model_dump(),
         executor=lambda: sync.get_network_stats(),
+    )
+
+
+@mcp.tool(
+    name=AcaoMCP.GET_BUDGET_STATS.value,
+    annotations={"title": "Kabbalah Budget Stats", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+)
+async def get_budget_stats(params: BridgeBaseInput) -> str:
+    """Return local LLM budget and consumption statistics."""
+
+    return await _authorize_and_execute(
+        acao=AcaoMCP.GET_BUDGET_STATS,
+        agente_id=params.agente_id,
+        papel_agente=params.papel_agente,
+        intencao=params.intencao,
+        argumentos=params.model_dump(),
+        executor=lambda: budget_manager.get_budget_stats(),
     )
 
 

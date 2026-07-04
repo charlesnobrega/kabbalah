@@ -37,6 +37,7 @@ class AcaoMCP(Enum):
     REJECT_CONTRACT = "reject_contract"
     COMPLETE_TASK = "complete_task"
     GET_NETWORK_STATS = "get_network_stats"
+    GET_BUDGET_STATS = "get_budget_stats"
 
 
 @dataclass(frozen=True)

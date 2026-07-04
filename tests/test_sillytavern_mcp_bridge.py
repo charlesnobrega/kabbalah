@@ -13,6 +13,7 @@ def test_acao_mcp_maps_bridge_tools():
     assert AcaoMCP.READ_FILE.value == "read_file"
     assert AcaoMCP.EXECUTE_COMMAND.value == "execute_command"
     assert AcaoMCP.NETWORK_REQUEST.value == "network_request"
+    assert AcaoMCP.GET_BUDGET_STATS.value == "get_budget_stats"
 
 
 def test_hitl_solicitar_sync_wrapper_denies_without_provider():
@@ -360,6 +361,31 @@ async def test_bridge_network_stats_tool_returns_sync_stats():
 
     assert payload["ok"] is True
     assert "hardware_hash" in payload["result"]
+
+
+@pytest.mark.asyncio
+async def test_bridge_budget_stats_tool_returns_budget_manager_stats(monkeypatch):
+    import kabbalah_mcp_bridge as bridge
+
+    class FakeBudgetManager:
+        def get_budget_stats(self):
+            return {
+                "mode": "warn",
+                "total_cost": 0.42,
+                "provider_costs": {"openrouter": 0.42},
+                "limits": {"daily_usd": 1.0},
+            }
+
+    monkeypatch.setattr(bridge, "budget_manager", FakeBudgetManager())
+
+    response = await bridge.get_budget_stats(
+        bridge.BridgeBaseInput(agente_id="agent", papel_agente="viewer")
+    )
+    payload = json.loads(response)
+
+    assert payload["ok"] is True
+    assert payload["result"]["total_cost"] == 0.42
+    assert payload["result"]["provider_costs"] == {"openrouter": 0.42}
 
 
 @pytest.mark.asyncio
