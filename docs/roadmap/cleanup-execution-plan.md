@@ -86,20 +86,25 @@ indicada; se ela divergir, investigue antes de remover.
 Não afeta o GitHub, mas o pedido é repo limpo por completo. **Regra: mover para fora
 do repo antes de apagar** — deletar só o que for confirmadamente descartável.
 
-- [ ] **C.1** `openclaude/`: clone de projeto TS alheio, zero imports (verificado).
+- [x] **C.1** `openclaude/`: clone de projeto TS alheio, zero imports (verificado).
   Deletar do disco. (Se o Charles quiser guardar, mover para `E:\projetos\openclaude`
   — já existe um diretório com esse nome lá; nesse caso apenas delete o daqui.)
-- [ ] **C.2** `workspace/`: área de desenvolvimento antiga com cópias desatualizadas
+- [x] **C.2** `workspace/`: área de desenvolvimento antiga com cópias desatualizadas
   do pacote e specs. Antes de apagar: conferir se `workspace/.kiro/specs/kabbalah/`
   (requirements.md, design.md) tem conteúdo que NÃO existe em `docs/specs/` — se
   tiver algo único e valioso, copiar para `docs/archive/kiro-specs/`. Depois mover
   `workspace/` inteiro para `E:\projetos\_kabbalah_workspace_backup\` (fora do repo).
   Após confirmação do Charles, ele apaga o backup quando quiser.
-- [ ] **C.3** Apagar do disco: `.pytest_cache/`, `__pycache__/` (todos), `pytest.log`.
+- [x] **C.3** Apagar do disco: `.pytest_cache/`, `__pycache__/` (todos), `pytest.log`.
   Conferir `.gitignore` cobre: `pytest.log`, `.pytest_cache/`, `__pycache__/`,
   `*.sqlite3`, `.hypothesis/` — adicionar o que faltar.
-- [ ] **C.4** `.kiro/` (raiz): specs de ferramenta antiga. Mesmo tratamento do C.2
+- [x] **C.4** `.kiro/` (raiz): specs de ferramenta antiga. Mesmo tratamento do C.2
   (conferir conteúdo único → arquivar → remover do disco).
+  - Resultado Codex 2026-07-04: specs únicas arquivadas em
+    `docs/archive/kiro-specs/`; `workspace/` movido para
+    `E:\projetos\_kabbalah_workspace_backup\workspace`; `openclaude/`, `.kiro/`,
+    `.pytest_cache/`, `__pycache__/` e `pytest.log` removidos. Scan redigido do
+    arquivo Kiro: `0` achados.
 
 ---
 
