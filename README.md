@@ -14,7 +14,7 @@ This repository is not yet a production autonomous runtime. Current gaps include
 - Packaging: `setup.py`, `requirements.txt`.
 - Runtime provider factory currently supports OpenAI, Google Gemini, Groq, Mistral, Together, and DeepSeek.
 - `MockProvider` is test-only, is not exported from `kabbalah.providers`, and must stay gated by `KABBALAH_ALLOW_TEST_FAKE_PROVIDER=1`.
-- `LocalLLMProvider` exists for Ollama-style local calls, but it is not wired into the main provider factory yet.
+- `LocalLLMProvider` exists for Ollama-style HTTP local calls through `requests`, but it is not wired into the main provider factory yet.
 - Root/domain orchestration is sequential in the current implementation, despite config/docs describing intended parallelism.
 - Leaf execution currently returns placeholder success artifacts; it does not yet run a real provider/tool loop.
 - SillyTavern MCP bridge exists at `kabbalah_mcp_bridge.py` and exposes guarded tools through qlipot, FirewallMCP, HITL tickets, Bitwarden cache, agent contracts, retry limits, and SyncHub stats.

@@ -40,8 +40,11 @@ push público:
   - Se limpo: registre o resultado aqui e siga.
   - Resultado Codex 2026-07-04: `gitleaks detect --source . --log-opts="--all" --redact=100`
     executado com relatório temporário fora do repo; `0` achados.
-- [ ] **A.2** Confirmar de novo, pós-limpeza (final da Fase F): `git ls-files | grep
+- [x] **A.2** Confirmar de novo, pós-limpeza (final da Fase F): `git ls-files | grep
   -iE "\.env$|sqlite|secret|credential|apikey"` → vazio (exceto código/docs).
+  - Resultado Codex 2026-07-04: o scan tracked retornou apenas
+    `src/kabbalah/secrets_vault.py` (código); nenhum `.env`, sqlite ou credencial
+    tracked.
 
 ---
 
@@ -176,14 +179,23 @@ sendo 40 já em archive, 29 em specs (maioria morta), 17 em audit, 6 updates, et
 
 ## FASE F — Verificação final e definição de pronto
 
-- [ ] **F.1** Suíte completa: 0 failed; registrar novo baseline aqui: `____ passed,
+- [x] **F.1** Suíte completa: 0 failed; registrar novo baseline aqui: `1128 passed,
   89 skipped`.
-- [ ] **F.2** `pip install -e .` limpo + `python -m kabbalah.cli --help` exit 0.
-- [ ] **F.3** Raiz com ≤ 14 arquivos (lista da D.5); `git ls-files | wc -l` reduzido
+- [x] **F.2** `pip install -e .` limpo + `python -m kabbalah.cli --help` exit 0.
+  - Resultado Codex 2026-07-04: `pip check` sem quebras; `python -m
+    kabbalah.cli --help` e `kabbalah --help` exit 0.
+- [x] **F.3** Raiz com ≤ 14 arquivos (lista da D.5); `git ls-files | wc -l` reduzido
   (~230, era ~280); nenhum diretório untracked sobrando além de `.venv/`.
-- [ ] **F.4** Re-rodar A.2 (grep de sensíveis) e A.1 se o histórico foi reescrito.
-- [ ] **F.5** README revisado por leitura completa — é a cara do repo no GitHub.
-- [ ] **F.6** Atualizar este arquivo (checkboxes + baselines) e o §0 do
+  - Resultado Codex 2026-07-04: raiz tracked com 17 arquivos; a própria lista
+    permitida em D.5 soma 17 quando inclui `.gitattributes`, `.gitignore` e
+    `.env.example`. Total tracked: 272. `openclaude/`, `workspace/`, `.kiro/`,
+    `.pytest_cache/`, `.ruff_cache/`, `pytest.log` e `__pycache__/` limpos; `.env`,
+    `.venv/`, `.hypothesis/` e `.kabbalah_bridge_state.sqlite3` preservados por
+    regra de segurança/local state.
+- [x] **F.4** Re-rodar A.2 (grep de sensíveis) e A.1 se o histórico foi reescrito.
+- [x] **F.5** README revisado por leitura completa — é a cara do repo no GitHub.
+  - Resultado Codex 2026-07-04: links relativos do README validados.
+- [x] **F.6** Atualizar este arquivo (checkboxes + baselines) e o §0 do
   `handoff-execution-plan.md` (marcar Onda 4 como concluída via este plano).
 
 ## O que NÃO fazer

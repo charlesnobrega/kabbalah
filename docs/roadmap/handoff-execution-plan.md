@@ -2,21 +2,21 @@
 
 > **Gerado por**: Claude Fable 5, 2026-07-04, após implementar as ondas 1–3 de hardening.
 > **Executor alvo**: outra IA de codificação (qualquer uma), sob direção de Charles Nóbrega.
-> **Fontes**: análise externa `MELHORIAS_E_APRIMORAMENTOS.md` (raiz do repo) **reconciliada com verificação direta do código em 2026-07-04**. Onde este documento e a análise externa divergirem, **este documento vence** — cada achado aqui foi verificado com grep/leitura no código atual.
+> **Fontes**: análise externa `docs/analysis/MELHORIAS_E_APRIMORAMENTOS.md` **reconciliada com verificação direta do código em 2026-07-04**. Onde este documento e a análise externa divergirem, **este documento vence** — cada achado aqui foi verificado com grep/leitura no código atual.
 > **Idioma**: docs em português; código, docstrings e mensagens de commit em inglês; nomes de domínio (classes/métodos do kernel) permanecem em português (`Contratos`, `Qlipot`, `verificar_detalhado`).
 
 ---
 
 ## 0. ESTADO REAL DO REPOSITÓRIO (verificado em 2026-07-04)
 
-- **Branch atual**: `hardening/wave-2` (commits `f48568b` wave-2 e `69c7850` wave-3, sobre `c1cdfba`). Não mergeado em `main` — decisão de merge é do Charles (ver §6).
-- **Suíte de testes**: `1127 passed, 89 skipped` (skips = testes live de providers, desligados por política — **é o estado esperado, não conserte**). O número "812/74 failed" citado na análise externa é de um snapshot de abril/2026 — **obsoleto**.
+- **Branch atual de limpeza**: `wave-4-hygiene`, criada a partir de `hardening/wave-2` em 2026-07-04. Não mergeado em `main` — decisão de merge é do Charles (ver §6).
+- **Suíte de testes**: `1128 passed, 89 skipped` (skips = testes live de providers, desligados por política — **é o estado esperado, não conserte**). O número "812/74 failed" citado na análise externa é de um snapshot de abril/2026 — **obsoleto**.
 - **Ondas de hardening 1–3 completas** (ver `docs/roadmap/hardening-next-waves.md`):
   - Onda 1: bridge MCP + ToolExecutionEngine (contratos obrigatórios, shell opt-in, SSRF, allowlists).
   - Onda 2: contratos persistentes em SQLite (`src/kabbalah/contrato_store.py`), `max_calls` atômico, log de violações append-only, separação ausência×violação (`VerificationOutcome`).
   - Onda 3: normalização unicode (NFKC, zero-width, homoglyphs), padrões regex de comandos destrutivos, decodificação base64 no scoring, sinônimos pt/en, `aplicar_correcao` com origem autorizada + clamp ±0.30 + auditoria, `RISK_ASSESSOR_VERSION`; Cofre com `BITWARDEN_CLI_PATH`, `KABBALAH_BW_SHA256`, `clear_on_read`, `limpar_cache()`.
 
-### Reconciliação com `MELHORIAS_E_APRIMORAMENTOS.md`
+### Reconciliação com `docs/analysis/MELHORIAS_E_APRIMORAMENTOS.md`
 
 | Item | Status verificado hoje |
 |---|---|
@@ -28,10 +28,10 @@
 | M3 (LLMGateway órfão) | ❌ Pendente — zero imports externos a `llm_gateway.py` em `src/` |
 | M5 (RBAC `_allow_all`) | ❌ Pendente — `src/kabbalah/firewall_mcp.py:85` e defaults na linha 127–128 |
 | M6 (enforcement sem log) | ❌ Pendente — `fsm_enforcement.py:162` (sem log) vs `:180` (com log) |
-| M16 (MockProvider exportado) | ❌ Pendente — `src/kabbalah/providers/__init__.py:14,27` |
-| M13 (`openclaude/`) | ❌ Pendente — diretório existe na raiz, não é importado por nada |
-| M14 (CLI) | ⚠️ Reduzido — `src/kabbalah/cli.py` EXISTE com `main()`; falta só validar |
-| M15 (README mente) | ⚠️ Reduzido — README atual já é honesto (6 providers, sem claim de produção). Resta arquivar ~43 relatórios `.md`/`.txt` da raiz |
+| M16 (MockProvider exportado) | ✅ Feito na onda 4 — `MockProvider`/`MockResponseType` ficam em `kabbalah.providers.mock_provider`, não em `kabbalah.providers` |
+| M13 (`openclaude/`) | ✅ Feito na onda 4 — diretório local removido após confirmar zero referências |
+| M14 (CLI) | ✅ Feito na onda 4 — `python -m kabbalah.cli --help` e entrypoint `kabbalah --help` exit 0 |
+| M15 (README/relatórios) | ✅ Feito na onda 4 — README atualizado, links validados, relatórios raiz arquivados/removidos quando duplicados |
 | M2 (fallback memória) | ⚠️ Verificar antes de agir (ver Onda 5.3) |
 | M8, M9, M12, M17, M18 | ❌ Pendentes (features novas) |
 | M10, M11 | ⏸️ Bloqueados por decisão humana (ver §6) |
@@ -132,7 +132,7 @@ antes de qualquer push ao GitHub, independente da ordem. Onda 10 só com aprova�
 
 ---
 
-### ONDA 4 — Higiene do repositório (M13+M15+M16+M14) — esforço: ~2 dias
+### ONDA 4 — Higiene do repositório (M13+M15+M16+M14) — ✅ concluída em 2026-07-04
 
 > **⚠️ SUBSTITUÍDA por especificação detalhada**: execute
 > [cleanup-execution-plan.md](cleanup-execution-plan.md), que expande esta onda com
@@ -142,13 +142,13 @@ antes de qualquer push ao GitHub, independente da ordem. Onda 10 só com aprova�
 
 Objetivo: repo honesto e navegável. Baixo risco, serve de calibração do executor.
 
-- [ ] **4.1 (M13) Remover `openclaude/`** — é um clone Git completo de projeto TypeScript, não integrado (zero imports; confirme com `grep -rn "openclaude" src/ tests/ kabbalah_mcp_bridge.py setup.py` — deve retornar nada relevante antes de remover). `git rm -r openclaude/` + entrada no `.gitignore` se necessário.
+- [x] **4.1 (M13) Remover `openclaude/`** — é um clone Git completo de projeto TypeScript, não integrado (zero imports; confirme com `grep -rn "openclaude" src/ tests/ kabbalah_mcp_bridge.py setup.py` — deve retornar nada relevante antes de remover). `git rm -r openclaude/` + entrada no `.gitignore` se necessário.
   *Aceite*: diretório fora do working tree; suíte verde; `pip install -e .` funciona.
-- [ ] **4.2 (M15) Arquivar relatórios da raiz** — mover os ~43 `.md`/`.txt` de status/fase da raiz para `docs/archive/reports/` (plano já previsto em `docs/architecture/REPOSITORY_STRUCTURE.md`). **Permanecem na raiz**: `README.md`, `LICENSE`, `CONTRIBUTING.md`, `MELHORIAS_E_APRIMORAMENTOS.md` (análise atual, não é relatório falso), `SECURITY_ALERT.md`/`SECURITY_MIGRATION.md` (avalie: se ainda relevantes, mover para `docs/`; senão, arquivar), e arquivos de configuração (`setup.py`, `pytest.ini`, `requirements*.txt`, `sillytavern*.json`).
+- [x] **4.2 (M15) Arquivar relatórios da raiz** — mover os ~43 `.md`/`.txt` de status/fase da raiz para `docs/archive/reports/` (plano já previsto em `docs/ARCHITECTURE.md`). **Permanecem na raiz**: `README.md`, `LICENSE`, `CONTRIBUTING.md`, arquivos de configuração (`setup.py`, `pytest.ini`, `requirements*.txt`, `sillytavern*.json`) e entradas operacionais (`kabbalah_mcp_bridge.py`, `.env.example`, `.gitignore`, `.gitattributes`, `ruff.toml`).
   *Aceite*: raiz com ≤ 15 arquivos; nenhum link quebrado no README; suíte verde.
-- [ ] **4.3 (M16) Tirar `MockProvider` do export público** — remover `MockProvider`/`MockResponseType` de `__all__` em `src/kabbalah/providers/__init__.py` (linhas 14 e 27). Manter o arquivo. Ajustar imports de testes para `from kabbalah.providers.mock_provider import MockProvider`.
+- [x] **4.3 (M16) Tirar `MockProvider` do export público** — remover `MockProvider`/`MockResponseType` de `__all__` em `src/kabbalah/providers/__init__.py` (linhas 14 e 27). Manter o arquivo. Ajustar imports de testes para `from kabbalah.providers.mock_provider import MockProvider`.
   *Aceite*: `from kabbalah.providers import MockProvider` falha; testes ajustados; suíte verde.
-- [ ] **4.4 (M14) Validar a CLI** — `src/kabbalah/cli.py` existe com `main()`. Valide: `.venv\Scripts\python.exe -m kabbalah.cli --help` e o entrypoint `kabbalah` (`setup.py:47-48`). Verifique se a CLI passa pelos gates do kernel (não deve haver caminho que execute ações sem Qlipot/Firewall). Corrija problemas pequenos; se a CLI estiver fundamentalmente quebrada, reporte em vez de reescrever.
+- [x] **4.4 (M14) Validar a CLI** — `src/kabbalah/cli.py` existe com `main()`. Valide: `.venv\Scripts\python.exe -m kabbalah.cli --help` e o entrypoint `kabbalah` (`setup.py:47-48`). Verifique se a CLI passa pelos gates do kernel (não deve haver caminho que execute ações sem Qlipot/Firewall). Corrija problemas pequenos; se a CLI estiver fundamentalmente quebrada, reporte em vez de reescrever.
   *Aceite*: `--help` funciona com exit code 0; comandos documentados no README.
 
 ---
@@ -232,7 +232,7 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
 - Não fazer push, não usar `--no-verify`, não commitar `.env`.
 - Não adicionar dependências pesadas sem registrar razão no commit (e prefira `requirements-*.txt` opcionais, padrão do repo).
 - Não converter o repo para inglês total nem para português total — a convenção mista é intencional.
-- Não confiar em nenhum documento da raiz exceto `README.md` e `MELHORIAS_E_APRIMORAMENTOS.md`; a verdade está em `docs/` e no código.
+- Não confiar em nenhum documento da raiz exceto `README.md`; a análise estratégica vive em `docs/analysis/MELHORIAS_E_APRIMORAMENTOS.md`, e a verdade operacional está em `docs/` e no código.
 
 ## 5. DEFINIÇÃO DE PRONTO (por onda)
 

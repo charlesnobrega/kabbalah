@@ -63,8 +63,8 @@ pytest tests -q → 1127 passed, 89 skipped
 | Contratos | Estado só em memória | Wave 2: `ContratoStore` SQLite, reload de contratos persistidos, eventos auditáveis, ausência de contrato separada de violação, consumo de `max_calls` via SQL |
 | Qlipot | Keyword lowercase puro; `aplicar_correcao` sem auth | Wave 3: normalização NFKC/casefold, remoção de format chars, mapeamento parcial de homoglyphs, scan de payload base64, padrões críticos, versão de assessor e correções autorizadas/clampadas/auditadas |
 | Cofre | `bw` via PATH sem validação; cache plaintext sem mitigação | Wave 3: `BITWARDEN_CLI_PATH`, hash opcional `KABBALAH_BW_SHA256`, `clear_on_read`, documentação explícita do tradeoff de cache |
-| CLI | Apontava para `cli.py` inexistente | `src/kabbalah/cli.py` existe e expõe `main()`; a pendência agora é validar UX/contratos da CLI, não criar arquivo inexistente |
-| Higiene de repo | `openclaude/`, specs antigas e exports de mock poluíam o repo/API | Onda 4: `openclaude/` removido do disco local, specs `.kiro` arquivadas, `MockProvider` removido do export público |
+| CLI | Apontava para `cli.py` inexistente | Onda 4: `src/kabbalah/cli.py` e entrypoint `kabbalah` validados com `--help` |
+| Higiene de repo | `openclaude/`, specs antigas, relatórios raiz e exports de mock poluíam o repo/API | Onda 4: `openclaude/` removido, specs `.kiro` arquivadas, relatórios raiz arquivados/removidos quando duplicados, `MockProvider` removido do export público |
 
 ### Lacunas que permanecem abertas
 
@@ -115,7 +115,7 @@ Proporção teste/código ~1,6:1 — saudável. O projeto **tem cultura de teste
 | RootOrchestrator | ⚠️ Bugado | dependências comparadas no domínio errado |
 | Memory Cognee | ❌ Placeholder | `memory_subsystem.py:73-109` é stub |
 | Tool sandbox | ⚠️ Endurecido, mas não isolado | grep sem shell, path/SSRF hardening, kill-switch de bash; ainda não é micro-VM |
-| CLI | ⚠️ Existe | `src/kabbalah/cli.py:main` existe; pendência é validar UX/contratos |
+| CLI | ✅ Validada | `python -m kabbalah.cli --help` e `kabbalah --help` exit 0 |
 
 ### 1.3 Resultado dos testes
 
@@ -238,11 +238,11 @@ def _execute_leaf_node(self, leaf_node):
 | `BaseProvider` (interface) | ✅ | ✅ | ✅ |
 | OpenAI/Groq/Mistral/Together/DeepSeek | ✅ | ✅ | ❌ ninguém chama |
 | GoogleGemini | ✅ | ⚠️ SDK deprecated, env var inconsistente | ❌ |
-| MockProvider | ✅ | ✅ | ⚠️ exportado publicamente (viola roadmap "no mocks") |
+| MockProvider | ✅ | ✅ | ✅ não exportado publicamente; uso por módulo dedicado de teste |
 | LocalLLMProvider (Ollama) | ✅ | ✅ | ⚠️ só em error_analysis |
 | ProviderFactory | ✅ | ✅ | ❌ órfão |
 | LLMGateway (seleção por $) | ✅ | ✅ | ❌ órfão total |
-| Anthropic/Claude | ❌ | — | README mente ("12+ providers") |
+| Anthropic/Claude | ❌ | — | Fora do README atual; não é provider implementado |
 | **LeafNode → provider** | ❌ | — | **lacuna central** |
 
 ### 4.4 Lacunas LLM priorizadas
@@ -252,7 +252,7 @@ def _execute_leaf_node(self, leaf_node):
 2. Decidir gateway canônico (Factory por role vs LLMGateway por $ — hoje dois becos).
 
 **🟡 P2 — Qualidade**
-3. Anthropic/Claude não existe (README mente).
+3. Anthropic/Claude não existe; manter fora do README até existir provider real.
 4. Gemini deprecated + env var inconsistente + perde stats em erro.
 5. Contagem de tokens em streaming é chute (`len/4` em PT/code erra).
 
@@ -518,12 +518,12 @@ Rank por **valor ÷ esforço**. Cada item tem: o quê, por quê, como, esforço 
 - **Esforço**: 🟢 10 minutos.
 
 #### M14. Corrigir ou Remover a CLI Quebrada
-- **Estado atual**: `src/kabbalah/cli.py` existe e contém `main()`.
-- **O que permanece**: validar UX, comandos, saída, help, exit codes e se a CLI respeita os gates do kernel.
+- **Status 2026-07-04**: ✅ feito na Onda 4. `python -m kabbalah.cli --help` e o entrypoint `kabbalah --help` retornam exit 0.
+- **Estado atual**: `src/kabbalah/cli.py` existe, contém `main()` e o entrypoint do `setup.py` funciona.
 - **Esforço**: 🟢 1 dia para validação/ajustes pequenos.
 
 #### M15. Acertar o README e Remover Relatórios Falsos
-- **Status 2026-07-04**: em execução na Onda 4. O README atual já não deve ser tratado como a origem do claim "12+ providers"; a pendência real é arquivar relatórios antigos de status/fase e validar links/layout final.
+- **Status 2026-07-04**: ✅ feito na Onda 4. README atualizado, links relativos validados, relatórios antigos de status/fase arquivados ou removidos quando duplicados.
 - **O quê**: relatórios antigos "APPROVED FOR PRODUCTION" e documentos de fase na raiz não são fonte de verdade.
 - **Por quê**: credibilidade. Qualquer reviewer técnico foi enganado por esses docs.
 - **Como**: mover ~30 relatórios de "PHASE X COMPLETE" para `docs/archive/reports/`, manter a raiz mínima e validar links do README.
@@ -615,8 +615,8 @@ Todas as claims deste doc são verificáveis no repositório:
 - **Contratos persistentes Wave 2**: `src/kabbalah/contrato_store.py` + `src/kabbalah/contratos.py`.
 - **Leaf mudo**: `src/kabbalah/domain_orchestrator.py:215-236`.
 - **Gateway órfão**: varredura de imports em todo `src/` (zero referências externas a `LLMGateway`).
-- **CLI existente**: `setup.py` aponta para `kabbalah.cli:main` e `src/kabbalah/cli.py` existe; pendência atual é validação/UX, não arquivo ausente.
-- **openclaude não integrado**: `docs/audit/FORENSIC_AUDIT_2026-04-11.md` Medium #14.
+- **CLI validada**: `setup.py` aponta para `kabbalah.cli:main`; `python -m kabbalah.cli --help` e `kabbalah --help` funcionam.
+- **openclaude arquivado/removido**: o diretório local não integrado foi removido na Onda 4 após verificação de zero referências.
 - **Origem do código**: `docs/audit/LAUDO_PERICIAL_ANTIGRAVITY.md`, `docs/audit/PERICIA_CIRURGICA_CODEX_2026_04_07.md`, `.kiro/specs/`.
 - **Comparativos de mercado**: `odysseusai.dev`, `docs.sillytavern.app`, `docs.cognee.ai`, `sakana.ai`, `github.com/sakanaai` (AI-Scientist-v2, CoffeeBench, ShinkaEvolve, continuous-thought-machines, evolutionary-model-merge).
 
