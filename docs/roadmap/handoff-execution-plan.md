@@ -278,6 +278,18 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
 - [ ] **7.2** Integração: o **LLMGateway consulta o BudgetManager antes de retornar provider**; estourou → exceção clara `BudgetExceededError` (modo `block`) ou warning logado (modo `warn`). **Default: `warn`** na primeira release; `block` via `KABBALAH_BUDGET_MODE=block`.
 - [ ] **7.3** Expor `get_budget_stats` como tool no bridge (mesmo padrão de `get_network_stats`).
   *Aceite*: teste de limite estourado nos dois modos; ledger append-only (sem API de update/delete); leaf registra custo no ledger a cada execução; suíte verde.
+- [ ] **7.4 Achados da ignição real (smoke Groq, 2026-07-04)** — dois defeitos
+  observados na primeira chamada LLM de verdade, ambos escopo desta onda:
+  1. **Fallback por candidato**: com Ollama offline (`localhost:11434` recusou),
+     o gateway selecionou o perfil local (cheap-first correto) e o leaf FALHOU
+     em vez de escalar. Corrigir: falha de conexão/instanciação marca o
+     candidato como indisponível (com registro) e tenta o PRÓXIMO da lista;
+     só falha quando todos os candidatos esgotarem. Teste simulando conexão
+     recusada no primeiro perfil.
+  2. **Custo real no ledger**: a chamada Groq real gravou `cost: 0.0` — o
+     `OpenAICompatibleProvider` não conhece pricing. Calcular custo a partir
+     do pricing do `ModelProfile` × `usage` reportado e gravar no ledger com
+     precisão suficiente para micro-custos (não arredondar para zero).
 
 ---
 
@@ -439,7 +451,7 @@ real da fase anterior — NÃO especificar agora.
 
 | # | Decisão | Bloqueia |
 |---|---|---|
-| 1 | Mergear `hardening/wave-2` em `main` antes de começar? (recomendado: sim) | Todas as ondas |
+| 1 | ✅ Resolvido 2026-07-04 — ondas 1–6 mergeadas em `main` (fast-forward, sem push) | — |
 | 2 | E2B (pago/cloud) vs Firecracker (self-hosted/Linux) | Onda 10.1 |
 | 3 | Modelo ML para o Qlipot + orçamento de avaliação | Onda 10.2 |
-| 4 | API keys live para smoke test real do loop LLM (opcional; mock cobre o essencial) | Qualidade extra da Onda 5 |
+| 4 | ✅ Resolvido 2026-07-04 — smoke real executado via Groq (`llama-3.1-8b-instant`): leaf → gateway → provider → artifact + linha no ledger. Achados registrados no item 7.4 | — |
