@@ -59,6 +59,9 @@ Recent decisions:
 - Onda 5 uses `LLMGateway` as the provider selector, `ProviderFactory` only as
   constructor, `BudgetLedger` as append-only call ledger, and `HardwareProfiler`
   as the canonical local hardware fingerprint/fit source.
+- Onda 7 adds `BudgetManager` enforcement (`warn` default, `block` opt-in),
+  gateway budget checks, ordered provider fallback, `get_budget_stats`, and
+  profile-priced ledger costs when provider responses report `cost=0.0`.
 
 Validation baseline:
 

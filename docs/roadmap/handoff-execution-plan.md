@@ -34,7 +34,8 @@
 | M14 (CLI) | ✅ Feito na onda 4 — `python -m kabbalah.cli --help` e entrypoint `kabbalah --help` exit 0 |
 | M15 (README/relatórios) | ✅ Feito na onda 4 — README atualizado, links validados, relatórios raiz arquivados/removidos quando duplicados |
 | M2 (fallback memória) | ✅ Verificado na onda 5 — com `cognee_present=False`, memória JSONL + Qlipot passaram testes direcionados |
-| M8, M9, M12, M17, M18 | ❌ Pendentes (features novas) |
+| M12 (Budget Manager) | ✅ Feito na onda 7 — limites por run/dia/provider, modos `warn|block`, gateway enforcement, tool `get_budget_stats`, fallback de providers e custos reais no ledger |
+| M8, M9, M17, M18 | ❌ Pendentes (features novas) |
 | M10, M11 | ⏸️ Bloqueados por decisão humana (ver §6) |
 
 ### APIs reais da camada de providers (verificadas)
@@ -43,7 +44,7 @@
 - `BaseProvider.execute_request(...)` — `src/kabbalah/providers/base.py`. Stats: `total_cost` segue disponível em `get_stats()`; chamadas de leaf também gravam consumo no `BudgetLedger` quando injetado.
 - `MockProvider` — gated por `KABBALAH_ALLOW_TEST_FAKE_PROVIDER=1`; é a ferramenta correta para testes e2e sem chamadas live.
 - `LLMGateway` / `CapabilityRegistry` — `src/kabbalah/llm_gateway.py`, seletor canônico por `role`, `capability` e `budget_hint`.
-- `BudgetLedger` — `src/kabbalah/budget_manager.py`, ledger SQLite append-only em modo só-registro; enforcement de limites fica para a Onda 7.
+- `BudgetLedger` / `BudgetManager` — `src/kabbalah/budget_manager.py`, ledger SQLite append-only e enforcement configurável por `KABBALAH_BUDGET_*`.
 - `HardwareProfiler` — `src/kabbalah/hardware_profile.py`, perfil local com fingerprint, fit/tier de modelos locais e tabela `hardware_profiles`.
 - Banco de estado: `KABBALAH_BRIDGE_STATE_DB` (default `.kabbalah_bridge_state.sqlite3`), tabelas `hitl_tickets`, `contratos`, `contrato_eventos`, `budget_ledger` e `hardware_profiles`. **Use `src/kabbalah/contrato_store.py` como implementação de referência para qualquer novo store SQLite** (lock + conexão por operação + busy_timeout + append-only para auditoria).
 
@@ -274,11 +275,11 @@ cofre, nunca escreve valor de chave em código, teste, log ou commit.
 
 Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost` já é acumulado por provider (`base.py:57,165`) e exposto em `get_stats()` — falta quem leia e haja.
 
-- [ ] **7.1** Estender `src/kabbalah/budget_manager.py`: o `BudgetLedger` append-only já existe desde a Onda 5; adicionar `BudgetManager` com limites configuráveis (por run, por dia, por provider) via env `KABBALAH_BUDGET_*`.
-- [ ] **7.2** Integração: o **LLMGateway consulta o BudgetManager antes de retornar provider**; estourou → exceção clara `BudgetExceededError` (modo `block`) ou warning logado (modo `warn`). **Default: `warn`** na primeira release; `block` via `KABBALAH_BUDGET_MODE=block`.
-- [ ] **7.3** Expor `get_budget_stats` como tool no bridge (mesmo padrão de `get_network_stats`).
+- [x] **7.1** Estender `src/kabbalah/budget_manager.py`: o `BudgetLedger` append-only já existe desde a Onda 5; adicionar `BudgetManager` com limites configuráveis (por run, por dia, por provider) via env `KABBALAH_BUDGET_*`.
+- [x] **7.2** Integração: o **LLMGateway consulta o BudgetManager antes de retornar provider**; estourou → exceção clara `BudgetExceededError` (modo `block`) ou warning logado (modo `warn`). **Default: `warn`** na primeira release; `block` via `KABBALAH_BUDGET_MODE=block`.
+- [x] **7.3** Expor `get_budget_stats` como tool no bridge (mesmo padrão de `get_network_stats`).
   *Aceite*: teste de limite estourado nos dois modos; ledger append-only (sem API de update/delete); leaf registra custo no ledger a cada execução; suíte verde.
-- [ ] **7.4 Achados da ignição real (smoke Groq, 2026-07-04)** — dois defeitos
+- [x] **7.4 Achados da ignição real (smoke Groq, 2026-07-04)** — dois defeitos
   observados na primeira chamada LLM de verdade, ambos escopo desta onda:
   1. **Fallback por candidato**: com Ollama offline (`localhost:11434` recusou),
      o gateway selecionou o perfil local (cheap-first correto) e o leaf FALHOU

@@ -6,7 +6,7 @@
 
 Kabbalah is an alpha-stage Python project for multi-agent orchestration. The repository contains a tree-based orchestration skeleton, provider abstractions, runtime hardening primitives, memory modules, tool execution primitives, observability primitives, and tests.
 
-This repository is not yet a production autonomous runtime. Current gaps include root-level gateway wiring, budget enforcement, Cognee-backed semantic retrieval, skill registry wiring, graph runtime wiring, and true parallel execution in the main orchestration path.
+This repository is not yet a production autonomous runtime. Current gaps include root-level gateway wiring, configuration/onboarding UI, Cognee-backed semantic retrieval, skill registry wiring, graph runtime wiring, and true parallel execution in the main orchestration path.
 
 ## Current runtime reality
 
@@ -17,7 +17,7 @@ This repository is not yet a production autonomous runtime. Current gaps include
 - `LocalLLMProvider` exists as legacy code; the main local route is `ollama_local` through the generic OpenAI-compatible adapter.
 - Root/domain orchestration is sequential in the current implementation, despite config/docs describing intended parallelism.
 - Leaf execution runs a real provider loop only when `DomainOrchestrator` is constructed with an injected `LLMGateway`; without a gateway it returns explicit `status="skipped"`, not fake success.
-- SillyTavern MCP bridge exists at `kabbalah_mcp_bridge.py` and exposes guarded tools through qlipot, FirewallMCP, HITL tickets, Bitwarden cache, agent contracts, retry limits, and SyncHub stats.
+- SillyTavern MCP bridge exists at `kabbalah_mcp_bridge.py` and exposes guarded tools through qlipot, FirewallMCP, HITL tickets, Bitwarden cache, agent contracts, retry limits, SyncHub stats, and budget stats.
 - Agent contracts are persisted in SQLite by the bridge. SyncHub network propagation is phase-1/local only; P2P/central federation is not production-wired yet.
 
 ## Repository layout
@@ -105,7 +105,7 @@ Current bridge tools include:
 - `read_env_var`, `call_tool`, `database_query`
 - `check_hitl_status`
 - `propose_contract`, `sign_contract`, `reject_contract`, `complete_task`
-- `get_network_stats`
+- `get_network_stats`, `get_budget_stats`
 
 All bridge logging is configured for `stderr`; `stdout` remains reserved for
 MCP/JSON-RPC stdio traffic.
@@ -151,8 +151,16 @@ Wave-5 LLM loop:
 - `LLMGateway` is the canonical provider selector by role, capability, and budget hint.
 - `OpenAICompatibleProvider` covers Ollama local, OpenRouter, Groq-compatible, Cerebras, and SambaNova without provider-specific SDKs.
 - `DomainOrchestrator` can execute leaf work through an injected gateway and returns `llm_response` artifacts on real provider success.
-- `BudgetLedger` records provider/model tokens and cost in append-only SQLite when injected; budget limits are a later roadmap item.
+- `BudgetLedger` records provider/model tokens and cost in append-only SQLite when injected.
 - `HardwareProfiler` fingerprints local CPU/GPU/RAM, stores hardware profiles in the bridge state DB, and classifies local model fit/tier without vendor-based assumptions.
+
+Wave-7 budget manager:
+
+- `BudgetManager` enforces configurable limits by run, day, and provider from `KABBALAH_BUDGET_*`.
+- `KABBALAH_BUDGET_MODE=warn` is the default; `KABBALAH_BUDGET_MODE=block` raises `BudgetExceededError`.
+- `LLMGateway` checks budget before returning providers and supports ordered fallback candidates.
+- `get_budget_stats` is exposed as a read-only MCP bridge tool.
+- Leaf ledger cost uses provider `usage` plus `ModelProfile` pricing when a provider reports `cost=0.0`.
 
 ## Configuration
 

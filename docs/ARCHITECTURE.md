@@ -24,7 +24,7 @@ UserRequest / MCP client / CLI
   -> LeafNode
   -> LLMGateway / CapabilityRegistry
   -> ProviderFactory
-  -> BudgetLedger when injected
+  -> BudgetManager / BudgetLedger when injected
   -> Synthesizer
   -> DeliveryPackage
 ```
@@ -61,8 +61,8 @@ Orchestration       | Intake -> Root -> Domain -> Leaf      |
                     +--------------------------------------+
 LLM layer           | LLMGateway -> CapabilityRegistry      |
                     | ProviderFactory -> provider adapters  |
-                    | Mock only gated; BudgetLedger records |
-                    | HardwareProfiler classifies local fit |
+                    | BudgetManager gates provider return   |
+                    | Mock only gated; HardwareProfiler fit |
                     +------------------+-------------------+
                                        |
                                        v
@@ -84,10 +84,10 @@ Persistence/audit   | SQLite state DB and append-only logs  |
 | `src/kabbalah/tools/execution_engine.py` | Tool execution boundary for filesystem, command, and network-style actions. |
 | `src/kabbalah/intake_node.py` | User request validation and conversion to a canonical specification. |
 | `src/kabbalah/root_orchestrator.py` | Decomposes specifications into domain branches. |
-| `src/kabbalah/domain_orchestrator.py` | Converts domain branch work into leaf nodes. With an injected `LLMGateway`, leaf execution calls a provider, returns an `llm_response` artifact, and can record ledger usage. |
-| `src/kabbalah/llm_gateway.py` | Canonical provider selector by role, capability, and budget hint. It delegates provider construction to `ProviderFactory`. |
+| `src/kabbalah/domain_orchestrator.py` | Converts domain branch work into leaf nodes. With an injected `LLMGateway`, leaf execution tries ordered provider candidates, returns an `llm_response` artifact, and can record ledger usage. |
+| `src/kabbalah/llm_gateway.py` | Canonical provider selector by role, capability, and budget hint. It delegates provider construction to `ProviderFactory`, checks `BudgetManager` when configured, and returns ordered candidates for fallback-capable callers. |
 | `src/kabbalah/providers/` | Provider abstraction and adapters for native and OpenAI-compatible external/local LLM providers. Runtime mock use is gated. |
-| `src/kabbalah/budget_manager.py` | Append-only `BudgetLedger` for provider/model token and cost records. Limit enforcement is deferred to the roadmap Budget Manager wave. |
+| `src/kabbalah/budget_manager.py` | Append-only `BudgetLedger` plus `BudgetManager` for run/day/provider limits in `warn` or `block` mode. |
 | `src/kabbalah/hardware_profile.py` | Local hardware fingerprinting, GPU/CPU/RAM detection, static model fit classification, and measured-token tier classification for local profiles. |
 | `src/kabbalah/memory_subsystem.py` and `src/kabbalah/memory_governance.py` | Memory storage, fallback behavior, and memory access governance. |
 | `src/kabbalah/observability/` and `src/kabbalah/trace_id_tracking.py` | Logs, trace IDs, and operational observability. |
