@@ -7,7 +7,11 @@ Implements the BaseProvider interface for Google's Gemini models.
 import os
 import time
 from typing import Dict, Optional, Iterator
-import google.generativeai as genai
+
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
 
 from .base import BaseProvider, ProviderResponse
 from ..secrets_vault import get_api_key
@@ -63,6 +67,9 @@ class GoogleGeminiProvider(BaseProvider):
         
         if not self.api_key:
             raise ValueError("GOOGLE_API_KEY not found in vault or environment")
+
+        if genai is None:
+            raise ValueError("google-generativeai package is not installed")
         
         # Configure the Gemini API
         genai.configure(api_key=self.api_key)

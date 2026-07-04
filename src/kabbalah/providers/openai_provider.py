@@ -7,7 +7,12 @@ Implements the BaseProvider interface for OpenAI's models.
 import os
 import time
 from typing import Dict, Optional, Iterator
-from openai import OpenAI, APIError
+
+try:
+    from openai import OpenAI, APIError
+except ImportError:
+    OpenAI = None
+    APIError = Exception
 
 from .base import BaseProvider, ProviderResponse
 from ..secrets_vault import get_api_key
@@ -63,6 +68,9 @@ class OpenAIProvider(BaseProvider):
         
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY not found in vault or environment")
+
+        if OpenAI is None:
+            raise ValueError("openai package is not installed")
         
         # Initialize OpenAI client
         self.client = OpenAI(api_key=self.api_key)

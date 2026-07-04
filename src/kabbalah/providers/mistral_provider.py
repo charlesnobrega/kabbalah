@@ -7,7 +7,11 @@ Implements the BaseProvider interface for Mistral's models.
 import os
 import time
 from typing import Dict, Optional, Iterator
-from mistralai.client import MistralClient as Mistral
+
+try:
+    from mistralai.client import MistralClient as Mistral
+except ImportError:
+    Mistral = None
 
 from .base import BaseProvider, ProviderResponse
 from ..secrets_vault import get_api_key
@@ -58,9 +62,9 @@ class MistralProvider(BaseProvider):
         
         if not self.api_key:
             raise ValueError("MISTRAL_API_KEY not found in vault or environment")
-        
+
         # Initialize Mistral client
-        self.client = Mistral(api_key=self.api_key)
+        self.client = Mistral(api_key=self.api_key) if Mistral is not None else None
     
     def execute_request(
         self,
@@ -89,6 +93,9 @@ class MistralProvider(BaseProvider):
         start_time = time.time()
         
         try:
+            if self.client is None:
+                raise RuntimeError("mistralai package is not installed")
+
             # Create the request (messages are already in dict format)
             response = self.client.chat.complete(
                 model=model_name,
@@ -162,6 +169,9 @@ class MistralProvider(BaseProvider):
         start_time = time.time()
         
         try:
+            if self.client is None:
+                raise RuntimeError("mistralai package is not installed")
+
             # Create the streaming request (messages are already in dict format)
             response = self.client.chat.stream(
                 model=model_name,

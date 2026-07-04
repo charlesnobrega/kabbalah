@@ -7,7 +7,11 @@ Implements the BaseProvider interface for Together's models.
 import os
 import time
 from typing import Dict, Optional, Iterator
-import together
+
+try:
+    import together
+except ImportError:
+    together = None
 
 from .base import BaseProvider, ProviderResponse
 from ..secrets_vault import get_api_key
@@ -63,6 +67,9 @@ class TogetherProvider(BaseProvider):
         
         if not self.api_key:
             raise ValueError("TOGETHER_API_KEY not found in vault or environment")
+
+        if together is None:
+            raise ValueError("together package is not installed")
         
         # Initialize Together client
         together.api_key = self.api_key

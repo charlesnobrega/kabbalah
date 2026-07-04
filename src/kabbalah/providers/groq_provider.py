@@ -7,7 +7,12 @@ Implements the BaseProvider interface for Groq's models.
 import os
 import time
 from typing import Dict, Optional, Iterator
-from groq import Groq, APIError
+
+try:
+    from groq import Groq, APIError
+except ImportError:
+    Groq = None
+    APIError = Exception
 
 from .base import BaseProvider, ProviderResponse
 from ..secrets_vault import get_api_key
@@ -58,9 +63,9 @@ class GroqProvider(BaseProvider):
         
         if not self.api_key:
             raise ValueError("GROQ_API_KEY not found in vault or environment")
-        
+
         # Initialize Groq client
-        self.client = Groq(api_key=self.api_key)
+        self.client = Groq(api_key=self.api_key) if Groq is not None else None
     
     def execute_request(
         self,
@@ -89,6 +94,9 @@ class GroqProvider(BaseProvider):
         start_time = time.time()
         
         try:
+            if self.client is None:
+                raise RuntimeError("groq package is not installed")
+
             # Create the request
             response = self.client.chat.completions.create(
                 model=model_name,
@@ -173,6 +181,9 @@ class GroqProvider(BaseProvider):
         start_time = time.time()
         
         try:
+            if self.client is None:
+                raise RuntimeError("groq package is not installed")
+
             # Create the streaming request
             response = self.client.chat.completions.create(
                 model=model_name,

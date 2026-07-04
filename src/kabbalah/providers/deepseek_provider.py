@@ -7,7 +7,11 @@ Implements the BaseProvider interface for DeepSeek's models.
 import os
 import time
 from typing import Dict, Optional, Iterator
-from openai import OpenAI
+
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
 
 from .base import BaseProvider, ProviderResponse
 from ..secrets_vault import get_api_key
@@ -53,6 +57,9 @@ class DeepSeekProvider(BaseProvider):
         
         if not self.api_key:
             raise ValueError("DEEPSEEK_API_KEY not found in vault or environment")
+
+        if OpenAI is None:
+            raise ValueError("openai package is not installed")
         
         # Initialize DeepSeek client (uses OpenAI-compatible API)
         self.client = OpenAI(
