@@ -140,7 +140,7 @@ sendo 40 já em archive, 29 em specs (maioria morta), 17 em audit, 6 updates, et
   `INTEGRATED_ROADMAP.md`, `NEXT_GEN_ROADMAP.md` (conflitam com o roadmap oficial),
   `MEMORY_ANALYSIS.md`, `EVOLUTION_CHECKLIST.md`, `SECURITY_SKILL_REGISTRY_ANALYSIS.md`,
   `TURBOQUANT_IMPLEMENTATION.md`. Remover `docs/specs/.config.kiro`.
-- [ ] **D.4** `docs/updates/` (6) e `docs/superpowers/` (1): ler por alto; se
+- [x] **D.4** `docs/updates/` (6) e `docs/superpowers/` (1): ler por alto; se
   descrevem estado passado → `docs/archive/`; se vivos, integrar ao doc certo.
 - [ ] **D.5** Raiz → `docs/archive/reports/`: `git mv` de TODOS os relatórios de
   status/fase da raiz (~30: `PHASE*_*.md`, `FINAL_*.{md,txt}`, `PROJECT_*.md`,
