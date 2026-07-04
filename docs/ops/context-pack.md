@@ -2,6 +2,10 @@
 
 Role: alpha-stage multi-agent orchestration runtime for experimentation and recovery.
 
+> Workspace-level rules (all AIs, all projects): `E:\projetos\AGENTS.md` — this
+> project folder (`E:\projetos\kabbalah`) is the working root; never treat
+> `E:\projetos` as the project.
+
 ## Document hierarchy (read this first — binding for any AI/dev)
 
 1. **Canonical execution plan**: `docs/roadmap/handoff-execution-plan.md` (waves
