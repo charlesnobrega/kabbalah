@@ -16,6 +16,7 @@ from .groq_provider import GroqProvider
 from .mistral_provider import MistralProvider
 from .together_provider import TogetherProvider
 from .deepseek_provider import DeepSeekProvider
+from .openai_compatible_provider import OpenAICompatibleProvider
 
 
 class ConfigurationMode(Enum):
@@ -53,6 +54,39 @@ class ProviderFactory:
         "mistral": MistralProvider,
         "together": TogetherProvider,
         "deepseek": DeepSeekProvider,
+        "ollama_local": OpenAICompatibleProvider,
+        "openrouter": OpenAICompatibleProvider,
+        "groq_compatible": OpenAICompatibleProvider,
+        "cerebras": OpenAICompatibleProvider,
+        "sambanova": OpenAICompatibleProvider,
+    }
+
+    PROVIDER_DEFAULTS: Dict[str, Dict] = {
+        "ollama_local": {
+            "base_url": "http://localhost:11434/v1",
+            "api_key_env": None,
+            "model": "llama3.1",
+        },
+        "openrouter": {
+            "base_url": "https://openrouter.ai/api/v1",
+            "api_key_env": "OPENROUTER_API_KEY",
+            "model": "openai/gpt-4o-mini",
+        },
+        "groq_compatible": {
+            "base_url": "https://api.groq.com/openai/v1",
+            "api_key_env": "GROQ_API_KEY",
+            "model": "llama-3.1-8b-instant",
+        },
+        "cerebras": {
+            "base_url": "https://api.cerebras.ai/v1",
+            "api_key_env": "CEREBRAS_API_KEY",
+            "model": "llama3.1-8b",
+        },
+        "sambanova": {
+            "base_url": "https://api.sambanova.ai/v1",
+            "api_key_env": "SAMBANOVA_API_KEY",
+            "model": "Meta-Llama-3.1-8B-Instruct",
+        },
     }
     
     def __init__(self):
@@ -94,6 +128,9 @@ class ProviderFactory:
         if cache_key in self.instances:
             return self.instances[cache_key]
         
+        provider_defaults = self.PROVIDER_DEFAULTS.get(provider_name, {})
+        merged_kwargs = {**provider_defaults, **kwargs}
+
         # Create new instance
         provider_class = self.PROVIDERS[provider_name]
         
@@ -102,7 +139,7 @@ class ProviderFactory:
             env_var = f"{provider_name.upper()}_API_KEY"
             api_key = os.getenv(env_var)
         
-        instance = provider_class(api_key=api_key, **kwargs)
+        instance = provider_class(api_key=api_key, **merged_kwargs)
         self.instances[cache_key] = instance
         
         return instance
