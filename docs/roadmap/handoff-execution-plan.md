@@ -11,7 +11,7 @@
 
 - **Branch atual de limpeza**: `wave-4-hygiene`, criada a partir de `hardening/wave-2` em 2026-07-04.
 - **Branch atual da Onda 5**: `wave-5-llm-loop`, criada a partir de `wave-4-hygiene` em 2026-07-04.
-- **Suíte de testes**: `1128 passed, 89 skipped` (skips = testes live de providers, desligados por política — **é o estado esperado, não conserte**). O número "812/74 failed" citado na análise externa é de um snapshot de abril/2026 — **obsoleto**.
+- **Suíte de testes**: `1150 passed, 89 skipped` em 2026-07-04 na branch `wave-5-llm-loop` com `.venv\Scripts\python.exe -m pytest tests -q` (skips = testes live de providers, desligados por política — **é o estado esperado, não conserte**). O número "812/74 failed" citado na análise externa é de um snapshot de abril/2026 — **obsoleto**.
 - **Ondas de hardening 1–3 completas** (ver `docs/roadmap/hardening-next-waves.md`):
   - Onda 1: bridge MCP + ToolExecutionEngine (contratos obrigatórios, shell opt-in, SSRF, allowlists).
   - Onda 2: contratos persistentes em SQLite (`src/kabbalah/contrato_store.py`), `max_calls` atômico, log de violações append-only, separação ausência×violação (`VerificationOutcome`).
