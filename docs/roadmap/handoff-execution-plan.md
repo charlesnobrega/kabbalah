@@ -203,6 +203,10 @@ cofre, nunca escreve valor de chave em código, teste, log ou commit.
   Notas: DeepSeek e modelos Anthropic/Claude entram **via OpenRouter** (decisão
   do Charles — não criar providers diretos para eles). Os providers nativos
   existentes (OpenAI, Gemini, Mistral) permanecem como tier premium.
+  **Chave ausente = provider indisponível no registro** (sem crash, sem pedir
+  segredo no meio de execução): o gateway simplesmente não oferece o tier e o
+  erro/log instrui a rodar `kabbalah setup` (item 8.0). Este `.env` é só o
+  bootstrap de desenvolvimento do executor — o fluxo do usuário final é o 8.0.
   `LocalLLMProvider` legado: substituir pelo adaptador genérico apontando para o
   endpoint OpenAI-compat do Ollama; não manter dois caminhos para o mesmo destino.
   *Aceite*: teste do adaptador contra servidor HTTP fake; entrada Ollama
@@ -270,8 +274,32 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
 
 ---
 
-### ONDA 8 — Features visíveis (M8+M9) — esforço: 5-8 dias — depende das Ondas 5 e 7
+### ONDA 8 — Features visíveis (M8+M9+config) — esforço: 7-10 dias — depende das Ondas 5 e 7
 
+- [ ] **8.0 Configuração e onboarding (menu de configurações)** — chaves são
+  **por instalação e solicitadas ao usuário**, nunca embutidas no projeto:
+  1. **Primeiro boot sem config** → wizard interativo na CLI (`kabbalah setup`):
+     lista os providers do registro, usuário escolhe quais ativar, insere as
+     chaves com input oculto (`getpass`), o wizard **valida cada uma com uma
+     chamada de teste** e só então armazena.
+  2. **Armazenamento por instalação**, em ordem de preferência: keyring do SO
+     (Windows Credential Manager / Secret Service, via lib `keyring`) como
+     padrão; Bitwarden via `CofreBitwarden` como opção avançada (o projeto já
+     prega isso); `.env` local como fallback de dev. **Nunca** em arquivo
+     tracked, nunca em claro no state DB.
+  3. **Menu `kabbalah config`**: listar providers com status da chave (presente/
+     válida/ausente — exibir no máximo últimos 4 caracteres), adicionar/remover/
+     testar chave, ver perfil de hardware ativo, definir limites de budget
+     (integra Onda 7), escolher política de roteamento.
+  4. **Nunca pedir segredo em execução autônoma**: se o gateway precisar de um
+     tier sem chave durante um run, falha com instrução clara para rodar
+     `kabbalah setup` — input de segredo só em sessão interativa do humano.
+  5. Bridge: expor `get_config_status` (status sem valores) como tool.
+  6. Existe `src/kabbalah/configuration_manager.py` (com testes) — **leia e
+     estenda**, não crie um sistema paralelo.
+  *Aceite*: instalação limpa → wizard funciona ponta a ponta; nenhum segredo
+  aparece em arquivo tracked, log ou saída de `kabbalah config list`; chave
+  inválida é rejeitada na validação; suíte verde.
 - [ ] **8.1 (M8) Model Comparison** — nova tool `compare_models` no bridge: mesma task despachada a N providers (via gateway, respeitando budget), retorna tabela JSON: provider, latência, tokens, custo, resposta. Passa pelo pipeline de segurança normal (contrato + firewall + qlipot) como qualquer tool. Sem API keys live configuradas → erro honesto por provider, não mock.
   *Aceite*: teste com MockProvider gated simulando 2 "providers"; entrada documentada no README.
 - [ ] **8.2 (M9) Group Chat SillyTavern** — mapear orquestração para sala ST: cada domain = um bot; decisões do Firewall/HITL aparecem como mensagens. Item mais aberto — **produza primeiro um design doc curto** (`docs/specs/st-group-chat-design.md`) com o mapeamento proposto e critérios, e só então implemente. Se o esforço explodir (>5 dias), pare no design doc e reporte.
