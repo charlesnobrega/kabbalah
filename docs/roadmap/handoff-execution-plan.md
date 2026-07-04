@@ -379,6 +379,47 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
 - Não converter o repo para inglês total nem para português total — a convenção mista é intencional.
 - Não confiar em nenhum documento da raiz exceto `README.md`; a análise estratégica vive em `docs/analysis/MELHORIAS_E_APRIMORAMENTOS.md`, e a verdade operacional está em `docs/` e no código.
 
+### ONDA 11 — Rede federada (SyncHub fase 2) — **só após a Onda 9 (M17)**
+
+> Gate duro: federar exige o Kabbalah-Bench provando com números que correções
+> compartilhadas melhoram contenção. Federar sinal não-validado é distribuir
+> ruído (ou veneno) em escala. Decisões abaixo fechadas com o Charles em
+> 2026-07-04 (recomendação do Claude, veto do Charles a qualquer momento).
+
+Visão: **threat intelligence federada para agentes** — o modelo "definições de
+antivírus", não uma rede social de instâncias. O SyncHub atual é a metade local
+(sinapses, quarentena, reputação, ban list); esta onda cria o transporte.
+
+- [ ] **11.1 Design doc primeiro** — `docs/specs/federated-network-design.md`:
+  formato do bundle, pipeline de importação, modelo de ameaça (envenenamento,
+  spoofing, replay), plano de compatibilidade entre versões do assessor.
+- [ ] **11.2 Identidade criptográfica** — keypair ed25519 gerado no
+  `kabbalah setup` (integra 8.0); a chave pública é a identidade da instância
+  na rede. O `hardware_hash` do profiler vira telemetria, NÃO identidade.
+- [ ] **11.3 Bundles assinados (a "rede" sem servidor)** — exportar/importar
+  arquivos de sinapses assinados:
+  - Conteúdo por sinapse: `hash(assinatura_acao)`, delta, contadores, janela
+    temporal grosseira, `RISK_ASSESSOR_VERSION`. **Nunca** conteúdo bruto
+    (parâmetros, caminhos, prompts não saem da máquina).
+  - Bundle carrega identidade do publicador + assinatura ed25519.
+  - Importação: verificar assinatura → publicador na trust list → quarentena →
+    quórum (≥N publicadores independentes OU contagem mínima) → clamp ±0.30
+    (já existe) → `aplicar_correcao(origem="sync_hub")` → auditoria append-only.
+  - Correção só internaliza se `RISK_ASSESSOR_VERSION` for compatível.
+- [ ] **11.4 Trust list e modos** — chave do projeto (Charles) pré-confiada;
+  usuário gerencia via `kabbalah config` (trust add/remove). Modos de rede no
+  menu 8.0: `off` (DEFAULT — instalação nunca fala com rede sem ação explícita)
+  / `receber` (importa, não envia) / `receber+contribuir`.
+  - Distribuição fase 2: bundles oficiais curados e assinados pelo Charles via
+    GitHub Releases do repo. Formato neutro por design: qualquer publicador
+    pode assinar; a trust list de cada dono decide.
+- [ ] **11.5 Medir antes e depois** — rodar o Kabbalah-Bench com e sem as
+  correções importadas; só promover a feature se a taxa de contenção melhorar
+  sem aumento de falso-positivo.
+
+Fases 3 (hub HTTPS opt-in) e 4 (P2P gossip): futuro, cada uma gated por tração
+real da fase anterior — NÃO especificar agora.
+
 ## 5. DEFINIÇÃO DE PRONTO (por onda)
 
 1. Todos os checkboxes da onda marcados neste arquivo.
