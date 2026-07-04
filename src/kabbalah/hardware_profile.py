@@ -18,6 +18,11 @@ from typing import Callable, Iterable, Optional, Protocol, Sequence
 
 from kabbalah.llm_gateway import ModelProfile
 
+try:
+    import psutil
+except ImportError:
+    psutil = None
+
 
 class CapabilityRegistryProtocol(Protocol):
     """Registry interface consumed by the hardware profiler."""
@@ -56,6 +61,7 @@ class HardwareProfile:
     cpu: CPUInfo
     ram_total_mb: int
     model_fits: dict[str, str]
+    model_tiers: dict[str, str]
     created_at: float
 
 
@@ -101,6 +107,7 @@ class HardwareProfiler:
                 cpu=cpu,
                 ram_total_mb=cpu.ram_total_mb,
                 model_fits=self._classify_model_fits(registry.list_profiles(), gpus),
+                model_tiers=self._classify_model_tiers(registry.list_profiles(), gpus),
                 created_at=time.time(),
             )
             self._insert_profile(profile)
@@ -190,6 +197,31 @@ class HardwareProfiler:
         # TODO(onda-7): enforce live VRAM pressure before dispatching a local model.
         return model_fits
 
+    @classmethod
+    def _classify_model_tiers(
+        cls,
+        profiles: Iterable[ModelProfile],
+        gpus: Sequence[GPUInfo],
+    ) -> dict[str, str]:
+        model_fits = cls._classify_model_fits(profiles, gpus)
+        model_tiers: dict[str, str] = {}
+
+        for profile in profiles:
+            if profile.location != "local":
+                continue
+
+            fit = model_fits.get(profile.name, "unavailable")
+            if fit == "unavailable" or profile.tokens_s_medido is None:
+                model_tiers[profile.name] = "indisponivel"
+            elif profile.tokens_s_medido >= 12.0:
+                model_tiers[profile.name] = "interativo"
+            elif profile.tokens_s_medido > 0:
+                model_tiers[profile.name] = "batch"
+            else:
+                model_tiers[profile.name] = "indisponivel"
+
+        return model_tiers
+
     @staticmethod
     def _fingerprint(*, gpus: Sequence[GPUInfo], cpu: CPUInfo) -> str:
         payload = {
@@ -219,6 +251,7 @@ class HardwareProfiler:
             ),
             ram_total_mb=data["ram_total_mb"],
             model_fits=dict(data["model_fits"]),
+            model_tiers=dict(data.get("model_tiers", {})),
             created_at=data["created_at"],
         )
 
@@ -227,19 +260,37 @@ class HardwareProfiler:
         model = platform.processor() or platform.machine() or "unknown-cpu"
         return CPUInfo(
             model=model,
-            cores=os.cpu_count() or 1,
+            cores=_detect_cpu_cores(),
             ram_total_mb=_detect_total_ram_mb(),
+            flags=_detect_cpu_flags(),
         )
 
     @staticmethod
     def _default_probe_gpus() -> list[GPUInfo]:
+        gpus = _probe_vendor_gpus()
+        if gpus:
+            return gpus
         gpus = _probe_nvidia_smi()
         if gpus:
             return gpus
         return _probe_windows_video_controllers()
 
 
+def _detect_cpu_cores() -> int:
+    if psutil is not None:
+        cores = psutil.cpu_count(logical=True)
+        if cores:
+            return int(cores)
+    return os.cpu_count() or 1
+
+
 def _detect_total_ram_mb() -> int:
+    if psutil is not None:
+        try:
+            return int(psutil.virtual_memory().total // (1024 * 1024))
+        except Exception:
+            pass
+
     if platform.system().lower() == "windows":
         class MEMORYSTATUSEX(ctypes.Structure):
             _fields_ = [
@@ -267,6 +318,130 @@ def _detect_total_ram_mb() -> int:
         except (OSError, ValueError):
             pass
     return 0
+
+
+def _detect_cpu_flags() -> tuple[str, ...]:
+    flags: set[str] = set()
+    cpuinfo_path = Path("/proc/cpuinfo")
+    if cpuinfo_path.exists():
+        try:
+            text = cpuinfo_path.read_text(encoding="utf-8", errors="ignore").lower()
+            for flag in ("avx", "avx2", "avx512", "fma", "sse4_2"):
+                if flag in text:
+                    flags.add(flag)
+        except OSError:
+            pass
+
+    processor = (platform.processor() or "").lower()
+    for flag in ("avx", "avx2", "avx512", "fma", "sse4_2"):
+        if flag in processor:
+            flags.add(flag)
+    return tuple(sorted(flags))
+
+
+def _probe_vendor_gpus() -> list[GPUInfo]:
+    """Probe vendor-specific APIs first; callers must tolerate empty results."""
+    gpus: list[GPUInfo] = []
+    gpus.extend(_probe_nvml())
+    gpus.extend(_probe_amdsmi())
+    return gpus
+
+
+def _probe_nvml() -> list[GPUInfo]:
+    try:
+        import pynvml
+    except ImportError:
+        return []
+
+    try:
+        pynvml.nvmlInit()
+        count = pynvml.nvmlDeviceGetCount()
+        gpus: list[GPUInfo] = []
+        for index in range(count):
+            handle = pynvml.nvmlDeviceGetHandleByIndex(index)
+            raw_name = pynvml.nvmlDeviceGetName(handle)
+            model = raw_name.decode("utf-8") if isinstance(raw_name, bytes) else str(raw_name)
+            memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            gpus.append(
+                GPUInfo(
+                    model=model,
+                    vendor="nvidia",
+                    vram_total_mb=int(memory.total // (1024 * 1024)),
+                    backend="cuda",
+                )
+            )
+        return gpus
+    except Exception:
+        return []
+    finally:
+        try:
+            pynvml.nvmlShutdown()
+        except Exception:
+            pass
+
+
+def _probe_amdsmi() -> list[GPUInfo]:
+    try:
+        import amdsmi
+    except ImportError:
+        return []
+
+    try:
+        amdsmi.amdsmi_init()
+        handles = amdsmi.amdsmi_get_processor_handles()
+        gpus: list[GPUInfo] = []
+        for handle in handles:
+            model = _amdsmi_model(handle, amdsmi)
+            vram_total_mb = _amdsmi_vram_total_mb(handle, amdsmi)
+            if model and vram_total_mb > 0:
+                gpus.append(
+                    GPUInfo(
+                        model=model,
+                        vendor="amd",
+                        vram_total_mb=vram_total_mb,
+                        backend="rocm",
+                    )
+                )
+        return gpus
+    except Exception:
+        return []
+    finally:
+        try:
+            amdsmi.amdsmi_shut_down()
+        except Exception:
+            pass
+
+
+def _amdsmi_model(handle: object, amdsmi_module: object) -> str:
+    for method_name in ("amdsmi_get_gpu_asic_info", "amdsmi_get_gpu_board_info"):
+        method = getattr(amdsmi_module, method_name, None)
+        if method is None:
+            continue
+        try:
+            info = method(handle)
+        except Exception:
+            continue
+        if isinstance(info, dict):
+            for key in ("market_name", "product_name", "name", "model"):
+                value = info.get(key)
+                if value:
+                    return str(value)
+    return "AMD GPU"
+
+
+def _amdsmi_vram_total_mb(handle: object, amdsmi_module: object) -> int:
+    memory_type = getattr(getattr(amdsmi_module, "AmdSmiMemoryType", object), "VRAM", None)
+    method = getattr(amdsmi_module, "amdsmi_get_gpu_memory_total", None)
+    if method is None:
+        return 0
+    try:
+        if memory_type is None:
+            total_bytes = method(handle)
+        else:
+            total_bytes = method(handle, memory_type)
+        return int(total_bytes // (1024 * 1024))
+    except Exception:
+        return 0
 
 
 def _probe_nvidia_smi() -> list[GPUInfo]:

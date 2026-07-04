@@ -1,5 +1,6 @@
 """Tests for local hardware profiling and model fit classification."""
 
+import kabbalah.hardware_profile as hardware_profile
 from kabbalah.hardware_profile import CPUInfo, GPUInfo, HardwareProfiler
 from kabbalah.llm_gateway import CapabilityRegistry, ModelProfile
 
@@ -9,6 +10,7 @@ def _local_profile(
     *,
     min_vram_full: int | None = None,
     min_vram_offload: int | None = None,
+    tokens_s_medido: float | None = None,
 ) -> ModelProfile:
     return ModelProfile(
         name=name,
@@ -24,6 +26,7 @@ def _local_profile(
         tier="local",
         min_vram_full=min_vram_full,
         min_vram_offload=min_vram_offload,
+        tokens_s_medido=tokens_s_medido,
     )
 
 
@@ -89,3 +92,55 @@ def test_profiler_appends_new_profile_when_hardware_changes(tmp_path):
     assert first.model_fits == {"small-local": "full", "large-local": "offload"}
     assert second.model_fits == {"small-local": "full", "large-local": "full"}
     assert len(profiler.list_profiles()) == 2
+
+
+def test_default_gpu_probe_prefers_vendor_api_before_fallbacks(monkeypatch):
+    vendor_gpu = GPUInfo(
+        model="Vendor GPU",
+        vendor="nvidia",
+        vram_total_mb=6144,
+        backend="cuda",
+    )
+    calls = []
+
+    monkeypatch.setattr(
+        hardware_profile,
+        "_probe_vendor_gpus",
+        lambda: calls.append("vendor") or [vendor_gpu],
+    )
+    monkeypatch.setattr(
+        hardware_profile,
+        "_probe_nvidia_smi",
+        lambda: calls.append("nvidia-smi") or [],
+    )
+    monkeypatch.setattr(
+        hardware_profile,
+        "_probe_windows_video_controllers",
+        lambda: calls.append("wmi") or [],
+    )
+
+    assert HardwareProfiler._default_probe_gpus() == [vendor_gpu]
+    assert calls == ["vendor"]
+
+
+def test_profiler_derives_runtime_tiers_from_measured_tokens_per_second(tmp_path):
+    registry = CapabilityRegistry(
+        [
+            _local_profile("interactive-model", tokens_s_medido=16.0),
+            _local_profile("batch-model", tokens_s_medido=4.0),
+            _local_profile("unavailable-model", min_vram_full=4096, tokens_s_medido=20.0),
+        ]
+    )
+    profiler = HardwareProfiler(
+        tmp_path / "hardware.sqlite3",
+        gpu_probe=lambda: [],
+        cpu_probe=lambda: CPUInfo(model="ci-cpu", cores=4, ram_total_mb=16384),
+    )
+
+    profile = profiler.profile(registry)
+
+    assert profile.model_tiers == {
+        "interactive-model": "interativo",
+        "batch-model": "batch",
+        "unavailable-model": "indisponivel",
+    }
