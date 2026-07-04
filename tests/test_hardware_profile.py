@@ -49,6 +49,32 @@ def test_profiler_records_cpu_only_profile_and_cpu_model_fit(tmp_path):
     assert len(profiler.list_profiles()) == 1
 
 
+def test_profiler_uses_bridge_state_db_by_default(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("KABBALAH_HARDWARE_PROFILE_DB", raising=False)
+    monkeypatch.delenv("KABBALAH_BRIDGE_STATE_DB", raising=False)
+
+    profiler = HardwareProfiler(
+        gpu_probe=lambda: [],
+        cpu_probe=lambda: CPUInfo(model="ci-cpu", cores=4, ram_total_mb=16384),
+    )
+
+    assert profiler.db_path == tmp_path / ".kabbalah_bridge_state.sqlite3"
+
+
+def test_profiler_honors_bridge_state_db_env(monkeypatch, tmp_path):
+    state_db = tmp_path / "state.sqlite3"
+    monkeypatch.setenv("KABBALAH_BRIDGE_STATE_DB", str(state_db))
+    monkeypatch.delenv("KABBALAH_HARDWARE_PROFILE_DB", raising=False)
+
+    profiler = HardwareProfiler(
+        gpu_probe=lambda: [],
+        cpu_probe=lambda: CPUInfo(model="ci-cpu", cores=4, ram_total_mb=16384),
+    )
+
+    assert profiler.db_path == state_db
+
+
 def test_profiler_reuses_cached_profile_when_fingerprint_is_unchanged(tmp_path):
     registry = CapabilityRegistry([_local_profile("cpu-friendly")])
     profiler = HardwareProfiler(

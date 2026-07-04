@@ -79,11 +79,15 @@ class HardwareProfiler:
         gpu_probe: Optional[GPUProbe] = None,
         cpu_probe: Optional[CPUProbe] = None,
     ):
-        self.db_path = Path(
+        state_db_path = (
             db_path
             or os.getenv("KABBALAH_HARDWARE_PROFILE_DB")
-            or ".kabbalah_hardware_profiles.sqlite3"
+            or os.getenv("KABBALAH_BRIDGE_STATE_DB")
+            or ".kabbalah_bridge_state.sqlite3"
         )
+        self.db_path = Path(state_db_path).expanduser()
+        if not self.db_path.is_absolute():
+            self.db_path = self.db_path.resolve()
         self._gpu_probe = gpu_probe or self._default_probe_gpus
         self._cpu_probe = cpu_probe or self._default_probe_cpu
         self._lock = threading.RLock()
