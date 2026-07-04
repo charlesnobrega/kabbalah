@@ -1,7 +1,7 @@
 """Domain Orchestrator for coordinating execution within a domain."""
 
 from dataclasses import dataclass, field
-from typing import List, Dict
+from typing import Any, List, Dict, Optional
 import time
 
 
@@ -55,9 +55,9 @@ class DomainOrchestrator:
     _leaf_counter = {}  # Track leaf counters per domain
     _last_date = None
     
-    def __init__(self):
+    def __init__(self, llm_gateway: Optional[Any] = None):
         """Initialize DomainOrchestrator."""
-        pass
+        self.llm_gateway = llm_gateway
     
     def spawn_leaf_nodes(
         self,
@@ -217,8 +217,34 @@ class DomainOrchestrator:
         start_time = time.time()
         
         try:
-            # In a real implementation, this would execute the task
-            # using the assigned provider and tools
+            if self.llm_gateway is None:
+                end_time = time.time()
+                return LeafResult(
+                    run_id=leaf_node.run_id,
+                    branch_id=leaf_node.branch_id,
+                    leaf_id=leaf_node.leaf_id,
+                    trace_id=leaf_node.trace_id,
+                    task_id=leaf_node.task_id,
+                    status="skipped",
+                    artifacts=[],
+                    metadata={
+                        "reason": "llm_gateway_not_configured",
+                        "message": "Leaf execution skipped because no LLMGateway was injected.",
+                    },
+                    start_time=start_time,
+                    end_time=end_time,
+                    duration=end_time - start_time
+                )
+
+            capability = self._capability_for_leaf(leaf_node)
+            selection = self.llm_gateway.select_provider(
+                role="Leaf_Builder",
+                capability=capability,
+            )
+            provider_response = selection.provider.execute_request(
+                self._build_leaf_request(leaf_node, selection.profile.model),
+                timeout=float(leaf_node.timeout),
+            )
             end_time = time.time()
             
             return LeafResult(
@@ -228,8 +254,20 @@ class DomainOrchestrator:
                 trace_id=leaf_node.trace_id,
                 task_id=leaf_node.task_id,
                 status="success",
-                artifacts=[],
-                metadata={},
+                artifacts=[
+                    {
+                        "type": "llm_response",
+                        "content": provider_response.content,
+                        "model": provider_response.model,
+                    }
+                ],
+                metadata={
+                    "provider": selection.profile.provider_name,
+                    "profile": selection.profile.name,
+                    "tokens_used": provider_response.tokens_used,
+                    "cost": provider_response.cost,
+                    "latency_ms": provider_response.latency_ms,
+                },
                 start_time=start_time,
                 end_time=end_time,
                 duration=end_time - start_time
@@ -243,10 +281,48 @@ class DomainOrchestrator:
                 leaf_id=leaf_node.leaf_id,
                 trace_id=leaf_node.trace_id,
                 task_id=leaf_node.task_id,
-                status="error",
+                status="failure",
                 artifacts=[],
                 metadata={"error": str(e)},
                 start_time=start_time,
                 end_time=end_time,
                 duration=end_time - start_time
             )
+
+    def _capability_for_leaf(self, leaf_node: LeafNode) -> str:
+        """Map leaf task type/tools to a provider capability."""
+        if leaf_node.task_type in {"implementation", "code", "coding"}:
+            return "code"
+        return "chat"
+
+    def _build_leaf_request(self, leaf_node: LeafNode, model: str) -> Dict:
+        """Build a provider request from leaf metadata and description."""
+        domain = leaf_node.metadata.get("domain", "unknown")
+        task_inputs = leaf_node.metadata.get("task_inputs", {})
+        expected_outputs = leaf_node.metadata.get("expected_outputs", {})
+        return {
+            "model": model,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a Kabbalah Leaf_Builder agent. Execute the assigned "
+                        "task and return a concrete artifact. Do not claim completion "
+                        "without producing content."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Domain: {domain}\n"
+                        f"Task ID: {leaf_node.task_id}\n"
+                        f"Task type: {leaf_node.task_type}\n"
+                        f"Description: {leaf_node.description}\n"
+                        f"Inputs: {task_inputs}\n"
+                        f"Expected outputs: {expected_outputs}"
+                    ),
+                },
+            ],
+            "temperature": 0.2,
+            "max_tokens": 2048,
+        }

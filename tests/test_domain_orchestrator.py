@@ -3,8 +3,10 @@
 import pytest
 from hypothesis import given, strategies as st
 from kabbalah.domain_orchestrator import (
-    DomainOrchestrator, SpawnError, DomainExecutionError
+    DomainOrchestrator, LeafNode, SpawnError, DomainExecutionError
 )
+from kabbalah.llm_gateway import ModelProfile, ProviderSelection
+from kabbalah.providers.base import ProviderResponse
 from kabbalah.root_orchestrator import RootOrchestrator
 from kabbalah.models import UserRequest
 from kabbalah.intake_node import IntakeNode
@@ -157,6 +159,113 @@ class TestDomainOrchestratorSpawning:
 
 class TestDomainOrchestratorExecution:
     """Tests for leaf node execution."""
+
+    def _leaf_node(self):
+        return LeafNode(
+            run_id="run_001",
+            branch_id="branch_backend_001",
+            leaf_id="leaf_backend_001",
+            trace_id="run_001:branch_backend_001:leaf_backend_001",
+            task_id="task_001",
+            task_type="implementation",
+            description="Implement an API endpoint",
+            provider="gateway",
+            model="auto",
+            metadata={"domain": "backend", "task_inputs": {"path": "/health"}},
+        )
+
+    def test_execute_leaf_node_without_gateway_returns_skipped(self):
+        """Leaf execution without gateway must not claim fake success."""
+        orchestrator = DomainOrchestrator()
+
+        result = orchestrator._execute_leaf_node(self._leaf_node())
+
+        assert result.status == "skipped"
+        assert result.artifacts == []
+        assert result.metadata["reason"] == "llm_gateway_not_configured"
+
+    def test_execute_leaf_node_with_gateway_returns_provider_artifact(self):
+        """Leaf execution with gateway uses provider response as real artifact."""
+
+        class Provider:
+            def execute_request(self, request, timeout=30.0):
+                assert request["messages"][0]["role"] == "system"
+                assert "Implement an API endpoint" in request["messages"][1]["content"]
+                return ProviderResponse(
+                    content="real artifact",
+                    model="mock-model",
+                    tokens_used=42,
+                    cost=0.001,
+                    latency_ms=12.5,
+                )
+
+        class Gateway:
+            def select_provider(self, *, role, capability, budget_hint=None):
+                assert role == "Leaf_Builder"
+                assert capability == "code"
+                return ProviderSelection(
+                    profile=ModelProfile(
+                        name="mock-profile",
+                        provider_name="mock",
+                        model="mock-model",
+                        roles={"Leaf_Builder"},
+                        capabilities={"code"},
+                        context_window=8192,
+                        input_cost_per_1m_tokens=0.0,
+                        output_cost_per_1m_tokens=0.0,
+                        license_type="open",
+                        location="local",
+                        tier="local",
+                    ),
+                    provider=Provider(),
+                )
+
+        result = DomainOrchestrator(llm_gateway=Gateway())._execute_leaf_node(self._leaf_node())
+
+        assert result.status == "success"
+        assert result.artifacts == [
+            {
+                "type": "llm_response",
+                "content": "real artifact",
+                "model": "mock-model",
+            }
+        ]
+        assert result.metadata["provider"] == "mock"
+        assert result.metadata["profile"] == "mock-profile"
+        assert result.metadata["tokens_used"] == 42
+        assert result.metadata["cost"] == 0.001
+        assert result.metadata["latency_ms"] == 12.5
+
+    def test_execute_leaf_node_provider_error_returns_failure(self):
+        """Provider errors are captured as leaf failures, not tree crashes."""
+
+        class Provider:
+            def execute_request(self, request, timeout=30.0):
+                raise RuntimeError("provider unavailable")
+
+        class Gateway:
+            def select_provider(self, *, role, capability, budget_hint=None):
+                return ProviderSelection(
+                    profile=ModelProfile(
+                        name="mock-profile",
+                        provider_name="mock",
+                        model="mock-model",
+                        roles={"Leaf_Builder"},
+                        capabilities={"code"},
+                        context_window=8192,
+                        input_cost_per_1m_tokens=0.0,
+                        output_cost_per_1m_tokens=0.0,
+                        license_type="open",
+                        location="local",
+                        tier="local",
+                    ),
+                    provider=Provider(),
+                )
+
+        result = DomainOrchestrator(llm_gateway=Gateway())._execute_leaf_node(self._leaf_node())
+
+        assert result.status == "failure"
+        assert "provider unavailable" in result.metadata["error"]
     
     def test_execute_leaf_nodes_with_empty_list(self):
         """Test that empty leaf nodes list raises DomainExecutionError."""
@@ -198,7 +307,7 @@ class TestDomainOrchestratorExecution:
         results = orchestrator.execute_leaf_nodes(leaf_nodes)
         
         for result in results:
-            assert result.status in ["success", "error", "timeout"]
+            assert result.status in ["success", "skipped", "failure", "error", "timeout"]
     
     def test_execute_leaf_nodes_preserves_trace_id(self):
         """Test that trace_id is preserved in results."""
@@ -315,7 +424,7 @@ class TestDomainOrchestratorIntegration:
             assert len(results) == len(leaf_nodes)
             
             for result in results:
-                assert result.status == "success"
+                assert result.status == "skipped"
                 assert result.run_id == run_id
                 assert result.branch_id == branch.branch_id
 
@@ -434,4 +543,4 @@ class TestDomainOrchestratorProperties:
         
         # All results should have status
         for result in results:
-            assert result.status in ["success", "error", "timeout"]
+            assert result.status in ["success", "skipped", "failure", "error", "timeout"]
