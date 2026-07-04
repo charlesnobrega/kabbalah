@@ -9,6 +9,7 @@ from typing import List, Optional, Tuple
 from enum import Enum
 import os
 import time
+import warnings
 
 
 class OperationalMode(Enum):
@@ -165,34 +166,55 @@ class FSMEnforcementModule:
         current_mode: Optional[OperationalMode] = None
     ) -> bool:
         """Check if an operation is allowed in the current mode.
-        
+
+        Wave-6 hardening: every BLOCK through this main enforcement path is
+        recorded in the immutable violation log — audit can no longer be
+        skipped by calling the non-logging variant.
+
         Args:
             operation: The operation to check
             current_mode: Optional mode to check against (defaults to current mode)
-            
+
         Returns:
             bool: True if the operation is allowed, False otherwise
         """
-        mode = current_mode or self._current_mode
-        allowed_operations = self.MODE_PERMISSIONS.get(mode, set())
-        return operation.operation_type in allowed_operations
+        is_allowed, _ = self._check_and_log_operation(operation, current_mode)
+        return is_allowed
 
     def check_operation_allowed_with_logging(
         self,
         operation: Operation,
         current_mode: Optional[OperationalMode] = None
     ) -> Tuple[bool, Optional[str]]:
-        """Check if an operation is allowed and log violations.
-        
-        Args:
-            operation: The operation to check
-            current_mode: Optional mode to check against (defaults to current mode)
-            
+        """Deprecated alias: `check_operation_allowed` already logs violations.
+
         Returns:
             Tuple[bool, Optional[str]]: (is_allowed, error_message)
         """
+        warnings.warn(
+            "check_operation_allowed_with_logging is deprecated; "
+            "check_operation_allowed now always logs violations",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return self._check_and_log_operation(operation, current_mode)
+
+    def _is_operation_allowed(
+        self,
+        operation: Operation,
+        mode: OperationalMode
+    ) -> bool:
+        """Pure permission check, no logging."""
+        allowed_operations = self.MODE_PERMISSIONS.get(mode, set())
+        return operation.operation_type in allowed_operations
+
+    def _check_and_log_operation(
+        self,
+        operation: Operation,
+        current_mode: Optional[OperationalMode] = None
+    ) -> Tuple[bool, Optional[str]]:
         mode = current_mode or self._current_mode
-        is_allowed = self.check_operation_allowed(operation, mode)
+        is_allowed = self._is_operation_allowed(operation, mode)
 
         if not is_allowed:
             violation_type = "OPERATION_BLOCKED"

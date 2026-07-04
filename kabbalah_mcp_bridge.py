@@ -45,7 +45,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from kabbalah.contratos import Contratos, VerificationOutcome
 from kabbalah.contrato_store import ContratoStore
 from kabbalah.cofre import CofreBitwarden, CofreError
-from kabbalah.firewall_mcp import AcaoMCP, FirewallMCP, MCPRequest
+from kabbalah.firewall_mcp import AcaoMCP, FirewallMCP, MCPRequest, permitir_tudo
 from kabbalah.hitl import HITL, NivelUrgencia
 from kabbalah.qlipot import Qlipot
 from kabbalah.sync_hub import SyncHub
@@ -140,7 +140,14 @@ def _contract_verifier(agente_id: str, acao: str) -> bool:
     return outcome == VerificationOutcome.ALLOWED
 
 
-firewall = FirewallMCP(hitl=hitl, contract_checker=_contract_checker, contract_verifier=_contract_verifier)
+# RBAC allow-all is a deliberate, visible choice here: bridge authorization is
+# enforced by contracts (_contract_checker) + qlipot risk + HITL, not by roles.
+firewall = FirewallMCP(
+    rbac_checker=permitir_tudo,
+    hitl=hitl,
+    contract_checker=_contract_checker,
+    contract_verifier=_contract_verifier,
+)
 contratos.firewall = firewall
 sync = SyncHub(qlipot=qlipot, contratos=contratos, firewall=firewall)
 _retry_attempts: Dict[tuple[str, str, str], tuple[int, float]] = {}

@@ -1,7 +1,7 @@
 import os
 
 from kabbalah.contratos import Contratos
-from kabbalah.firewall_mcp import AcaoMCP, FirewallMCP, MCPRequest
+from kabbalah.firewall_mcp import AcaoMCP, FirewallMCP, MCPRequest, permitir_tudo
 from kabbalah.hitl import HITL
 from kabbalah.qlipot import Qlipot
 
@@ -30,7 +30,12 @@ def make_firewall():
             return True, None
         return False, "Nenhum contrato ativo autoriza esta ação para este agente. Use propose_contract/sign_contract primeiro."
 
-    firewall = FirewallMCP(hitl=hitl, contract_checker=contract_checker, contract_verifier=contratos.verificar)
+    firewall = FirewallMCP(
+        rbac_checker=permitir_tudo,
+        hitl=hitl,
+        contract_checker=contract_checker,
+        contract_verifier=contratos.verificar,
+    )
     return firewall, contratos
 
 

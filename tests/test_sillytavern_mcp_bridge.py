@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from kabbalah.firewall_mcp import AcaoMCP, FirewallMCP, MCPDecision, MCPRequest, MCPRiskLevel, RegraMCP
+from kabbalah.firewall_mcp import AcaoMCP, FirewallMCP, MCPDecision, MCPRequest, MCPRiskLevel, RegraMCP, permitir_tudo
 from kabbalah.hitl import HITL, NivelUrgencia, SolicitacaoHITL, StatusAprovacao
 from kabbalah.qlipot import Qlipot
 
@@ -104,7 +104,11 @@ def test_qlipot_aplicar_correcao_emits_callback():
 
 
 def test_firewall_uses_bridge_risk_metadata():
-    firewall = FirewallMCP(hitl=HITL(approval_provider=lambda request: True))
+    firewall = FirewallMCP(
+        rbac_checker=permitir_tudo,
+        contract_checker=permitir_tudo,
+        hitl=HITL(approval_provider=lambda request: True),
+    )
     request = MCPRequest(
         agente_id="agent",
         ferramenta=AcaoMCP.EXECUTE_COMMAND.value,
@@ -123,7 +127,7 @@ def test_firewall_uses_bridge_risk_metadata():
 
 def test_firewall_contract_required_for_cross_agent_action():
     events = []
-    firewall = FirewallMCP(contract_checker=lambda _: (False, "CONTRACT_REQUIRED"))
+    firewall = FirewallMCP(rbac_checker=permitir_tudo, contract_checker=lambda _: (False, "CONTRACT_REQUIRED"))
     firewall.registrar_callback("bloqueio", lambda event, data: events.append((event, data)))
 
     request = MCPRequest(

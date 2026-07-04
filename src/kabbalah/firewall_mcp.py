@@ -82,7 +82,19 @@ RiskAssessor = Callable[[MCPRequest], Tuple[MCPRiskLevel, float, str]]
 ContractVerifier = Callable[[str, str], bool]
 
 
-def _allow_all(_: MCPRequest) -> CheckResult:
+def _deny_all(_: MCPRequest) -> CheckResult:
+    return False, "Nenhum checker configurado — negado por padrão (fail-closed)"
+
+
+def permitir_tudo(_: MCPRequest) -> CheckResult:
+    """Explicit opt-in allow-all checker.
+
+    Wave-6 hardening: the firewall denies by default when no checker is
+    injected. Callers that intentionally delegate authorization elsewhere
+    (e.g. the MCP bridge, which relies on contracts + risk + HITL) must make
+    that permissiveness visible by passing this function explicitly.
+    """
+
     return True, None
 
 
@@ -124,8 +136,8 @@ class FirewallMCP:
         risk_assessor: Optional[RiskAssessor] = None,
         hitl: Optional[HITL] = None,
     ):
-        self._rbac_checker = rbac_checker or _allow_all
-        self._contract_checker = contract_checker or _allow_all
+        self._rbac_checker = rbac_checker or _deny_all
+        self._contract_checker = contract_checker or _deny_all
         self._contract_verifier = contract_verifier
         self._risk_assessor = risk_assessor or _default_risk_assessor
         self._hitl = hitl or HITL()

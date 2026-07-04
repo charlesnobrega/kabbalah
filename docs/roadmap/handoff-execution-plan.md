@@ -27,8 +27,8 @@
 | Cofre PATH/cache (Parte 3.4) | ✅ Feito na onda 3 |
 | M1 (LeafNode mudo) | ✅ Feito na onda 5 — `DomainOrchestrator` executa leaf via `LLMGateway` injetado; sem gateway retorna `status="skipped"` explícito |
 | M3 (LLMGateway órfão) | ✅ Feito na onda 5 — gateway virou seletor canônico por role/capability/budget e é consumido pelo leaf via injeção |
-| M5 (RBAC `_allow_all`) | ❌ Pendente — `src/kabbalah/firewall_mcp.py:85` e defaults na linha 127–128 |
-| M6 (enforcement sem log) | ❌ Pendente — `fsm_enforcement.py:162` (sem log) vs `:180` (com log) |
+| M5 (RBAC `_allow_all`) | ✅ Feito na onda 6 — `FirewallMCP` nega por padrão sem checkers; permissividade só via `permitir_tudo` explícito (bridge injeta com comentário) |
+| M6 (enforcement sem log) | ✅ Feito na onda 6 — `check_operation_allowed` sempre loga bloqueios; `_with_logging` é alias deprecated sem double-log |
 | M16 (MockProvider exportado) | ✅ Feito na onda 4 — `MockProvider`/`MockResponseType` ficam em `kabbalah.providers.mock_provider`, não em `kabbalah.providers` |
 | M13 (`openclaude/`) | ✅ Feito na onda 4 — diretório local removido após confirmar zero referências |
 | M14 (CLI) | ✅ Feito na onda 4 — `python -m kabbalah.cli --help` e entrypoint `kabbalah --help` exit 0 |
@@ -259,13 +259,13 @@ cofre, nunca escreve valor de chave em código, teste, log ou commit.
 
 ### ONDA 6 — Segurança residual (M5+M6) — esforço: 1-2 dias
 
-- [ ] **6.1 (M5) RBAC deny-by-default** — em `src/kabbalah/firewall_mcp.py`:
+- [x] **6.1 (M5) RBAC deny-by-default** *(Claude, 2026-07-04 — testes em `tests/test_hardening_wave6.py`; suíte 1156 passed/89 skipped)* — em `src/kabbalah/firewall_mcp.py`:
   1. Linhas 85 e 127: o default de `rbac_checker` é `_allow_all`. Trocar por `_deny_all` (motivo claro: "Nenhum rbac_checker configurado — negado por padrão (fail-closed)").
   2. **Atenção**: linha 128 também aplica `_allow_all` a `contract_checker` — avaliar caso a caso: o bridge injeta os dois; para uso como biblioteca, contract_checker sem injeção também deve negar (consistência fail-closed).
   3. Escape hatch temporário e explícito: construtor aceita `rbac_checker=permitir_tudo` importável (`from kabbalah.firewall_mcp import permitir_tudo`) — a permissividade tem que ser opt-in visível no código do chamador, nunca default.
   4. Corrigir os testes que constroem `FirewallMCP()` puro (vão passar a ser negados — atualize-os para injetar `permitir_tudo` quando o teste não for sobre RBAC).
   *Aceite*: `FirewallMCP()` sem checkers nega tudo; bridge continua funcionando (já injeta); commit documenta a mudança de default.
-- [ ] **6.2 (M6) Log no enforcement principal** — em `src/kabbalah/fsm_enforcement.py`: `check_operation_allowed` (linha 162) não loga; `check_operation_allowed_with_logging` (linha 180) loga. Unificar: a variante principal SEMPRE loga bloqueios; `_with_logging` vira alias deprecated (manter por compat, com `DeprecationWarning`).
+- [x] **6.2 (M6) Log no enforcement principal** *(Claude, 2026-07-04)* — em `src/kabbalah/fsm_enforcement.py`: `check_operation_allowed` (linha 162) não loga; `check_operation_allowed_with_logging` (linha 180) loga. Unificar: a variante principal SEMPRE loga bloqueios; `_with_logging` vira alias deprecated (manter por compat, com `DeprecationWarning`).
   *Aceite*: teste provando que um BLOCK pelo caminho principal gera registro de auditoria; grep confirma que nenhum caller depende da variante sem log para silêncio.
 
 ---
