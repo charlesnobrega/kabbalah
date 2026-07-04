@@ -296,6 +296,29 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
 
 ### ONDA 8 — Features visíveis + AJUSTES FINOS (M8+M9+config+polimento) — esforço: 2-3 semanas — depende das Ondas 5 e 7
 
+- [ ] **8.-1 Achados do teste REAL de matriz de providers (2026-07-04, chaves live do Charles)** —
+  probe ao vivo de 1 frase por tier. **Estes são bugs reais, prioridade nesta onda:**
+  1. **Modelos premium DOA (bug de config)**: os defaults do registro `gpt-4.1`,
+     `gemini-pro` e `mistral-large-latest` NÃO existem na allowlist dos providers
+     nativos (`openai_provider.py` aceita `gpt-4o/gpt-4-turbo/gpt-4`;
+     `google_gemini_provider.py` aceita `gemini-2.5-flash/2.5-pro/2.0-flash/pro-latest`;
+     `mistral_provider.py` aceita `mistral-large`) → `ValueError: Unknown model`.
+     Com os ids corretos, os três funcionam (testado: OpenAI $4.5e-5, Gemini
+     $6.75e-7). Corrigir os defaults do `CapabilityRegistry.default()` para ids
+     válidos e adicionar teste que valide profile.model contra a allowlist do
+     provider nativo correspondente.
+  2. **Cerebras 404**: `https://api.cerebras.ai/v1/chat/completions` retornou
+     Not Found — base_url/rota incorreta. Verificar o endpoint atual da Cerebras.
+  3. **SambaNova 410 GONE**: endpoint desativado — atualizar base_url/modelo para
+     a API vigente ou marcar o perfil como indisponível por padrão.
+  4. **Mistral resposta vazia**: conecta e autentica, mas retornou content vazio
+     e 0 tokens com `mistral-large` — investigar parsing da resposta no
+     `mistral_provider.py` (pode ser formato de retorno ou `max_tokens`).
+  **Confirmado funcionando ponta a ponta com chave real**: OpenRouter, Groq,
+  OpenAI, Gemini (custo real gravado no ledger; enforcement `block` levantou
+  `BudgetExceededError`, `warn` permitiu com decisão negada). O caminho barato
+  padrão (OpenRouter+Groq) está sólido; os premium precisam só do ajuste de id.
+
 > Decisão do Charles (2026-07-04): esta é a **onda do acabamento**. As ondas
 > anteriores são o grosso; o propósito final é um sistema **limpo e belo** —
 > instalável em 5 minutos, com toda mensagem de erro dizendo o que fazer, e
