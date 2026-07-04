@@ -1,7 +1,7 @@
 """Property-based tests for MemoryGovernanceModule."""
 
 import tempfile
-from hypothesis import given, strategies as st
+from hypothesis import given, settings, strategies as st
 
 from kabbalah.memory_governance import (
     MemoryGovernanceModule,
@@ -380,6 +380,9 @@ class TestAccessControlConsistency:
         memory_category=memory_categories_strategy,
         operation=operations_strategy,
     )
+    # 100 audit-log writes per example: disk latency under full-suite load
+    # exceeds Hypothesis's default 200ms deadline and flakes the run.
+    @settings(deadline=None)
     def test_access_decision_independent_of_module_state(
         self, agent_role, memory_category, operation
     ):
