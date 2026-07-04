@@ -12,8 +12,7 @@ Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9
 """
 
 import pytest
-from datetime import datetime
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from kabbalah.fix_generation_module import (
     FixGenerationModule,

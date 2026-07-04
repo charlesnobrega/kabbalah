@@ -10,14 +10,12 @@ Tests correctness properties using Hypothesis:
 Requirements: 3.1, 3.4, 3.8, 3.9
 """
 
-import pytest
-from datetime import datetime
-from hypothesis import given, strategies as st, assume, settings, HealthCheck
+from hypothesis import given, strategies as st, settings, HealthCheck
 from unittest.mock import patch
 
 from kabbalah.fix_generation_module import FixGenerationModule
 from kabbalah.error_analysis_module import ErrorAnalysis
-from kabbalah.self_healing_models import CodeChange, FixProposal, FixStatus
+from kabbalah.self_healing_models import CodeChange, FixProposal
 
 
 class TestFixGenerationModuleProperties:

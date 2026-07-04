@@ -3,11 +3,9 @@
 **Validates: Requirements 1, 13**
 """
 
-import pytest
-from hypothesis import given, strategies as st, assume
-from datetime import datetime
+from hypothesis import given, strategies as st
 from kabbalah.intake_node import IntakeNode
-from kabbalah.models import UserRequest, Specification
+from kabbalah.models import UserRequest
 
 
 # Strategies for generating test data

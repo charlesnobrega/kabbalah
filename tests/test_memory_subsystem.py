@@ -1,15 +1,11 @@
 """Unit tests for MemorySubsystem."""
 
-import json
-import os
-import platform
 import tempfile
 import threading
 import time
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 
 from kabbalah.memory_subsystem import (
     CogneeBackend,
@@ -502,7 +498,7 @@ class TestMemorySubsystem:
             subsystem = MemorySubsystem(tmpdir)
 
             # This should not raise an exception
-            result = subsystem.store_knowledge(None, "run_001:branch_001:leaf_001")
+            subsystem.store_knowledge(None, "run_001:branch_001:leaf_001")
             # Result depends on implementation, but should not crash
 
     def test_consistency_state_initialization(self):

@@ -4,7 +4,6 @@ Tests for Specification Pretty Printer
 
 import pytest
 import json
-import time
 from src.kabbalah.specification_pretty_printer import (
     SpecificationPrettyPrinter,
     OutputFormat,

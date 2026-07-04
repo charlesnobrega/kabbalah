@@ -19,7 +19,7 @@ Requirements: 1.6, 11.6
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 
 from kabbalah.self_healing_models import ErrorReport, ErrorSeverity

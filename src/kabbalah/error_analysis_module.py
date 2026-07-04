@@ -11,11 +11,10 @@ Requirements: 2.1, 2.2, 2.3, 2.6, 2.7
 import json
 import logging
 import re
-import signal
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from kabbalah.llm_local_provider import LocalLLMConfig, LocalLLMProvider
 from kabbalah.self_healing_models import ErrorReport, LearningEntry

@@ -5,9 +5,8 @@ Tests security aspects including input validation, access control, and tool sand
 """
 
 import pytest
-import json
 from src.kabbalah.intake_node import IntakeNode
-from src.kabbalah.models import UserRequest, Specification
+from src.kabbalah.models import UserRequest
 from src.kabbalah.specification_parser import SpecificationParser
 from src.kabbalah.configuration_manager import ConfigurationManager
 from src.kabbalah.day2_operations import Day2OperationsModule, OperationType
@@ -348,7 +347,7 @@ class TestSecurityValidation:
                     )
                 with lock:
                     results["success"] += 1
-            except Exception as e:
+            except Exception:
                 with lock:
                     results["errors"] += 1
         

@@ -3,10 +3,9 @@
 import pytest
 from hypothesis import given, strategies as st
 from kabbalah.root_orchestrator import (
-    RootOrchestrator, DomainBranch, BranchResult,
-    DecompositionError, ExecutionError
+    RootOrchestrator, DecompositionError, ExecutionError
 )
-from kabbalah.models import Specification, UserRequest
+from kabbalah.models import UserRequest
 from kabbalah.intake_node import IntakeNode
 
 

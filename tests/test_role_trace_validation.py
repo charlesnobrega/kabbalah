@@ -1,13 +1,10 @@
 """Unit tests for RoleTraceValidationModule."""
 
-import pytest
 from datetime import datetime
 from kabbalah.role_trace_validation import (
     RoleTraceValidationModule,
     CanonicalRole,
     OperationCategory,
-    TraceMetadata,
-    RoleViolation,
 )
 
 

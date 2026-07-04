@@ -6,8 +6,7 @@ These tests validate core properties of the role trace validation system:
 - Property 14: Trace propagation
 """
 
-import pytest
-from hypothesis import given, strategies as st, assume
+from hypothesis import given, strategies as st
 from datetime import datetime
 from kabbalah.role_trace_validation import (
     RoleTraceValidationModule,

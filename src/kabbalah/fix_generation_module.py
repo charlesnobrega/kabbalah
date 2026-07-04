@@ -14,7 +14,7 @@ import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from kabbalah.error_analysis_module import ErrorAnalysis
 from kabbalah.self_healing_models import CodeChange, FixProposal, FixStatus

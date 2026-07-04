@@ -10,7 +10,7 @@ Tests verify universal properties that should hold across all valid inputs:
 Requirements: 1.6, 11.6
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from hypothesis import given, strategies as st, settings, HealthCheck
 import pytest
 

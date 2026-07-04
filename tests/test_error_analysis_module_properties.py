@@ -13,15 +13,13 @@ from datetime import datetime
 from unittest.mock import Mock
 
 import pytest
-from hypothesis import given, strategies as st, assume
+from hypothesis import given, strategies as st
 
 from kabbalah.error_analysis_module import ErrorAnalysisModule, ErrorAnalysis
 from kabbalah.llm_local_provider import LocalLLMConfig, LocalLLMProvider
 from kabbalah.self_healing_models import (
     ErrorReport,
     ErrorSeverity,
-    CodeChange,
-    LearningEntry,
 )
 
 

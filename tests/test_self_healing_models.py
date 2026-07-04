@@ -8,7 +8,6 @@ are present and clear.
 Requirements: 1.3, 1.4, 1.5, 3.1, 4.1, 6.1, 6.2
 """
 
-import pytest
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 from src.kabbalah.self_healing_models import (

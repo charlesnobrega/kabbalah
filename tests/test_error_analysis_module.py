@@ -11,10 +11,9 @@ Tests error analysis functionality including:
 Requirements: 2.1, 2.2, 2.3, 2.5, 2.6, 2.7
 """
 
-import json
 import pytest
 from datetime import datetime
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock
 
 from kabbalah.error_analysis_module import (
     ErrorAnalysisModule,

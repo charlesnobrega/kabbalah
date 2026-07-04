@@ -1,7 +1,7 @@
 """Synthesizer for consolidating results from all branches."""
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple
 import time
 
 

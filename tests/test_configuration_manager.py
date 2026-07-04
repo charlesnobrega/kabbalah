@@ -8,7 +8,6 @@ import json
 import tempfile
 from src.kabbalah.configuration_manager import (
     ConfigurationManager,
-    Configuration,
     ProviderConfig,
     ConfigurationError,
 )

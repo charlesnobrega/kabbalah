@@ -10,10 +10,8 @@ Tests verify universal properties that should hold across all valid inputs:
 Requirements: 1.6, 1.7, 1.8, 11.2, 11.3, 11.4
 """
 
-import pytest
 from hypothesis import given, strategies as st, settings, HealthCheck
-from datetime import datetime, timedelta
-from unittest.mock import patch
+from datetime import datetime
 
 from kabbalah.error_detection_module import ErrorDetectionModule
 from kabbalah.self_healing_models import ErrorSeverity
@@ -403,7 +401,7 @@ class TestProperty4ErrorReportPersistence:
         module = ErrorDetectionModule()
 
         exception = RuntimeError(message)
-        report = module.capture_exception(
+        module.capture_exception(
             exception,
             component,
             context={"trace_id": "trace-123", "request_id": "req-456"},

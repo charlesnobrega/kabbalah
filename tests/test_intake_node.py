@@ -712,8 +712,7 @@ class TestIntakeNodePrivateMethods:
         )
         
         # Get first run_id
-        spec1, run_id1 = intake.parse_request(request)
-        counter1 = int(run_id1.split("_")[-1])
+        spec1, _ = intake.parse_request(request)
         
         # Manually reset the date to simulate date change
         IntakeNode._last_date = None
@@ -1150,7 +1149,6 @@ class TestIntakeNodeCoverageGaps:
     
     def test_run_id_date_component_is_valid(self):
         """Test that run_id date component is valid."""
-        from datetime import datetime
         intake = IntakeNode()
         request = UserRequest(
             project_name="Test",

@@ -70,12 +70,14 @@ indicada; se ela divergir, investigue antes de remover.
   (cuidado com o falso-match do sufixo `_module`; confira cada hit) e o equivalente
   para `self_healing\b`. Confirmado órfão → `git rm` (o histórico git preserva;
   não criar cópia em archive).
-- [ ] **B.5** Imports e variáveis não usados no código vivo: adicionar `ruff` a
+- [x] **B.5** Imports e variáveis não usados no código vivo: adicionar `ruff` a
   `requirements-dev.txt`, criar `ruff.toml` mínimo (`select = ["F401", "F841"]`,
   `target-version = "py39"`), rodar `ruff check src tests kabbalah_mcp_bridge.py
   --fix`, revisar o diff manualmente (não aceitar remoção cega em `__init__.py`
   de pacote — ali import "não usado" pode ser API pública; use `__all__` como guia).
   Commit separado.
+  - Resultado Codex 2026-07-04: `ruff check src tests kabbalah_mcp_bridge.py`
+    limpo; suíte completa `1127 passed, 89 skipped`.
 
 ---
 

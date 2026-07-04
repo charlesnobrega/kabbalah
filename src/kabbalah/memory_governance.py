@@ -172,7 +172,7 @@ class MemoryGovernanceModule:
             raise ValueError(f"Invalid memory category: {memory_category}")
 
         try:
-            op = MemoryOperation(operation)
+            MemoryOperation(operation)
         except ValueError:
             raise ValueError(f"Invalid operation: {operation}")
 
@@ -225,12 +225,12 @@ class MemoryGovernanceModule:
             raise ValueError(f"Invalid agent role: {agent_role}")
 
         try:
-            category = MemoryCategory(memory_category)
+            MemoryCategory(memory_category)
         except ValueError:
             raise ValueError(f"Invalid memory category: {memory_category}")
 
         try:
-            op = MemoryOperation(operation)
+            MemoryOperation(operation)
         except ValueError:
             raise ValueError(f"Invalid operation: {operation}")
 

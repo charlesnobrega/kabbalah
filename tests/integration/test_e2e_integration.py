@@ -8,9 +8,9 @@ import pytest
 import time
 import json
 from src.kabbalah.intake_node import IntakeNode
-from src.kabbalah.models import UserRequest, Specification
+from src.kabbalah.models import UserRequest
 from src.kabbalah.specification_parser import SpecificationParser
-from src.kabbalah.specification_pretty_printer import SpecificationPrettyPrinter, OutputFormat
+from src.kabbalah.specification_pretty_printer import SpecificationPrettyPrinter
 from src.kabbalah.configuration_manager import ConfigurationManager
 from src.kabbalah.day2_operations import Day2OperationsModule, OperationType
 from src.kabbalah.observability.observability_module import ObservabilityModule, LogLevel, OperationStatus
@@ -75,7 +75,6 @@ class TestE2EIntegration:
         assert isinstance(config_json, str)
         
         # Step 5: Parse exported configuration
-        parser = SpecificationParser()
         # Configuration should be valid JSON
         parsed = json.loads(config_json)
         assert parsed["mode"] == "DAY1"
@@ -249,12 +248,12 @@ class TestE2EIntegration:
                 day2_module = Day2OperationsModule()
                 
                 # Perform operations
-                trace = obs_module.start_trace(
+                obs_module.start_trace(
                     trace_id=f"trace_{threading.current_thread().ident}",
                     operation_name="concurrent_op",
                 )
                 
-                result = day2_module.check_operation_allowed(
+                day2_module.check_operation_allowed(
                     OperationType.QUERY,
                     user_id=f"user_{threading.current_thread().ident}",
                 )
@@ -265,7 +264,7 @@ class TestE2EIntegration:
                 )
                 
                 results["success"] += 1
-            except Exception as e:
+            except Exception:
                 results["error"] += 1
         
         # Run concurrent operations

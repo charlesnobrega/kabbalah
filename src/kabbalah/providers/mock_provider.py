@@ -7,7 +7,6 @@ Runtime code must not simulate real provider responses.
 
 import os
 import time
-import random
 from typing import Dict, Optional, Iterator, List
 from enum import Enum
 

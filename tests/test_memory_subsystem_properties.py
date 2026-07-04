@@ -1,9 +1,7 @@
 """Property-based tests for MemorySubsystem."""
 
 import tempfile
-from typing import List
 
-import pytest
 from hypothesis import given, strategies as st
 
 from kabbalah.memory_subsystem import Knowledge, MemorySubsystem

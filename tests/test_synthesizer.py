@@ -3,11 +3,9 @@
 import pytest
 from hypothesis import given, strategies as st
 from kabbalah.synthesizer import (
-    Synthesizer, DeliveryPackage, ConsistencyViolation,
-    SynthesisError
+    Synthesizer, DeliveryPackage, SynthesisError
 )
 from kabbalah.root_orchestrator import RootOrchestrator, BranchResult
-from kabbalah.domain_orchestrator import DomainOrchestrator
 from kabbalah.models import UserRequest
 from kabbalah.intake_node import IntakeNode
 

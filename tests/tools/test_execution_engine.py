@@ -7,7 +7,6 @@ Tests the ToolExecutionEngine implementation.
 import pytest
 import os
 import tempfile
-from pathlib import Path
 
 from src.kabbalah.tools.execution_engine import (
     ToolExecutionEngine,
@@ -216,10 +215,7 @@ class TestToolExecutionEngine:
     
     def test_web_request_execution(self):
         """Test web request execution"""
-        try:
-            import requests
-        except ImportError:
-            pytest.skip("requests library not installed")
+        pytest.importorskip("requests")
         
         engine = ToolExecutionEngine()
         

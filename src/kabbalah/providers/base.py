@@ -6,8 +6,7 @@ Defines the abstract interface that all LLM providers must implement.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Iterator
-import time
+from typing import Dict, Optional, Iterator
 
 
 @dataclass

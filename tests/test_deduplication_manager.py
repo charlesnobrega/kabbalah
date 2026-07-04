@@ -14,14 +14,11 @@ Requirements: 1.6, 11.6
 
 import pytest
 import time
-from datetime import datetime, timedelta
-from unittest.mock import patch
+from datetime import datetime
 
 from src.kabbalah.deduplication_manager import (
     DeduplicationManager,
     DeduplicationRule,
-    DeduplicationStats,
-    DuplicateGroup,
 )
 from src.kabbalah.self_healing_models import ErrorReport, ErrorSeverity
 

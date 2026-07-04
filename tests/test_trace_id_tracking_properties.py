@@ -1,12 +1,11 @@
 """Property-based tests for trace_id_tracking module."""
 
 import pytest
-from hypothesis import given, strategies as st, assume
+from hypothesis import given, strategies as st
 import time
 from kabbalah.trace_id_tracking import (
     TraceIDGenerator,
     ExecutionLog,
-    TraceIDError,
     ExecutionLogError
 )
 

@@ -10,12 +10,10 @@ This test suite uses hypothesis to generate random operations, inputs,
 and outputs to verify that contracts are enforced consistently.
 """
 
-import pytest
 from hypothesis import given, strategies as st, settings, HealthCheck
 from kabbalah.contract_enforcement import (
     ContractEnforcementModule,
     OperationContract,
-    ContractViolation,
 )
 
 

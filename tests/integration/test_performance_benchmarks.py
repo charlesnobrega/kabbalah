@@ -8,9 +8,9 @@ import pytest
 import time
 import json
 from src.kabbalah.intake_node import IntakeNode
-from src.kabbalah.models import UserRequest, Specification
+from src.kabbalah.models import UserRequest
 from src.kabbalah.specification_parser import SpecificationParser
-from src.kabbalah.specification_pretty_printer import SpecificationPrettyPrinter, OutputFormat
+from src.kabbalah.specification_pretty_printer import SpecificationPrettyPrinter
 from src.kabbalah.configuration_manager import ConfigurationManager
 from src.kabbalah.day2_operations import Day2OperationsModule, OperationType
 from src.kabbalah.observability.observability_module import ObservabilityModule, LogLevel, OperationStatus
@@ -87,6 +87,7 @@ class TestPerformanceBenchmarks:
         
         printer = SpecificationPrettyPrinter()
         json_output = printer.format_json(parse_result.data)
+        assert isinstance(json_output, str)
         text_output = printer.format_text(parse_result.data)
         
         # Try YAML if available
@@ -236,6 +237,7 @@ class TestPerformanceBenchmarks:
         
         printer = SpecificationPrettyPrinter()
         json_output = printer.format_json(parse_result.data)
+        assert isinstance(json_output, str)
         
         # Phase 3: Configuration
         config_manager = ConfigurationManager()
@@ -335,7 +337,7 @@ class TestPerformanceBenchmarks:
                 with lock:
                     results["completed"] += 1
                     results["total_time"] += elapsed
-            except Exception as e:
+            except Exception:
                 with lock:
                     results["failed"] += 1
         

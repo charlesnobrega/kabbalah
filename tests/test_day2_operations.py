@@ -3,13 +3,10 @@ Tests for Day 2 Operations Module
 """
 
 import pytest
-import time
 from src.kabbalah.day2_operations import (
     Day2OperationsModule,
     OperationType,
     OperationStatus,
-    AuditLogEntry,
-    Day2OperationResult,
 )
 
 

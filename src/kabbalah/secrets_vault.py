@@ -120,7 +120,7 @@ def get_waha_url(account: str = 'charles_pessoal') -> str:
         URL completa com autenticacao
     """
     port = WAHA_PORTS.get(account.lower(), 3000)
-    api_key = get_waha_api_key()
+    get_waha_api_key()
     return f"http://127.0.0.1:{port}"
 
 

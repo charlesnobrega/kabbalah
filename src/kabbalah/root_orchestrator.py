@@ -1,8 +1,7 @@
 """Root Orchestrator for decomposing specifications into domain branches."""
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional, Tuple
-import uuid
+from typing import List, Dict
 import logging
 from datetime import datetime
 

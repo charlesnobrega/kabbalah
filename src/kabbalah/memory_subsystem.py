@@ -8,7 +8,7 @@ import threading
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)

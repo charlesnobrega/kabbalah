@@ -27,9 +27,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 import threading
-import queue
 import psutil
-from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
 
@@ -948,7 +946,7 @@ class ToolExecutionEngine:
             
             return None
         
-        except Exception as e:
+        except Exception:
             # If we can't check resources, don't block execution
             return None
     

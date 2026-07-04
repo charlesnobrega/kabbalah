@@ -13,7 +13,6 @@ This test suite uses hypothesis to generate random bootstrap operations
 and verify that they are always blocked in DAY2 mode with violations logged.
 """
 
-import pytest
 from hypothesis import given, strategies as st, settings, HealthCheck
 from kabbalah.fsm_enforcement import (
     FSMEnforcementModule,

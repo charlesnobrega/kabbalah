@@ -9,7 +9,7 @@ Requirements: 1.3, 3.4
 """
 
 from datetime import datetime, timedelta
-from hypothesis import given, strategies as st, settings, HealthCheck
+from hypothesis import given, strategies as st
 from src.kabbalah.self_healing_models import (
     ErrorSeverity,
     FixStatus,

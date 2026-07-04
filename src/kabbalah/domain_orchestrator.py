@@ -1,7 +1,7 @@
 """Domain Orchestrator for coordinating execution within a domain."""
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
+from typing import List, Dict
 import time
 
 

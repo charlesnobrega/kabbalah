@@ -7,7 +7,6 @@ format and structure, and logs contract violations with full context.
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple, Callable
 from datetime import datetime
-import json
 import logging
 
 

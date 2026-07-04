@@ -8,9 +8,6 @@ import time
 from src.kabbalah.specification_parser import (
     SpecificationParser,
     SpecificationFormat,
-    ParsingError,
-    ValidationError,
-    ParseResult,
 )
 
 
@@ -279,7 +276,7 @@ class TestSpecificationParser:
             "version": "1.0",
         }
         
-        result = parser.parse(spec)
+        parser.parse(spec)
         
         assert parser.last_parsed_format == SpecificationFormat.JSON
         assert parser.last_parsed_version == "1.0"

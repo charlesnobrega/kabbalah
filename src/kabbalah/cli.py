@@ -5,8 +5,6 @@ Kabbalah CLI - Command-line interface for the Kabbalah orchestration system.
 import sys
 import argparse
 import logging
-from typing import Optional
-from pathlib import Path
 
 from kabbalah.intake_node import IntakeNode
 from kabbalah.models import UserRequest

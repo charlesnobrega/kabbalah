@@ -1,7 +1,7 @@
 """Property-based tests for MemoryGovernanceModule."""
 
 import tempfile
-from hypothesis import given, strategies as st, assume
+from hypothesis import given, strategies as st
 
 from kabbalah.memory_governance import (
     MemoryGovernanceModule,

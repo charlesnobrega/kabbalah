@@ -10,7 +10,7 @@ Manages provider configuration from multiple sources:
 
 import os
 import json
-from typing import Dict, Optional, Any
+from typing import Dict, Any
 from pathlib import Path
 
 try:
