@@ -1,0 +1,205 @@
+"""Tests for the canonical LLM gateway and capability registry."""
+
+import pytest
+
+from kabbalah.llm_gateway import CapabilityRegistry, LLMGateway, ModelProfile
+
+
+class DummyProvider:
+    def __init__(self, name: str):
+        self.name = name
+
+
+class RecordingFactory:
+    def __init__(self):
+        self.created = []
+
+    def create_provider(self, provider_name: str, **kwargs):
+        self.created.append((provider_name, kwargs))
+        return DummyProvider(provider_name)
+
+
+def test_gateway_selects_cheapest_available_profile_by_role_and_capability():
+    registry = CapabilityRegistry()
+    registry.register(
+        ModelProfile(
+            name="ollama-qwen",
+            provider_name="ollama_local",
+            model="qwen2.5-coder:7b",
+            roles={"Leaf_Builder"},
+            capabilities={"chat", "code"},
+            context_window=32768,
+            input_cost_per_1m_tokens=0.0,
+            output_cost_per_1m_tokens=0.0,
+            license_type="open",
+            location="local",
+            tier="local",
+            backend="cpu",
+            quant="q4_K_M",
+        )
+    )
+    registry.register(
+        ModelProfile(
+            name="premium-openai",
+            provider_name="openai",
+            model="gpt-4.1",
+            roles={"Root_Orchestrator", "Leaf_Builder"},
+            capabilities={"chat", "reasoning"},
+            context_window=128000,
+            input_cost_per_1m_tokens=2.0,
+            output_cost_per_1m_tokens=8.0,
+            license_type="paga",
+            location="cloud",
+            tier="premium",
+        )
+    )
+
+    factory = RecordingFactory()
+    gateway = LLMGateway(factory=factory, registry=registry)
+
+    selection = gateway.select_provider(role="Leaf_Builder", capability="code")
+
+    assert selection.profile.name == "ollama-qwen"
+    assert selection.provider.name == "ollama_local"
+    assert factory.created == [
+        (
+            "ollama_local",
+            {"model": "qwen2.5-coder:7b", "base_url": None},
+        )
+    ]
+
+
+def test_gateway_escalates_to_premium_when_role_requires_it():
+    registry = CapabilityRegistry()
+    registry.register(
+        ModelProfile(
+            name="local-chat",
+            provider_name="ollama_local",
+            model="llama3.1",
+            roles={"Leaf_Builder"},
+            capabilities={"chat"},
+            context_window=8192,
+            input_cost_per_1m_tokens=0.0,
+            output_cost_per_1m_tokens=0.0,
+            license_type="open",
+            location="local",
+            tier="local",
+        )
+    )
+    registry.register(
+        ModelProfile(
+            name="premium-root",
+            provider_name="openai",
+            model="gpt-4.1",
+            roles={"Root_Orchestrator"},
+            capabilities={"chat", "reasoning"},
+            context_window=128000,
+            input_cost_per_1m_tokens=2.0,
+            output_cost_per_1m_tokens=8.0,
+            license_type="paga",
+            location="cloud",
+            tier="premium",
+        )
+    )
+
+    selection = LLMGateway(factory=RecordingFactory(), registry=registry).select_provider(
+        role="Root_Orchestrator",
+        capability="reasoning",
+    )
+
+    assert selection.profile.name == "premium-root"
+
+
+def test_gateway_reports_clear_error_for_unknown_capability():
+    registry = CapabilityRegistry()
+    registry.register(
+        ModelProfile(
+            name="chat-only",
+            provider_name="groq_compatible",
+            model="llama-3.1-8b-instant",
+            roles={"Leaf_Builder"},
+            capabilities={"chat"},
+            context_window=8192,
+            input_cost_per_1m_tokens=0.05,
+            output_cost_per_1m_tokens=0.08,
+            license_type="agregador",
+            location="cloud",
+            tier="fast",
+        )
+    )
+
+    gateway = LLMGateway(factory=RecordingFactory(), registry=registry)
+
+    with pytest.raises(ValueError, match="Leaf_Builder.*vision"):
+        gateway.select_provider(role="Leaf_Builder", capability="vision")
+
+
+def test_budget_hint_filters_profiles_by_total_cost_per_1m_tokens():
+    registry = CapabilityRegistry()
+    registry.register(
+        ModelProfile(
+            name="cheap",
+            provider_name="groq_compatible",
+            model="cheap-model",
+            roles={"Leaf_Builder"},
+            capabilities={"chat"},
+            context_window=8192,
+            input_cost_per_1m_tokens=0.05,
+            output_cost_per_1m_tokens=0.05,
+            license_type="agregador",
+            location="cloud",
+            tier="fast",
+        )
+    )
+    registry.register(
+        ModelProfile(
+            name="expensive",
+            provider_name="openai",
+            model="expensive-model",
+            roles={"Leaf_Builder"},
+            capabilities={"chat"},
+            context_window=128000,
+            input_cost_per_1m_tokens=5.0,
+            output_cost_per_1m_tokens=15.0,
+            license_type="paga",
+            location="cloud",
+            tier="premium",
+        )
+    )
+
+    selection = LLMGateway(factory=RecordingFactory(), registry=registry).select_provider(
+        role="Leaf_Builder",
+        capability="chat",
+        budget_hint=1.0,
+    )
+
+    assert selection.profile.name == "cheap"
+
+
+def test_default_registry_skips_cloud_profiles_without_api_keys(monkeypatch):
+    for env_name in (
+        "OPENROUTER_API_KEY",
+        "GROQ_API_KEY",
+        "CEREBRAS_API_KEY",
+        "SAMBANOVA_API_KEY",
+        "OPENAI_API_KEY",
+        "GOOGLE_GEMINI_API_KEY",
+        "MISTRAL_API_KEY",
+    ):
+        monkeypatch.delenv(env_name, raising=False)
+
+    registry = CapabilityRegistry.default()
+    provider_names = {profile.provider_name for profile in registry.list_profiles()}
+
+    assert "ollama_local" in provider_names
+    assert "openrouter" not in provider_names
+    assert "cerebras" not in provider_names
+
+
+def test_default_registry_includes_cloud_profiles_when_api_key_exists(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+    registry = CapabilityRegistry.default()
+    provider_names = {profile.provider_name for profile in registry.list_profiles()}
+
+    assert "openrouter" in provider_names
