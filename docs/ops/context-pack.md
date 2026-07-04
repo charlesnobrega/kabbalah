@@ -2,6 +2,28 @@
 
 Role: alpha-stage multi-agent orchestration runtime for experimentation and recovery.
 
+## Document hierarchy (read this first — binding for any AI/dev)
+
+1. **Canonical execution plan**: `docs/roadmap/handoff-execution-plan.md` (waves
+   4–10, reconciled against the code on 2026-07-04). On any divergence between
+   documents, THIS file wins — but always re-validate its claims against the code.
+2. **Cleanup spec**: `docs/roadmap/cleanup-execution-plan.md` — the detailed
+   version of wave 4. Its Phase A (git-history secret scan) is mandatory before
+   any GitHub push, regardless of wave order.
+3. **Analysis input (NOT canonical)**: `MELHORIAS_E_APRIMORAMENTOS.md` — external
+   strategic analysis. Valuable for positioning/market context, but contains
+   stale technical claims; the reconciliation table in the handoff plan §0 lists
+   which of its items are already done or outdated. Never execute from it directly.
+4. **Completed history**: `docs/roadmap/hardening-next-waves.md` (waves 1–3, done).
+5. **Legacy — ignore**: `workspace/docs/ARCHITECTURE.md` and everything under
+   `workspace/` (untracked, outdated; scheduled for removal in cleanup Phase C).
+6. **Future single architecture doc**: `docs/ARCHITECTURE.md` does not exist yet —
+   it is the deliverable of cleanup Phase D.1. Do not create competing
+   architecture documents elsewhere.
+
+Wave order: cleanup (wave 4) and the LLM loop (wave 5) are independent and may be
+executed in either order; waves 6+ follow the dependencies stated in the handoff plan.
+
 Runtime: Python package under `src/kabbalah`; tests under `tests`; packaging via `setup.py` and `requirements.txt`.
 
 Do not use: real secrets in repo files, ungated mock provider behavior, root-level runtime modules, or old phase reports as source-of-truth.

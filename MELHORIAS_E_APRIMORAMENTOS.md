@@ -1,5 +1,13 @@
 # Kabbalah — Análise Completa, Melhorias e Aprimoramentos
 
+> **⚠️ PAPEL DESTE DOCUMENTO — leia antes de agir**: este arquivo é a **análise
+> estratégica de entrada** (levantamento externo). Ele NÃO é o plano de execução
+> canônico e contém claims técnicos desatualizados (ex.: estado dos testes,
+> M4/M7 já aplicados nas ondas 2–3). A execução canônica, reconciliada com o
+> código real, está em `docs/roadmap/handoff-execution-plan.md` (§0 traz a tabela
+> do que daqui já foi feito ou envelheceu). Em divergência, o handoff vence.
+> Hierarquia completa de documentos: `docs/ops/context-pack.md`.
+
 > **Documento técnico consolidado** — geração: 2026-07-04
 > **Escopo**: raio-x do código (não do README), origem das linhagens, auditoria dos subsistemas, comparativo de mercado e plano de melhorias priorizado.
 > **Premissa do projeto**: a equipe de LLM está parada; o foco tem sido a camada de **controle/governance**, que está mais madura que a de LLM. Este doc parte dessa realidade.

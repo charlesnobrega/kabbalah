@@ -125,7 +125,10 @@ cd E:\projetos\kabbalah
 
 ## 3. ONDAS DE EXECUÇÃO
 
-Ordem obrigatória: 4 → 5 → 6 → 7. Depois, 8 e 9 podem intercalar. Onda 10 só com aprovação humana.
+Ordem: as ondas 4 (limpeza) e 5 (loop LLM) são independentes — podem ser executadas
+em qualquer ordem, conforme prioridade do Charles. Depois delas: 6 → 7; 8 e 9 podem
+intercalar. A Fase A do plano de limpeza (scan de segredos no histórico) é obrigatória
+antes de qualquer push ao GitHub, independente da ordem. Onda 10 só com aprovação humana.
 
 ---
 
