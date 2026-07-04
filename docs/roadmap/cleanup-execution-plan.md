@@ -130,7 +130,7 @@ sendo 40 já em archive, 29 em specs (maioria morta), 17 em audit, 6 updates, et
   M13–M16 o que esta limpeza concluir (✅ + data), corrigir o M15 (o README atual já
   é honesto — o que restava era arquivar relatórios, feito na Fase E) e adicionar no
   topo um bloco "Status vivo: ver docs/roadmap/handoff-execution-plan.md §0".
-- [ ] **D.3** Triagem de `docs/specs/` (29 arquivos). MANTER apenas os vivos:
+- [x] **D.3** Triagem de `docs/specs/` (29 arquivos). MANTER apenas os vivos:
   `NO_MOCK_RUNTIME_POLICY.md`, `CONFIGURATION_GUIDE.md`,
   `PROVIDERS_IMPLEMENTATION_GUIDE.md`, `PROVIDER_HIERARCHY.md`,
   `PROVIDER_SETUP_LINKS.md`, `PROVIDER_TESTING_STRATEGY.md`, `API_KEY_SECURITY.md`,
