@@ -55,9 +55,10 @@ class DomainOrchestrator:
     _leaf_counter = {}  # Track leaf counters per domain
     _last_date = None
     
-    def __init__(self, llm_gateway: Optional[Any] = None):
+    def __init__(self, llm_gateway: Optional[Any] = None, budget_ledger: Optional[Any] = None):
         """Initialize DomainOrchestrator."""
         self.llm_gateway = llm_gateway
+        self.budget_ledger = budget_ledger
     
     def spawn_leaf_nodes(
         self,
@@ -245,6 +246,22 @@ class DomainOrchestrator:
                 self._build_leaf_request(leaf_node, selection.profile.model),
                 timeout=float(leaf_node.timeout),
             )
+            if self.budget_ledger is not None:
+                usage = {}
+                if isinstance(provider_response.raw_response, dict):
+                    usage = provider_response.raw_response.get("usage") or {}
+                input_tokens = int(usage.get("prompt_tokens") or 0)
+                output_tokens = int(usage.get("completion_tokens") or 0)
+                total_tokens = int(usage.get("total_tokens") or provider_response.tokens_used)
+                self.budget_ledger.record_call(
+                    provider=selection.profile.provider_name,
+                    model=provider_response.model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    total_tokens=total_tokens,
+                    cost=provider_response.cost,
+                    trace_id=leaf_node.trace_id,
+                )
             end_time = time.time()
             
             return LeafResult(
