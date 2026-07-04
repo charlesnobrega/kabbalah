@@ -64,6 +64,10 @@ class ModelProfile:
             "model": self.model,
             "base_url": self.base_url,
         }
+        if self.input_cost_per_1m_tokens:
+            kwargs["input_cost_per_1m_tokens"] = self.input_cost_per_1m_tokens
+        if self.output_cost_per_1m_tokens:
+            kwargs["output_cost_per_1m_tokens"] = self.output_cost_per_1m_tokens
         if self.api_key_env:
             kwargs["api_key"] = os.getenv(self.api_key_env)
             kwargs["api_key_env"] = self.api_key_env
@@ -274,6 +278,22 @@ class LLMGateway:
         self.factory = factory
         self.registry = registry or CapabilityRegistry.default()
         self.budget_manager = budget_manager
+        self._unavailable_profiles: dict[str, str] = {}
+
+    @property
+    def unavailable_profiles(self) -> dict[str, str]:
+        """Return profiles marked unavailable in this gateway session."""
+        return dict(self._unavailable_profiles)
+
+    def mark_unavailable(self, profile: ModelProfile, error: str) -> None:
+        """Mark a profile unavailable for subsequent selections."""
+        self._unavailable_profiles[profile.name] = error
+        logger.warning(
+            "Marked provider profile unavailable: %s (%s): %s",
+            profile.name,
+            profile.provider_name,
+            error,
+        )
 
     def registrar_provider(self, provider: ProviderCandidate) -> None:
         """Register a legacy provider candidate."""
@@ -292,6 +312,28 @@ class LLMGateway:
         trace_id: str = "gateway:selection",
     ) -> ProviderSelection:
         """Select and instantiate a provider by role and capability."""
+        selections = self.select_providers(
+            role=role,
+            capability=capability,
+            budget_hint=budget_hint,
+            trace_id=trace_id,
+        )
+        if not selections:
+            raise ValueError(
+                f"No provider profile available for role '{role}' and capability "
+                f"'{capability}'. Run `kabbalah setup` or update the capability registry."
+            )
+        return selections[0]
+
+    def select_providers(
+        self,
+        *,
+        role: str,
+        capability: str = "chat",
+        budget_hint: Optional[float] = None,
+        trace_id: str = "gateway:selection",
+    ) -> list[ProviderSelection]:
+        """Return ordered provider candidates for fallback-capable callers."""
         if self.factory is None:
             raise ValueError("LLMGateway requires a ProviderFactory to select real providers")
 
@@ -300,6 +342,11 @@ class LLMGateway:
             capability=capability,
             budget_hint=budget_hint,
         )
+        candidates = [
+            profile
+            for profile in candidates
+            if profile.name not in self._unavailable_profiles
+        ]
         if not candidates:
             budget_msg = f" within budget {budget_hint}" if budget_hint is not None else ""
             raise ValueError(
@@ -308,10 +355,25 @@ class LLMGateway:
                 "capability registry."
             )
 
-        profile = candidates[0]
-        self._enforce_budget(profile, trace_id=trace_id)
-        provider = self.factory.create_provider(profile.provider_name, **profile.provider_kwargs())
-        return ProviderSelection(profile=profile, provider=provider)
+        selections: list[ProviderSelection] = []
+        for profile in candidates:
+            self._enforce_budget(profile, trace_id=trace_id)
+            try:
+                provider = self.factory.create_provider(
+                    profile.provider_name,
+                    **profile.provider_kwargs(),
+                )
+            except Exception as exc:
+                self.mark_unavailable(profile, str(exc))
+                continue
+            selections.append(ProviderSelection(profile=profile, provider=provider))
+
+        if not selections:
+            raise ValueError(
+                f"All provider profiles failed for role '{role}' and capability "
+                f"'{capability}'. Unavailable: {self._unavailable_profiles}"
+            )
+        return selections
 
     def _enforce_budget(self, profile: ModelProfile, *, trace_id: str) -> None:
         if self.budget_manager is None:

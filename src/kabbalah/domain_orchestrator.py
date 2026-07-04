@@ -238,28 +238,46 @@ class DomainOrchestrator:
                 )
 
             capability = self._capability_for_leaf(leaf_node)
-            selection = self.llm_gateway.select_provider(
-                role="Leaf_Builder",
-                capability=capability,
-            )
-            provider_response = selection.provider.execute_request(
-                self._build_leaf_request(leaf_node, selection.profile.model),
-                timeout=float(leaf_node.timeout),
-            )
+            selections = self._select_provider_candidates(leaf_node, capability)
+            failed_profiles = []
+            provider_response = None
+            selection = None
+
+            for candidate in selections:
+                try:
+                    candidate_response = candidate.provider.execute_request(
+                        self._build_leaf_request(leaf_node, candidate.profile.model),
+                        timeout=float(leaf_node.timeout),
+                    )
+                    if candidate_response.error:
+                        raise RuntimeError(candidate_response.error)
+                    provider_response = candidate_response
+                    selection = candidate
+                    break
+                except Exception as exc:
+                    if hasattr(self.llm_gateway, "mark_unavailable"):
+                        self.llm_gateway.mark_unavailable(candidate.profile, str(exc))
+                    failed_profiles.append(
+                        {
+                            "profile": candidate.profile.name,
+                            "provider": candidate.profile.provider_name,
+                            "error": str(exc),
+                        }
+                    )
+
+            if provider_response is None or selection is None:
+                raise RuntimeError(f"All provider candidates failed: {failed_profiles}")
+
+            usage = self._usage_from_response(provider_response)
+            effective_cost = self._effective_cost(selection.profile, provider_response, usage)
             if self.budget_ledger is not None:
-                usage = {}
-                if isinstance(provider_response.raw_response, dict):
-                    usage = provider_response.raw_response.get("usage") or {}
-                input_tokens = int(usage.get("prompt_tokens") or 0)
-                output_tokens = int(usage.get("completion_tokens") or 0)
-                total_tokens = int(usage.get("total_tokens") or provider_response.tokens_used)
                 self.budget_ledger.record_call(
                     provider=selection.profile.provider_name,
                     model=provider_response.model,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
-                    total_tokens=total_tokens,
-                    cost=provider_response.cost,
+                    input_tokens=usage["input_tokens"],
+                    output_tokens=usage["output_tokens"],
+                    total_tokens=usage["total_tokens"],
+                    cost=effective_cost,
                     trace_id=leaf_node.trace_id,
                 )
             end_time = time.time()
@@ -282,8 +300,9 @@ class DomainOrchestrator:
                     "provider": selection.profile.provider_name,
                     "profile": selection.profile.name,
                     "tokens_used": provider_response.tokens_used,
-                    "cost": provider_response.cost,
+                    "cost": effective_cost,
                     "latency_ms": provider_response.latency_ms,
+                    "failed_profiles": failed_profiles,
                 },
                 start_time=start_time,
                 end_time=end_time,
@@ -311,6 +330,52 @@ class DomainOrchestrator:
         if leaf_node.task_type in {"implementation", "code", "coding"}:
             return "code"
         return "chat"
+
+    def _select_provider_candidates(self, leaf_node: LeafNode, capability: str) -> List[Any]:
+        """Return provider candidates, preserving compatibility with older gateways."""
+        if hasattr(self.llm_gateway, "select_providers"):
+            return list(
+                self.llm_gateway.select_providers(
+                    role="Leaf_Builder",
+                    capability=capability,
+                    trace_id=leaf_node.trace_id,
+                )
+            )
+        try:
+            selection = self.llm_gateway.select_provider(
+                role="Leaf_Builder",
+                capability=capability,
+                trace_id=leaf_node.trace_id,
+            )
+        except TypeError:
+            selection = self.llm_gateway.select_provider(
+                role="Leaf_Builder",
+                capability=capability,
+            )
+        return [selection]
+
+    @staticmethod
+    def _usage_from_response(provider_response) -> Dict[str, int]:
+        usage = {}
+        if isinstance(provider_response.raw_response, dict):
+            usage = provider_response.raw_response.get("usage") or {}
+        input_tokens = int(usage.get("prompt_tokens") or 0)
+        output_tokens = int(usage.get("completion_tokens") or 0)
+        total_tokens = int(usage.get("total_tokens") or provider_response.tokens_used)
+        return {
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "total_tokens": total_tokens,
+        }
+
+    @staticmethod
+    def _effective_cost(profile, provider_response, usage: Dict[str, int]) -> float:
+        if provider_response.cost:
+            return float(provider_response.cost)
+        return (
+            (usage["input_tokens"] / 1_000_000) * profile.input_cost_per_1m_tokens
+            + (usage["output_tokens"] / 1_000_000) * profile.output_cost_per_1m_tokens
+        )
 
     def _build_leaf_request(self, leaf_node: LeafNode, model: str) -> Dict:
         """Build a provider request from leaf metadata and description."""

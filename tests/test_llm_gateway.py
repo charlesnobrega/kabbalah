@@ -20,6 +20,14 @@ class RecordingFactory:
         return DummyProvider(provider_name)
 
 
+class FailingFirstFactory(RecordingFactory):
+    def create_provider(self, provider_name: str, **kwargs):
+        self.created.append((provider_name, kwargs))
+        if provider_name == "ollama_local":
+            raise ConnectionError("ollama offline")
+        return DummyProvider(provider_name)
+
+
 def test_gateway_selects_cheapest_available_profile_by_role_and_capability():
     registry = CapabilityRegistry()
     registry.register(
@@ -66,6 +74,128 @@ def test_gateway_selects_cheapest_available_profile_by_role_and_capability():
         (
             "ollama_local",
             {"model": "qwen2.5-coder:7b", "base_url": None},
+        )
+    ]
+
+
+def test_gateway_returns_ordered_provider_candidates_for_leaf_fallback():
+    registry = CapabilityRegistry(
+        [
+            ModelProfile(
+                name="local",
+                provider_name="ollama_local",
+                model="llama3.1",
+                roles={"Leaf_Builder"},
+                capabilities={"code"},
+                context_window=8192,
+                input_cost_per_1m_tokens=0.0,
+                output_cost_per_1m_tokens=0.0,
+                license_type="open",
+                location="local",
+                tier="local",
+            ),
+            ModelProfile(
+                name="groq",
+                provider_name="groq_compatible",
+                model="llama-3.1-8b-instant",
+                roles={"Leaf_Builder"},
+                capabilities={"code"},
+                context_window=8192,
+                input_cost_per_1m_tokens=0.05,
+                output_cost_per_1m_tokens=0.08,
+                license_type="agregador",
+                location="cloud",
+                tier="fast",
+            ),
+        ]
+    )
+
+    selections = LLMGateway(factory=RecordingFactory(), registry=registry).select_providers(
+        role="Leaf_Builder",
+        capability="code",
+        trace_id="run:branch:leaf",
+    )
+
+    assert [selection.profile.name for selection in selections] == ["local", "groq"]
+
+
+def test_gateway_skips_instantiation_failure_and_marks_profile_unavailable():
+    registry = CapabilityRegistry(
+        [
+            ModelProfile(
+                name="local",
+                provider_name="ollama_local",
+                model="llama3.1",
+                roles={"Leaf_Builder"},
+                capabilities={"code"},
+                context_window=8192,
+                input_cost_per_1m_tokens=0.0,
+                output_cost_per_1m_tokens=0.0,
+                license_type="open",
+                location="local",
+                tier="local",
+            ),
+            ModelProfile(
+                name="groq",
+                provider_name="groq_compatible",
+                model="llama-3.1-8b-instant",
+                roles={"Leaf_Builder"},
+                capabilities={"code"},
+                context_window=8192,
+                input_cost_per_1m_tokens=0.05,
+                output_cost_per_1m_tokens=0.08,
+                license_type="agregador",
+                location="cloud",
+                tier="fast",
+            ),
+        ]
+    )
+    gateway = LLMGateway(factory=FailingFirstFactory(), registry=registry)
+
+    selection = gateway.select_provider(
+        role="Leaf_Builder",
+        capability="code",
+        trace_id="run:branch:leaf",
+    )
+
+    assert selection.profile.name == "groq"
+    assert "local" in gateway.unavailable_profiles
+
+
+def test_gateway_passes_profile_pricing_to_provider_factory():
+    registry = CapabilityRegistry()
+    registry.register(
+        ModelProfile(
+            name="groq",
+            provider_name="groq_compatible",
+            model="llama-3.1-8b-instant",
+            roles={"Leaf_Builder"},
+            capabilities={"chat"},
+            context_window=8192,
+            input_cost_per_1m_tokens=0.05,
+            output_cost_per_1m_tokens=0.08,
+            license_type="agregador",
+            location="cloud",
+            tier="fast",
+            base_url="https://api.groq.com/openai/v1",
+        )
+    )
+    factory = RecordingFactory()
+
+    LLMGateway(factory=factory, registry=registry).select_provider(
+        role="Leaf_Builder",
+        capability="chat",
+    )
+
+    assert factory.created == [
+        (
+            "groq_compatible",
+            {
+                "model": "llama-3.1-8b-instant",
+                "base_url": "https://api.groq.com/openai/v1",
+                "input_cost_per_1m_tokens": 0.05,
+                "output_cost_per_1m_tokens": 0.08,
+            },
         )
     ]
 

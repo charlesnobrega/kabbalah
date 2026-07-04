@@ -266,6 +266,126 @@ class TestDomainOrchestratorExecution:
 
         assert result.status == "failure"
         assert "provider unavailable" in result.metadata["error"]
+
+    def test_execute_leaf_node_falls_back_to_next_gateway_candidate(self):
+        """Provider connection failure should try the next candidate before failing."""
+
+        class FailingProvider:
+            def execute_request(self, request, timeout=30.0):
+                raise ConnectionError("ollama refused connection")
+
+        class WorkingProvider:
+            def execute_request(self, request, timeout=30.0):
+                return ProviderResponse(
+                    content="fallback artifact",
+                    model="groq-model",
+                    tokens_used=12,
+                    cost=0.0001,
+                    latency_ms=8.0,
+                )
+
+        class Gateway:
+            def __init__(self):
+                self.marked_unavailable = []
+
+            def select_providers(self, *, role, capability, budget_hint=None, trace_id="gateway:selection"):
+                assert trace_id == "run_001:branch_backend_001:leaf_backend_001"
+                return [
+                    ProviderSelection(
+                        profile=ModelProfile(
+                            name="local-ollama",
+                            provider_name="ollama_local",
+                            model="llama3.1",
+                            roles={"Leaf_Builder"},
+                            capabilities={"code"},
+                            context_window=8192,
+                            input_cost_per_1m_tokens=0.0,
+                            output_cost_per_1m_tokens=0.0,
+                            license_type="open",
+                            location="local",
+                            tier="local",
+                        ),
+                        provider=FailingProvider(),
+                    ),
+                    ProviderSelection(
+                        profile=ModelProfile(
+                            name="groq-fast",
+                            provider_name="groq_compatible",
+                            model="groq-model",
+                            roles={"Leaf_Builder"},
+                            capabilities={"code"},
+                            context_window=8192,
+                            input_cost_per_1m_tokens=0.05,
+                            output_cost_per_1m_tokens=0.08,
+                            license_type="agregador",
+                            location="cloud",
+                            tier="fast",
+                        ),
+                        provider=WorkingProvider(),
+                    ),
+                ]
+
+            def mark_unavailable(self, profile, error):
+                self.marked_unavailable.append((profile.name, error))
+
+        gateway = Gateway()
+        result = DomainOrchestrator(llm_gateway=gateway)._execute_leaf_node(self._leaf_node())
+
+        assert result.status == "success"
+        assert result.metadata["provider"] == "groq_compatible"
+        assert result.metadata["failed_profiles"] == [
+            {"profile": "local-ollama", "provider": "ollama_local", "error": "ollama refused connection"}
+        ]
+        assert gateway.marked_unavailable == [("local-ollama", "ollama refused connection")]
+        assert result.artifacts[0]["content"] == "fallback artifact"
+
+    def test_execute_leaf_node_calculates_cost_from_profile_usage_when_provider_cost_is_zero(self, tmp_path):
+        """Ledger cost must use ModelProfile pricing when a compatible provider reports zero cost."""
+        from kabbalah.budget_manager import BudgetLedger
+
+        ledger = BudgetLedger(tmp_path / "state.sqlite3")
+
+        class Provider:
+            def execute_request(self, request, timeout=30.0):
+                return ProviderResponse(
+                    content="priced artifact",
+                    model="priced-model",
+                    tokens_used=3000,
+                    cost=0.0,
+                    latency_ms=9.0,
+                    raw_response={
+                        "usage": {
+                            "prompt_tokens": 1000,
+                            "completion_tokens": 2000,
+                            "total_tokens": 3000,
+                        }
+                    },
+                )
+
+        class Gateway:
+            def select_provider(self, *, role, capability, budget_hint=None, trace_id="gateway:selection"):
+                return ProviderSelection(
+                    profile=ModelProfile(
+                        name="priced-profile",
+                        provider_name="groq_compatible",
+                        model="priced-model",
+                        roles={"Leaf_Builder"},
+                        capabilities={"code"},
+                        context_window=8192,
+                        input_cost_per_1m_tokens=0.05,
+                        output_cost_per_1m_tokens=0.08,
+                        license_type="agregador",
+                        location="cloud",
+                        tier="fast",
+                    ),
+                    provider=Provider(),
+                )
+
+        result = DomainOrchestrator(llm_gateway=Gateway(), budget_ledger=ledger)._execute_leaf_node(self._leaf_node())
+
+        assert result.status == "success"
+        assert result.metadata["cost"] == pytest.approx(0.00021)
+        assert ledger.list_entries()[0]["cost"] == pytest.approx(0.00021)
     
     def test_execute_leaf_nodes_with_empty_list(self):
         """Test that empty leaf nodes list raises DomainExecutionError."""
