@@ -6,19 +6,19 @@
 
 Kabbalah is an alpha-stage Python project for multi-agent orchestration. The repository contains a tree-based orchestration skeleton, provider abstractions, runtime hardening primitives, memory modules, tool execution primitives, observability primitives, and tests.
 
-This repository is not yet a production autonomous runtime. Current gaps include real leaf execution, centralized policy orchestration, MCP execution, Cognee-backed semantic retrieval, skill registry wiring, graph runtime wiring, and true parallel execution in the main orchestration path.
+This repository is not yet a production autonomous runtime. Current gaps include real leaf execution, full LLM gateway integration, Cognee-backed semantic retrieval, skill registry wiring, graph runtime wiring, and true parallel execution in the main orchestration path.
 
 ## Current runtime reality
 
 - Main package: `src/kabbalah`.
 - Packaging: `setup.py`, `requirements.txt`.
 - Runtime provider factory currently supports OpenAI, Google Gemini, Groq, Mistral, Together, and DeepSeek.
-- `MockProvider` is test-only and must stay gated by `KABBALAH_ALLOW_TEST_FAKE_PROVIDER=1`.
+- `MockProvider` is test-only, is not exported from `kabbalah.providers`, and must stay gated by `KABBALAH_ALLOW_TEST_FAKE_PROVIDER=1`.
 - `LocalLLMProvider` exists for Ollama-style local calls, but it is not wired into the main provider factory yet.
 - Root/domain orchestration is sequential in the current implementation, despite config/docs describing intended parallelism.
 - Leaf execution currently returns placeholder success artifacts; it does not yet run a real provider/tool loop.
 - SillyTavern MCP bridge exists at `kabbalah_mcp_bridge.py` and exposes guarded tools through qlipot, FirewallMCP, HITL tickets, Bitwarden cache, agent contracts, retry limits, and SyncHub stats.
-- Agent contracts and SyncHub are implemented as local in-memory primitives. Network propagation is phase-1/local only; P2P/central federation is not production-wired yet.
+- Agent contracts are persisted in SQLite by the bridge. SyncHub network propagation is phase-1/local only; P2P/central federation is not production-wired yet.
 
 ## Repository layout
 
@@ -28,19 +28,24 @@ kabbalah/
 ├── tests/                     # Unit, integration, provider, property tests
 ├── config/                    # Example configuration
 ├── docs/
-│   ├── architecture/          # Current architecture and structure docs
-│   ├── specs/                 # Requirements, design, policies, roadmap specs
+│   ├── ARCHITECTURE.md        # Single architecture overview
 │   ├── adr/                   # Architecture decision records
+│   ├── analysis/              # Non-canonical analysis inputs
+│   ├── archive/               # Historical specs, reports, updates, tool artifacts
 │   ├── audit/                 # Audit evidence and findings
 │   ├── development/           # Contributor workflow
 │   ├── governance/            # Operating rules
 │   ├── ops/                   # Short operational context for future agents
-│   └── archive/reports/       # Historical phase/session reports
+│   ├── roadmap/               # Executable plans and future waves
+│   ├── security/              # Security incident/migration notes
+│   └── specs/                 # Living specs, policies, and setup guides
 ├── archive/legacy/            # Legacy code snapshots kept out of import paths
 ├── scripts/                   # Utility scripts
-├── requirements.txt
+├── requirements*.txt          # Base, dev, MCP, memory, observability dependencies
+├── kabbalah_mcp_bridge.py     # stdio MCP bridge entrypoint
 ├── setup.py
 ├── pytest.ini
+├── ruff.toml
 └── README.md
 ```
 
@@ -181,8 +186,9 @@ Live provider tests must not run implicitly. Use the policy in `docs/specs/NO_MO
 
 ## Important docs
 
-- [Current Architecture](docs/architecture/CURRENT_ARCHITECTURE.md)
-- [Repository Structure](docs/architecture/REPOSITORY_STRUCTURE.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Execution Handoff Plan](docs/roadmap/handoff-execution-plan.md)
+- [Cleanup Execution Plan](docs/roadmap/cleanup-execution-plan.md)
 - [Repository Audit](docs/specs/REPOSITORY_AUDIT.md)
 - [No Mock Runtime Policy](docs/specs/NO_MOCK_RUNTIME_POLICY.md)
 - [Governance](docs/governance/GOVERNANCE.md)

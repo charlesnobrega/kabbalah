@@ -154,7 +154,7 @@ sendo 40 já em archive, 29 em specs (maioria morta), 17 em audit, 6 updates, et
   `setup.py`, `pytest.ini`, `ruff.toml`, `requirements*.txt` (5),
   `kabbalah_mcp_bridge.py`, `sillytavern_config.json`, `sillytavern_mcp_config.json`,
   `.gitignore`, `.gitattributes`, `.env.example`.
-- [ ] **D.6** Atualizar `README.md`: seção "Repository layout" reflete a árvore nova;
+- [x] **D.6** Atualizar `README.md`: seção "Repository layout" reflete a árvore nova;
   "Important docs" aponta para `docs/ARCHITECTURE.md` + roadmap + governança;
   remover links quebrados (validar todos os links relativos do README).
 
