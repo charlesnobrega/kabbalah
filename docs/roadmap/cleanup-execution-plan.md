@@ -32,12 +32,14 @@ O repo teve incidente de chave no passado (evidência: `SECURITY_ALERT.md`,
 `SECURITY_MIGRATION.md`, `scripts/migrate_keys_to_vault.ps1`). Antes de qualquer
 push público:
 
-- [ ] **A.1** Rodar um scanner de segredos no **histórico completo**, não só no
+- [x] **A.1** Rodar um scanner de segredos no **histórico completo**, não só no
   working tree: `gitleaks detect --source . --log-opts="--all"` (ou trufflehog).
   - Se encontrar segredo em commit antigo: **PARE e reporte ao Charles** com a lista
     de commits/arquivos. A decisão entre reescrever histórico (BFG/filter-repo) ou
     publicar como repo novo órfão é dele (gate #5 do handoff, adicionado abaixo).
   - Se limpo: registre o resultado aqui e siga.
+  - Resultado Codex 2026-07-04: `gitleaks detect --source . --log-opts="--all" --redact=100`
+    executado com relatório temporário fora do repo; `0` achados.
 - [ ] **A.2** Confirmar de novo, pós-limpeza (final da Fase F): `git ls-files | grep
   -iE "\.env$|sqlite|secret|credential|apikey"` → vazio (exceto código/docs).
 
