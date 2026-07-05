@@ -385,12 +385,16 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
   segura, budget, hardware ativo conhecido, contratos ativos e tickets HITL
   pendentes; `-v/-vv` aumentam logging; JSON errors usam `what_happened/why/
   what_to_do`; exit codes documentados.
-- [ ] **8.4 Empacotamento moderno** — migrar `setup.py` → `pyproject.toml`
+- [x] **8.4 Empacotamento moderno** *(Codex, 2026-07-05 — testes em `tests/test_packaging_metadata.py`)* — migrar `setup.py` → `pyproject.toml`
   (PEP 621), single-source da versão (`kabbalah.__version__`), criar
   `CHANGELOG.md` retroativo por ondas (semver: 0.x enquanto alpha), extras
   opcionais formalizados (`pip install kabbalah[mcp,memory,observability]`)
   substituindo os requirements-*.txt na documentação (mantê-los como espelho).
   *Aceite*: `pip install -e .` e extras funcionam; versão única em um lugar.
+  *Implementado*: `pyproject.toml` é a fonte canônica PEP 621; `setup.py`
+  permanece como shim legado; versão vem de `kabbalah.__version__`; extras
+  `mcp`, `memory` e `observability` formalizados; `requirements-*.txt` ficam
+  como espelhos; `CHANGELOG.md` registra o histórico por ondas.
 - [ ] **8.5 CI no GitHub** — hoje `.github/` só tem templates. Criar workflows:
   1. `ci.yml`: suíte completa em push/PR (Windows + Ubuntu, Python 3.9 e 3.11),
      ruff check, e job de gitleaks.

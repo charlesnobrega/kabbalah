@@ -11,6 +11,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
+from kabbalah import __version__
 from kabbalah.budget_manager import BudgetLedger, BudgetManager
 from kabbalah.configuration_manager import ConfigurationManager
 from kabbalah.hardware_profile import HardwareProfiler
@@ -50,7 +51,7 @@ Examples:
     parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s 1.0.0",
+        version=f"%(prog)s {__version__}",
     )
 
     parser.add_argument(
@@ -341,7 +342,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
 def cmd_version(args: argparse.Namespace) -> int:
     """Handle version command."""
-    print("Kabbalah v1.0.0")
+    print(f"Kabbalah v{__version__}")
     print("Multi-agent orchestration system")
     return 0
 

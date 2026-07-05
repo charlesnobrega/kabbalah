@@ -11,7 +11,7 @@ This repository is not yet a production autonomous runtime. Current gaps include
 ## Current runtime reality
 
 - Main package: `src/kabbalah`.
-- Packaging: `setup.py`, `requirements.txt`.
+- Packaging: `pyproject.toml`, `setup.py` compatibility shim, `requirements*.txt` mirrors.
 - Runtime provider factory currently supports native OpenAI, Google Gemini, Groq, Mistral, Together, and DeepSeek, plus OpenAI-compatible entries for Ollama local, OpenRouter, Groq-compatible, Cerebras, and SambaNova.
 - `MockProvider` is test-only, is not exported from `kabbalah.providers`, and must stay gated by `KABBALAH_ALLOW_TEST_FAKE_PROVIDER=1`.
 - `LocalLLMProvider` exists as legacy code; the main local route is `ollama_local` through the generic OpenAI-compatible adapter.
@@ -43,6 +43,7 @@ kabbalah/
 ├── scripts/                   # Utility scripts
 ├── requirements*.txt          # Base, dev, MCP, memory, observability dependencies
 ├── kabbalah_mcp_bridge.py     # stdio MCP bridge entrypoint
+├── pyproject.toml
 ├── setup.py
 ├── pytest.ini
 ├── ruff.toml
@@ -76,20 +77,20 @@ python -m pip install -r requirements-dev.txt
 Cognee-backed semantic memory is optional and intentionally kept out of the base install:
 
 ```bash
-python -m pip install -r requirements-memory.txt
+python -m pip install -e ".[memory]"
 ```
 
 External telemetry exporters are also optional:
 
 ```bash
-python -m pip install -r requirements-observability.txt
+python -m pip install -e ".[observability]"
 ```
 
 Optional MCP bridge dependencies are isolated because the official MCP SDK may
 require newer transitive dependency versions than the legacy provider stack:
 
 ```bash
-python -m pip install -r requirements-mcp.txt
+python -m pip install -e ".[mcp]"
 ```
 
 ## Setup and CLI status

@@ -142,7 +142,8 @@ kabbalah/
 ├── src/kabbalah/            # canonical Python package
 ├── tests/                   # canonical test suite
 ├── kabbalah_mcp_bridge.py   # stdio MCP bridge entrypoint
-└── setup.py                 # packaging and CLI entrypoint
+├── pyproject.toml           # canonical packaging metadata and CLI entrypoint
+└── setup.py                 # legacy compatibility shim
 ```
 
 Root-level Markdown should stay minimal: `README.md`, `CONTRIBUTING.md`, and

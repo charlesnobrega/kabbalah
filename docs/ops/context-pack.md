@@ -28,7 +28,7 @@ Role: alpha-stage multi-agent orchestration runtime for experimentation and reco
 Wave order: cleanup (wave 4) and the LLM loop (wave 5) are independent and may be
 executed in either order; waves 6+ follow the dependencies stated in the handoff plan.
 
-Runtime: Python package under `src/kabbalah`; tests under `tests`; packaging via `setup.py` and `requirements.txt`.
+Runtime: Python package under `src/kabbalah`; tests under `tests`; packaging via `pyproject.toml` with `setup.py` kept as a compatibility shim.
 
 Do not use: real secrets in repo files, ungated mock provider behavior, root-level runtime modules, or old phase reports as source-of-truth.
 
@@ -37,16 +37,16 @@ Critical commands:
 - `.venv\Scripts\python.exe -m pytest tests -q`
 - `python -m pip install -r requirements.txt`
 - `python -m pip install -r requirements-dev.txt`
-- `python -m pip install -r requirements-memory.txt`
-- `python -m pip install -r requirements-observability.txt`
+- `python -m pip install -e ".[memory]"`
+- `python -m pip install -e ".[observability]"`
 - `python -m pip install -e .`
 
 Known gotchas:
 
 - The active Windows Python may point to a tool-managed interpreter without `pip`; use the project `.venv`.
 - `LocalLLMProvider` exists as legacy code; the main provider factory now routes local Ollama-style calls through `ollama_local` and `OpenAICompatibleProvider`.
-- Cognee is optional and installed via `requirements-memory.txt`, not the base requirements file.
-- Test/quality dependencies are in `requirements-dev.txt`; telemetry exporters are in `requirements-observability.txt`.
+- Cognee is optional and installed via `pip install -e ".[memory]"`; `requirements-memory.txt` is kept as a mirror.
+- Test/quality dependencies are in the `dev` extra and `requirements-dev.txt`; telemetry exporters are in the `observability` extra and `requirements-observability.txt`.
 - Root/domain orchestration is sequential in code even where older docs/config mention parallel execution.
 - Leaf execution performs real provider calls only when `DomainOrchestrator` is constructed with an `LLMGateway`; without an injected gateway it returns explicit `status="skipped"`, not fake success.
 - Live provider tests require explicit gating; see `docs/specs/NO_MOCK_RUNTIME_POLICY.md`.
