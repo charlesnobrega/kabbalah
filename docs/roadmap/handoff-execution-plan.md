@@ -395,12 +395,15 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
   permanece como shim legado; versão vem de `kabbalah.__version__`; extras
   `mcp`, `memory` e `observability` formalizados; `requirements-*.txt` ficam
   como espelhos; `CHANGELOG.md` registra o histórico por ondas.
-- [ ] **8.5 CI no GitHub** — hoje `.github/` só tem templates. Criar workflows:
+- [x] **8.5 CI no GitHub** *(Codex, 2026-07-05 — testes em `tests/test_ci_workflow.py`)* — hoje `.github/` só tem templates. Criar workflows:
   1. `ci.yml`: suíte completa em push/PR (Windows + Ubuntu, Python 3.9 e 3.11),
      ruff check, e job de gitleaks.
   2. Badges REAIS no README (build, versão, licença) — badge verde de verdade,
      não decorativo.
   *Aceite*: pipeline verde no primeiro push; PR sem testes falha o check.
+  *Implementado*: `.github/workflows/ci.yml` roda ruff e pytest em
+  Windows/Ubuntu com Python 3.9/3.11 e inclui job separado de gitleaks; README
+  usa badges reais de workflow, tag de versão e licença do GitHub.
 - [ ] **8.6 Qualidade de código fina** — ampliar `ruff.toml` além de F401/F841
   (adicionar `E`, `W`, `I` para ordenação de imports, `B` bugbear), corrigir o
   que apontar; type hints completos nos módulos públicos (gateway, contratos,

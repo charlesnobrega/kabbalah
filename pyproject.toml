@@ -65,6 +65,7 @@ dev = [
   "mypy==1.7.0",
   "isort==5.13.0",
   "ruff==0.6.9",
+  "tomli>=2.0.1; python_version < '3.11'",
 ]
 docs = [
   "sphinx>=7.0.0",
