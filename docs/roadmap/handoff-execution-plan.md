@@ -330,7 +330,7 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
 > cara de produto no GitHub. Cada onda continua entregando limpo (regra §2),
 > mas o passe de vitrine concentrado é aqui.
 
-- [ ] **8.0 Configuração e onboarding (menu de configurações)** — chaves são
+- [x] **8.0 Configuração e onboarding (menu de configurações)** *(Codex, 2026-07-05 — testes em `tests/test_onboarding.py`, `tests/test_configuration_manager.py`, `tests/test_cli.py`)* — chaves são
   **por instalação e solicitadas ao usuário**, nunca embutidas no projeto:
   1. **Primeiro boot sem config** → wizard interativo na CLI (`kabbalah setup`):
      lista os providers do registro, usuário escolhe quais ativar, insere as
@@ -351,11 +351,12 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
   5. Bridge: expor `get_config_status` (status sem valores) como tool.
   6. Existe `src/kabbalah/configuration_manager.py` (com testes) — **leia e
      estenda**, não crie um sistema paralelo.
-  *Progresso 2026-07-04*: `ConfigurationManager` agora expõe status seguro de
-  chaves por provider (ambiente/keyring/configuração, com apenas `last4`),
-  recusa armazenamento em cleartext e o bridge expõe `get_config_status` sem
-  valores secretos. Ainda faltam wizard `kabbalah setup`, menu CLI completo e
-  validação live de cada chave antes de marcar este item como concluído.
+  *Implementado*: `kabbalah setup` lista providers, recebe chaves por input
+  oculto, valida com chamada mínima via provider e só então armazena no
+  keyring; `kabbalah config list/add-key/remove-key/test-key/set-budget/
+  set-routing` cobre status seguro, hardware ativo conhecido, limites de
+  budget e política de roteamento; `get_config_status` permanece exposto no
+  bridge sem valores secretos.
   *Aceite*: instalação limpa → wizard funciona ponta a ponta; nenhum segredo
   aparece em arquivo tracked, log ou saída de `kabbalah config list`; chave
   inválida é rejeitada na validação; suíte verde.

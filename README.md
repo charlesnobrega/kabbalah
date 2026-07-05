@@ -92,16 +92,38 @@ require newer transitive dependency versions than the legacy provider stack:
 python -m pip install -r requirements-mcp.txt
 ```
 
-## CLI status
+## Setup and CLI status
 
-The first Wave-8 CLI status panel is available as JSON:
+Configure provider keys per installation with the interactive wizard:
+
+```bash
+kabbalah setup
+```
+
+The wizard lists supported providers, reads keys with hidden input, validates
+each key with a minimal provider call, and stores valid keys in the OS keyring.
+It does not write provider keys to tracked files, the state database, logs, or
+stdout.
+
+Useful config commands:
+
+```bash
+kabbalah config list --json
+kabbalah config add-key openai --json
+kabbalah config test-key openai --json
+kabbalah config remove-key openai --json
+kabbalah config set-budget --mode block --run-usd 1.25 --daily-usd 5 --json
+kabbalah config set-routing budget_first --json
+```
+
+The runtime status panel is available as JSON:
 
 ```bash
 kabbalah status --json
 ```
 
 It returns safe provider key status (`present`/`absent`, source and `last4`) and
-budget stats. It must not print full API keys or secrets.
+budget/hardware stats. It must not print full API keys or secrets.
 
 ## SillyTavern MCP bridge
 

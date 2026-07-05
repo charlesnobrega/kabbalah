@@ -3,6 +3,7 @@ Kabbalah CLI - Command-line interface for the Kabbalah orchestration system.
 """
 
 import argparse
+import getpass
 import json
 import logging
 import os
@@ -10,9 +11,11 @@ import sys
 from pathlib import Path
 
 from kabbalah.budget_manager import BudgetLedger, BudgetManager
+from kabbalah.configuration_manager import ConfigurationManager
+from kabbalah.hardware_profile import HardwareProfiler
 from kabbalah.intake_node import IntakeNode
 from kabbalah.models import UserRequest
-from kabbalah.configuration_manager import ConfigurationManager
+from kabbalah.onboarding import ProviderKeyValidator, run_setup_wizard
 from kabbalah.specification_pretty_printer import SpecificationPrettyPrinter, OutputFormat
 
 
@@ -35,7 +38,9 @@ def parse_arguments() -> argparse.Namespace:
         epilog="""
 Examples:
   kabbalah parse --name "My Project" --description "Project description"
+  kabbalah setup
   kabbalah config --show
+  kabbalah config list --json
   kabbalah status --json
   kabbalah version
         """,
@@ -55,6 +60,18 @@ Examples:
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
+
+    # Setup command
+    setup_parser = subparsers.add_parser("setup", help="Interactive first-boot setup")
+    setup_parser.add_argument(
+        "--providers",
+        help="Comma-separated provider names to configure non-interactively",
+    )
+    setup_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON",
+    )
 
     # Parse command
     parse_parser = subparsers.add_parser("parse", help="Parse a project request")
@@ -98,6 +115,35 @@ Examples:
         metavar=("KEY", "VALUE"),
         help="Set configuration value",
     )
+    config_subparsers = config_parser.add_subparsers(dest="config_command")
+    config_list = config_subparsers.add_parser("list", help="List safe provider/config status")
+    config_list.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+
+    config_add = config_subparsers.add_parser("add-key", help="Add or replace a provider API key")
+    config_add.add_argument("provider", help="Provider name")
+    config_add.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+
+    config_remove = config_subparsers.add_parser("remove-key", help="Remove a provider API key from keyring")
+    config_remove.add_argument("provider", help="Provider name")
+    config_remove.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+
+    config_test = config_subparsers.add_parser("test-key", help="Validate an installed provider API key")
+    config_test.add_argument("provider", help="Provider name")
+    config_test.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+
+    config_budget = config_subparsers.add_parser("set-budget", help="Persist non-secret budget limits")
+    config_budget.add_argument("--mode", choices=["warn", "block"], help="Budget enforcement mode")
+    config_budget.add_argument("--run-usd", type=float, help="Run budget in USD")
+    config_budget.add_argument("--daily-usd", type=float, help="Daily budget in USD")
+    config_budget.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+
+    config_routing = config_subparsers.add_parser("set-routing", help="Persist routing policy")
+    config_routing.add_argument(
+        "policy",
+        choices=["balanced", "budget_first", "quality_first", "local_first"],
+        help="Routing policy",
+    )
+    config_routing.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
 
     # Version command
     status_parser = subparsers.add_parser("status", help="Show safe runtime status")
@@ -152,8 +198,84 @@ def cmd_parse(args: argparse.Namespace) -> int:
 def cmd_config(args: argparse.Namespace) -> int:
     """Handle config command."""
     try:
-        config_manager = ConfigurationManager()
-        config_manager.load_defaults()
+        config_manager = _load_config_manager()
+
+        if args.config_command == "list":
+            status = config_manager.get_config_status()
+            status["hardware"] = _hardware_status(_state_db_path())
+            return _emit_success(status, json_output=args.json)
+
+        if args.config_command == "add-key":
+            api_key = getpass.getpass(f"{args.provider} API key: ")
+            validation = ProviderKeyValidator().validate(args.provider, api_key)
+            if not validation.valid:
+                return _emit_error(
+                    what_happened="Provider key validation failed.",
+                    why=validation.message,
+                    what_to_do="Check the key/provider and run `kabbalah config add-key` again.",
+                    json_output=args.json,
+                )
+            config_manager.set_provider_api_key(args.provider, api_key, storage="keyring")
+            status = config_manager.get_provider_key_status(args.provider)
+            return _emit_success(
+                {
+                    "provider": args.provider,
+                    "stored": True,
+                    "source": status["source"],
+                    "last4": status["last4"],
+                    "validation": validation.message,
+                },
+                json_output=args.json,
+            )
+
+        if args.config_command == "remove-key":
+            config_manager.remove_provider_api_key(args.provider, storage="keyring")
+            return _emit_success(
+                {"provider": args.provider, "removed": True},
+                json_output=args.json,
+            )
+
+        if args.config_command == "test-key":
+            api_key = config_manager.get_provider_api_key(args.provider)
+            if not api_key:
+                return _emit_error(
+                    what_happened="Provider key is not configured.",
+                    why=f"No key found for {args.provider}.",
+                    what_to_do=f"Run `kabbalah config add-key {args.provider}` first.",
+                    json_output=args.json,
+                )
+            validation = ProviderKeyValidator().validate(args.provider, api_key)
+            return _emit_success(
+                {
+                    "provider": args.provider,
+                    "valid": validation.valid,
+                    "message": validation.message,
+                },
+                json_output=args.json,
+            ) if validation.valid else _emit_error(
+                what_happened="Provider key validation failed.",
+                why=validation.message,
+                what_to_do=f"Run `kabbalah config add-key {args.provider}` with a valid key.",
+                json_output=args.json,
+            )
+
+        if args.config_command == "set-budget":
+            config_manager.set_budget_limits(
+                mode=args.mode,
+                run_limit_usd=args.run_usd,
+                daily_limit_usd=args.daily_usd,
+            )
+            return _emit_success(
+                {"budget": config_manager.get_config_status()["budget"]},
+                json_output=args.json,
+            )
+
+        if args.config_command == "set-routing":
+            config_manager.set_routing_policy(args.policy)
+            return _emit_success(
+                {"routing": config_manager.get_config_status()["routing"]},
+                json_output=args.json,
+            )
 
         if args.show:
             config_dict = config_manager.to_dict()
@@ -180,6 +302,35 @@ def cmd_config(args: argparse.Namespace) -> int:
         return 1
 
 
+def cmd_setup(args: argparse.Namespace) -> int:
+    """Handle first-boot setup command."""
+    try:
+        config_manager = _load_config_manager()
+        input_func = (lambda _: args.providers) if args.providers else input
+        result = run_setup_wizard(
+            config_manager=config_manager,
+            validator=ProviderKeyValidator(),
+            provider_names=sorted(config_manager.PROVIDER_KEY_ENVS),
+            input_func=input_func,
+            secret_input_func=getpass.getpass,
+            output_func=(lambda message: None) if args.json else print,
+        )
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["ok"] else 1
+    except Exception as e:
+        logger.error(f"Error running setup: {str(e)}")
+        if args.json:
+            return _emit_error(
+                what_happened="Setup failed.",
+                why=str(e),
+                what_to_do="Install keyring or configure Bitwarden, then rerun `kabbalah setup`.",
+                json_output=True,
+            )
+        print(f"Setup failed. Why: {e}. What to do: install keyring or configure Bitwarden.", file=sys.stderr)
+        return 1
+
+
 def cmd_version(args: argparse.Namespace) -> int:
     """Handle version command."""
     print("Kabbalah v1.0.0")
@@ -190,19 +341,13 @@ def cmd_version(args: argparse.Namespace) -> int:
 def cmd_status(args: argparse.Namespace) -> int:
     """Handle status command."""
     try:
-        config_manager = ConfigurationManager()
-        config_manager.load_defaults()
-        config_manager.load_from_env()
-        state_db = Path(
-            os.environ.get(
-                "KABBALAH_BRIDGE_STATE_DB",
-                str(Path.cwd() / ".kabbalah_bridge_state.sqlite3"),
-            )
-        )
+        config_manager = _load_config_manager()
+        state_db = _state_db_path()
         budget_manager = BudgetManager.from_env(BudgetLedger(state_db))
         result = {
             "config": config_manager.get_config_status(),
             "budget": budget_manager.get_budget_stats(),
+            "hardware": _hardware_status(state_db),
         }
         if args.json:
             print(json.dumps({"ok": True, "result": result}, ensure_ascii=False, indent=2))
@@ -233,6 +378,71 @@ def cmd_status(args: argparse.Namespace) -> int:
         return 1
 
 
+def _load_config_manager() -> ConfigurationManager:
+    manager = ConfigurationManager()
+    manager.load_defaults()
+    manager.load_from_env()
+    manager.load_installation_config()
+    return manager
+
+
+def _state_db_path() -> Path:
+    return Path(
+        os.environ.get(
+            "KABBALAH_BRIDGE_STATE_DB",
+            str(Path.cwd() / ".kabbalah_bridge_state.sqlite3"),
+        )
+    )
+
+
+def _hardware_status(state_db: Path) -> dict:
+    profiles = HardwareProfiler(state_db).list_profiles()
+    if not profiles:
+        return {
+            "active": False,
+            "message": "No hardware profile recorded yet.",
+        }
+    latest = profiles[-1]
+    return {
+        "active": True,
+        "fingerprint": latest.fingerprint,
+        "backend": latest.backend,
+        "gpu_count": len(latest.gpus),
+        "ram_total_mb": latest.ram_total_mb,
+        "created_at": latest.created_at,
+    }
+
+
+def _emit_success(result: dict, *, json_output: bool) -> int:
+    if json_output:
+        print(json.dumps({"ok": True, "result": result}, ensure_ascii=False, indent=2))
+    else:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
+def _emit_error(
+    *,
+    what_happened: str,
+    why: str,
+    what_to_do: str,
+    json_output: bool,
+) -> int:
+    payload = {
+        "ok": False,
+        "error": {
+            "what_happened": what_happened,
+            "why": why,
+            "what_to_do": what_to_do,
+        },
+    }
+    if json_output:
+        print(json.dumps(payload, ensure_ascii=False, indent=2), file=sys.stderr)
+    else:
+        print(f"{what_happened} Why: {why}. What to do: {what_to_do}", file=sys.stderr)
+    return 1
+
+
 def main() -> int:
     """Main entry point."""
     try:
@@ -243,7 +453,9 @@ def main() -> int:
             print("No command specified. Use --help for usage information.")
             return 1
 
-        if args.command == "parse":
+        if args.command == "setup":
+            return cmd_setup(args)
+        elif args.command == "parse":
             return cmd_parse(args)
         elif args.command == "config":
             return cmd_config(args)
