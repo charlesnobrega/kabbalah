@@ -17,7 +17,7 @@ This repository is not yet a production autonomous runtime. Current gaps include
 - `LocalLLMProvider` exists as legacy code; the main local route is `ollama_local` through the generic OpenAI-compatible adapter.
 - Root/domain orchestration is sequential in the current implementation, despite config/docs describing intended parallelism.
 - Leaf execution runs a real provider loop only when `DomainOrchestrator` is constructed with an injected `LLMGateway`; without a gateway it returns explicit `status="skipped"`, not fake success.
-- SillyTavern MCP bridge exists at `kabbalah_mcp_bridge.py` and exposes guarded tools through qlipot, FirewallMCP, HITL tickets, Bitwarden cache, agent contracts, retry limits, SyncHub stats, and budget stats.
+- SillyTavern MCP bridge exists at `kabbalah_mcp_bridge.py` and exposes guarded tools through qlipot, FirewallMCP, HITL tickets, Bitwarden cache, agent contracts, retry limits, SyncHub stats, budget stats, safe config status, and model comparison.
 - Agent contracts are persisted in SQLite by the bridge. SyncHub network propagation is phase-1/local only; P2P/central federation is not production-wired yet.
 
 ## Repository layout
@@ -105,10 +105,18 @@ Current bridge tools include:
 - `read_env_var`, `call_tool`, `database_query`
 - `check_hitl_status`
 - `propose_contract`, `sign_contract`, `reject_contract`, `complete_task`
-- `get_network_stats`, `get_budget_stats`
+- `get_network_stats`, `get_budget_stats`, `get_config_status`
+- `compare_models`
 
 All bridge logging is configured for `stderr`; `stdout` remains reserved for
 MCP/JSON-RPC stdio traffic.
+
+`compare_models` sends the same task to selected gateway providers and returns
+JSON rows with `provider`, `model`, `latency_ms`, `tokens`, `cost`, `response`,
+and `error`. It uses the normal bridge authorization pipeline and the
+`LLMGateway`, so budget policy and missing API keys surface as real provider
+errors instead of mock output. Test-only comparisons use `MockProvider` only
+when `KABBALAH_ALLOW_TEST_FAKE_PROVIDER=1`.
 
 Wave-1 hardening defaults:
 

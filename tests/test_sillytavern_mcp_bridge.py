@@ -15,6 +15,7 @@ def test_acao_mcp_maps_bridge_tools():
     assert AcaoMCP.NETWORK_REQUEST.value == "network_request"
     assert AcaoMCP.GET_BUDGET_STATS.value == "get_budget_stats"
     assert AcaoMCP.GET_CONFIG_STATUS.value == "get_config_status"
+    assert AcaoMCP.COMPARE_MODELS.value == "compare_models"
 
 
 def test_hitl_solicitar_sync_wrapper_denies_without_provider():
@@ -417,6 +418,47 @@ async def test_bridge_config_status_tool_returns_safe_provider_status(monkeypatc
     assert payload["ok"] is True
     assert payload["result"]["providers"][0]["last4"] == "1234"
     assert "sk-" not in json.dumps(payload)
+
+
+@pytest.mark.asyncio
+async def test_bridge_compare_models_tool_uses_authorized_pipeline(monkeypatch):
+    import kabbalah_mcp_bridge as bridge
+
+    monkeypatch.setenv("KABBALAH_BRIDGE_REQUIRE_CONTRACTS", "0")
+
+    def fake_compare_models(**kwargs):
+        assert kwargs["task"] == "Compare this"
+        assert kwargs["providers"] == ["mock_a", "mock_b"]
+        assert kwargs["gateway"] is bridge.llm_gateway
+        return {
+            "comparisons": [
+                {
+                    "provider": "mock_a",
+                    "model": "mock-model-1",
+                    "latency_ms": 1.0,
+                    "tokens": 10,
+                    "cost": 0.0001,
+                    "response": "ok",
+                    "error": None,
+                }
+            ],
+            "summary": {"provider_count": 1, "error_count": 0},
+        }
+
+    monkeypatch.setattr(bridge, "compare_model_outputs", fake_compare_models)
+
+    response = await bridge.compare_models(
+        bridge.CompareModelsInput(
+            agente_id="agent",
+            papel_agente="viewer",
+            task="Compare this",
+            providers=["mock_a", "mock_b"],
+        )
+    )
+    payload = json.loads(response)
+
+    assert payload["ok"] is True
+    assert payload["result"]["summary"]["provider_count"] == 1
 
 
 @pytest.mark.asyncio

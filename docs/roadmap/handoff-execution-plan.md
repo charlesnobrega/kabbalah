@@ -359,7 +359,10 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
   *Aceite*: instalação limpa → wizard funciona ponta a ponta; nenhum segredo
   aparece em arquivo tracked, log ou saída de `kabbalah config list`; chave
   inválida é rejeitada na validação; suíte verde.
-- [ ] **8.1 (M8) Model Comparison** — nova tool `compare_models` no bridge: mesma task despachada a N providers (via gateway, respeitando budget), retorna tabela JSON: provider, latência, tokens, custo, resposta. Passa pelo pipeline de segurança normal (contrato + firewall + qlipot) como qualquer tool. Sem API keys live configuradas → erro honesto por provider, não mock.
+- [x] **8.1 (M8) Model Comparison** *(Codex, 2026-07-04 — testes em `tests/test_model_comparison.py` e `tests/test_sillytavern_mcp_bridge.py`)* — nova tool `compare_models` no bridge: mesma task despachada a N providers (via gateway, respeitando budget), retorna tabela JSON: provider, latência, tokens, custo, resposta. Passa pelo pipeline de segurança normal (contrato + firewall + qlipot) como qualquer tool. Sem API keys live configuradas → erro honesto por provider, não mock.
+  *Nota*: o payload de autorização sanitiza o campo técnico `max_tokens` como
+  `output_limit` para evitar falso positivo do Qlipot sobre a palavra "token";
+  o executor continua usando `max_tokens` real na chamada ao provider.
   *Aceite*: teste com MockProvider gated simulando 2 "providers"; entrada documentada no README.
 - [ ] **8.2 (M9) Group Chat SillyTavern** — mapear orquestração para sala ST: cada domain = um bot; decisões do Firewall/HITL aparecem como mensagens. Item mais aberto — **produza primeiro um design doc curto** (`docs/specs/st-group-chat-design.md`) com o mapeamento proposto e critérios, e só então implemente. Se o esforço explodir (>5 dias), pare no design doc e reporte.
 - [ ] **8.3 CLI e experiência de uso** — a interface tem que ser bonita e

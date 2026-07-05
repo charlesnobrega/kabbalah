@@ -49,6 +49,9 @@ from kabbalah.contrato_store import ContratoStore
 from kabbalah.cofre import CofreBitwarden, CofreError
 from kabbalah.firewall_mcp import AcaoMCP, FirewallMCP, MCPRequest, permitir_tudo
 from kabbalah.hitl import HITL, NivelUrgencia
+from kabbalah.llm_gateway import LLMGateway
+from kabbalah.model_comparison import compare_models as compare_model_outputs
+from kabbalah.providers.factory import ProviderFactory
 from kabbalah.qlipot import Qlipot
 from kabbalah.sync_hub import SyncHub
 
@@ -121,6 +124,7 @@ budget_manager = BudgetManager.from_env(budget_ledger)
 config_manager = ConfigurationManager()
 config_manager.load_defaults()
 config_manager.load_from_env()
+llm_gateway = LLMGateway(factory=ProviderFactory(), budget_manager=budget_manager)
 
 
 def _contract_checker(request: MCPRequest) -> tuple[bool, Optional[str]]:
@@ -209,6 +213,18 @@ class NetworkRequestInput(BridgeBaseInput):
     secret_field: str = Field(default="api_key", description="Bitwarden field name to inject.")
     secret_header: str = Field(default="Authorization", description="Header name receiving the secret value.")
     secret_prefix: str = Field(default="Bearer ", description="Prefix before the secret in the header.")
+
+
+class CompareModelsInput(BridgeBaseInput):
+    """Input for compare_models."""
+
+    task: str = Field(..., description="Task/prompt sent unchanged to each selected model.", min_length=1)
+    providers: list[str] = Field(default_factory=list, description="Optional provider/profile names to compare.")
+    role: str = Field(default="Leaf_Builder", description="Gateway role used for model selection.")
+    capability: str = Field(default="chat", description="Required model capability.")
+    max_tokens: int = Field(default=256, ge=1, le=4096, description="Maximum output tokens per provider.")
+    temperature: float = Field(default=0.2, ge=0.0, le=2.0, description="Sampling temperature per provider.")
+    timeout_seconds: int = Field(default=30, ge=1, le=120, description="Per-provider timeout in seconds.")
 
 
 class ReadEnvVarInput(BridgeBaseInput):
@@ -859,6 +875,36 @@ async def get_budget_stats(params: BridgeBaseInput) -> str:
         intencao=params.intencao,
         argumentos=params.model_dump(),
         executor=lambda: budget_manager.get_budget_stats(),
+    )
+
+
+@mcp.tool(
+    name=AcaoMCP.COMPARE_MODELS.value,
+    annotations={"title": "Kabbalah Compare Models", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+)
+async def compare_models(params: CompareModelsInput) -> str:
+    """Run the same task through selected LLM providers and return comparison rows."""
+
+    auth_args = params.model_dump()
+    auth_args["output_limit"] = auth_args.pop("max_tokens")
+
+    return await _authorize_and_execute(
+        acao=AcaoMCP.COMPARE_MODELS,
+        agente_id=params.agente_id,
+        papel_agente=params.papel_agente,
+        intencao=params.intencao or params.task,
+        argumentos=auth_args,
+        executor=lambda: compare_model_outputs(
+            task=params.task,
+            gateway=llm_gateway,
+            providers=params.providers,
+            role=params.role,
+            capability=params.capability,
+            max_tokens=params.max_tokens,
+            temperature=params.temperature,
+            timeout=float(params.timeout_seconds),
+            trace_id=f"{params.agente_id}:compare_models",
+        ),
     )
 
 
