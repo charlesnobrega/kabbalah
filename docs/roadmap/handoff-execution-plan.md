@@ -365,6 +365,11 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
   o executor continua usando `max_tokens` real na chamada ao provider.
   *Aceite*: teste com MockProvider gated simulando 2 "providers"; entrada documentada no README.
 - [ ] **8.2 (M9) Group Chat SillyTavern** — mapear orquestração para sala ST: cada domain = um bot; decisões do Firewall/HITL aparecem como mensagens. Item mais aberto — **produza primeiro um design doc curto** (`docs/specs/st-group-chat-design.md`) com o mapeamento proposto e critérios, e só então implemente. Se o esforço explodir (>5 dias), pare no design doc e reporte.
+  *Progresso 2026-07-04*: design doc criado em
+  `docs/specs/st-group-chat-design.md`; primeiro slice implementado com
+  `src/kabbalah/sillytavern_group_chat.py` e tool MCP `render_group_event`
+  para mensagens `[KABBALAH:*]` redigidas. Ainda falta receita/cartões de
+  grupo e eventual integração UI/extensão antes de fechar o item.
 - [ ] **8.3 CLI e experiência de uso** — a interface tem que ser bonita e
   consistente:
   1. `kabbalah status` — painel único: perfil de hardware ativo, providers e

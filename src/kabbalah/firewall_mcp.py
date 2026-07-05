@@ -40,6 +40,7 @@ class AcaoMCP(Enum):
     GET_BUDGET_STATS = "get_budget_stats"
     GET_CONFIG_STATUS = "get_config_status"
     COMPARE_MODELS = "compare_models"
+    RENDER_GROUP_EVENT = "render_group_event"
 
 
 @dataclass(frozen=True)

@@ -16,6 +16,7 @@ def test_acao_mcp_maps_bridge_tools():
     assert AcaoMCP.GET_BUDGET_STATS.value == "get_budget_stats"
     assert AcaoMCP.GET_CONFIG_STATUS.value == "get_config_status"
     assert AcaoMCP.COMPARE_MODELS.value == "compare_models"
+    assert AcaoMCP.RENDER_GROUP_EVENT.value == "render_group_event"
 
 
 def test_hitl_solicitar_sync_wrapper_denies_without_provider():
@@ -459,6 +460,30 @@ async def test_bridge_compare_models_tool_uses_authorized_pipeline(monkeypatch):
 
     assert payload["ok"] is True
     assert payload["result"]["summary"]["provider_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_bridge_render_group_event_tool_returns_display_text(monkeypatch):
+    import kabbalah_mcp_bridge as bridge
+
+    monkeypatch.setenv("KABBALAH_BRIDGE_REQUIRE_CONTRACTS", "0")
+
+    response = await bridge.render_group_event(
+        bridge.RenderGroupEventInput(
+            agente_id="agent",
+            papel_agente="viewer",
+            event_type="deny",
+            agent="Security",
+            summary="Ação bloqueada.",
+            details={"motivo": "contrato ausente"},
+            next_step="Use propose_contract.",
+        )
+    )
+    payload = json.loads(response)
+
+    assert payload["ok"] is True
+    assert payload["result"]["display_text"].startswith("[KABBALAH:DENY] Security")
+    assert "Use propose_contract." in payload["result"]["display_text"]
 
 
 @pytest.mark.asyncio

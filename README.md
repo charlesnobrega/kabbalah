@@ -107,6 +107,7 @@ Current bridge tools include:
 - `propose_contract`, `sign_contract`, `reject_contract`, `complete_task`
 - `get_network_stats`, `get_budget_stats`, `get_config_status`
 - `compare_models`
+- `render_group_event`
 
 All bridge logging is configured for `stderr`; `stdout` remains reserved for
 MCP/JSON-RPC stdio traffic.
@@ -117,6 +118,11 @@ and `error`. It uses the normal bridge authorization pipeline and the
 `LLMGateway`, so budget policy and missing API keys surface as real provider
 errors instead of mock output. Test-only comparisons use `MockProvider` only
 when `KABBALAH_ALLOW_TEST_FAKE_PROVIDER=1`.
+
+`render_group_event` formats Kabbalah decisions for SillyTavern group chats
+with stable prefixes such as `[KABBALAH:DENY]`, `[KABBALAH:HITL]`,
+`[KABBALAH:BUDGET]`, and `[KABBALAH:CONFIG]`. Secret-like detail keys are
+redacted before display text is returned.
 
 Wave-1 hardening defaults:
 

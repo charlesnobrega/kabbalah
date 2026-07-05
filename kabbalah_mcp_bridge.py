@@ -53,6 +53,7 @@ from kabbalah.llm_gateway import LLMGateway
 from kabbalah.model_comparison import compare_models as compare_model_outputs
 from kabbalah.providers.factory import ProviderFactory
 from kabbalah.qlipot import Qlipot
+from kabbalah.sillytavern_group_chat import render_group_event as render_group_chat_event
 from kabbalah.sync_hub import SyncHub
 
 logging.basicConfig(
@@ -225,6 +226,17 @@ class CompareModelsInput(BridgeBaseInput):
     max_tokens: int = Field(default=256, ge=1, le=4096, description="Maximum output tokens per provider.")
     temperature: float = Field(default=0.2, ge=0.0, le=2.0, description="Sampling temperature per provider.")
     timeout_seconds: int = Field(default=30, ge=1, le=120, description="Per-provider timeout in seconds.")
+
+
+class RenderGroupEventInput(BridgeBaseInput):
+    """Input for render_group_event."""
+
+    event_type: str = Field(..., description="allow, deny, hitl, budget, config, or error.", min_length=1)
+    agent: str = Field(..., description="Visible SillyTavern group member/domain name.", min_length=1)
+    summary: str = Field(..., description="Human-readable status summary.", min_length=1)
+    details: Dict[str, Any] = Field(default_factory=dict, description="Structured details; secret-like keys are redacted.")
+    ticket_id: Optional[str] = Field(default=None, description="Optional HITL ticket ID.")
+    next_step: Optional[str] = Field(default=None, description="Suggested next action.")
 
 
 class ReadEnvVarInput(BridgeBaseInput):
@@ -904,6 +916,30 @@ async def compare_models(params: CompareModelsInput) -> str:
             temperature=params.temperature,
             timeout=float(params.timeout_seconds),
             trace_id=f"{params.agente_id}:compare_models",
+        ),
+    )
+
+
+@mcp.tool(
+    name=AcaoMCP.RENDER_GROUP_EVENT.value,
+    annotations={"title": "Kabbalah Render Group Event", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+)
+async def render_group_event(params: RenderGroupEventInput) -> str:
+    """Render a Kabbalah status event for a SillyTavern group chat."""
+
+    return await _authorize_and_execute(
+        acao=AcaoMCP.RENDER_GROUP_EVENT,
+        agente_id=params.agente_id,
+        papel_agente=params.papel_agente,
+        intencao=params.intencao or params.summary,
+        argumentos=params.model_dump(),
+        executor=lambda: render_group_chat_event(
+            event_type=params.event_type,
+            agent=params.agent,
+            summary=params.summary,
+            details=params.details,
+            ticket_id=params.ticket_id,
+            next_step=params.next_step,
         ),
     )
 
