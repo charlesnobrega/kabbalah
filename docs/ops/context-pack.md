@@ -62,6 +62,12 @@ Recent decisions:
 - Onda 7 adds `BudgetManager` enforcement (`warn` default, `block` opt-in),
   gateway budget checks, ordered provider fallback, `get_budget_stats`, and
   profile-priced ledger costs when provider responses report `cost=0.0`.
+- Onda 8 started with provider default refresh (`gpt-4o`, `gemini-2.5-pro`,
+  `mistral-large`, `gpt-oss-120b`, `Meta-Llama-3.3-70B-Instruct`), safe
+  config status (`get_config_status`), `compare_models`, SillyTavern group
+  event rendering (`render_group_event`), and `kabbalah status --json`.
+  Remaining visible-product work: full `kabbalah setup/config` wizard, rich
+  status panel, packaging/CI, and README-vitrine.
 
 Validation baseline:
 
