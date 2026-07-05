@@ -38,6 +38,7 @@ class AcaoMCP(Enum):
     COMPLETE_TASK = "complete_task"
     GET_NETWORK_STATS = "get_network_stats"
     GET_BUDGET_STATS = "get_budget_stats"
+    GET_CONFIG_STATUS = "get_config_status"
 
 
 @dataclass(frozen=True)

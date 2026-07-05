@@ -4,12 +4,12 @@ Configuration Manager
 Manages system configuration from multiple sources with precedence.
 """
 
-import os
-import json
 import logging
-from typing import Dict, Any, Optional, List
+import json
+import os
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any, Dict, List, Optional
 import platform
 
 logger = logging.getLogger(__name__)
@@ -102,12 +102,41 @@ class ConfigurationManager:
         "max_concurrent_tasks": 10,
         "max_memory_mb": 4096,
     }
+
+    PROVIDER_KEY_ENVS = {
+        "openai": ["OPENAI_API_KEY", "KABBALAH_OPENAI_API_KEY"],
+        "google_gemini": [
+            "GOOGLE_GEMINI_API_KEY",
+            "GOOGLE_API_KEY",
+            "KABBALAH_GOOGLE_GEMINI_API_KEY",
+        ],
+        "groq": ["GROQ_API_KEY", "KABBALAH_GROQ_API_KEY"],
+        "groq_compatible": ["GROQ_API_KEY", "KABBALAH_GROQ_COMPATIBLE_API_KEY"],
+        "mistral": ["MISTRAL_API_KEY", "KABBALAH_MISTRAL_API_KEY"],
+        "deepseek": ["DEEPSEEK_API_KEY", "KABBALAH_DEEPSEEK_API_KEY"],
+        "together": ["TOGETHER_API_KEY", "KABBALAH_TOGETHER_API_KEY"],
+        "openrouter": ["OPENROUTER_API_KEY", "KABBALAH_OPENROUTER_API_KEY"],
+        "cerebras": ["CEREBRAS_API_KEY", "KABBALAH_CEREBRAS_API_KEY"],
+        "sambanova": ["SAMBANOVA_API_KEY", "KABBALAH_SAMBANOVA_API_KEY"],
+    }
+
+    _AUTO_KEYRING = object()
     
-    def __init__(self):
+    def __init__(self, *, keyring_backend: Any = _AUTO_KEYRING):
         """Initialize configuration manager"""
         self.config = Configuration()
         self.sources: Dict[str, ConfigurationSource] = {}
+        self._keyring = self._load_keyring() if keyring_backend is self._AUTO_KEYRING else keyring_backend
         self._detect_environment()
+
+    @staticmethod
+    def _load_keyring() -> Any:
+        """Return the optional keyring backend when installed."""
+        try:
+            import keyring  # type: ignore[import-not-found]
+        except Exception:
+            return None
+        return keyring
     
     def _detect_environment(self) -> None:
         """Detect runtime environment"""
@@ -251,6 +280,103 @@ class ConfigurationManager:
         if hasattr(self.config, key):
             return getattr(self.config, key)
         return default
+
+    def get_provider_key_status(self, provider: str) -> Dict[str, Any]:
+        """
+        Return provider credential status without exposing the credential value.
+
+        The lookup order is environment, OS keyring, then in-memory/file
+        configuration for backward compatibility. Only the last four characters
+        are exposed for human confirmation.
+        """
+        env_names = self._provider_env_names(provider)
+        for env_name in env_names:
+            value = os.environ.get(env_name)
+            if value:
+                return self._provider_status(
+                    provider=provider,
+                    status="present",
+                    source="environment",
+                    last4=self._last4(value),
+                    env_names=env_names,
+                )
+
+        keyring_value = self._get_keyring_provider_api_key(provider)
+        if keyring_value:
+            return self._provider_status(
+                provider=provider,
+                status="present",
+                source="keyring",
+                last4=self._last4(keyring_value),
+                env_names=env_names,
+            )
+
+        configured = self.config.providers.get(provider)
+        if configured and configured.api_key:
+            return self._provider_status(
+                provider=provider,
+                status="present",
+                source="configuration",
+                last4=self._last4(configured.api_key),
+                env_names=env_names,
+            )
+
+        return self._provider_status(
+            provider=provider,
+            status="absent",
+            source="none",
+            last4=None,
+            env_names=env_names,
+        )
+
+    def get_config_status(self, *, provider_names: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Return safe installation/configuration status for humans and MCP."""
+        names = provider_names or sorted(set(self.PROVIDER_KEY_ENVS) | set(self.config.providers))
+        return {
+            "mode": self.config.mode,
+            "environment": self.config.environment,
+            "default_provider": self.config.default_provider,
+            "providers": [self.get_provider_key_status(provider) for provider in names],
+            "storage": {
+                "keyring_available": self._keyring is not None,
+                "keyring_service": "kabbalah",
+                "bitwarden_supported": True,
+                "tracked_cleartext_supported": False,
+            },
+            "budget": {
+                "mode": os.environ.get("KABBALAH_BUDGET_MODE", "warn"),
+                "run_limit_usd": os.environ.get("KABBALAH_BUDGET_RUN_USD"),
+                "daily_limit_usd": os.environ.get("KABBALAH_BUDGET_DAILY_USD"),
+            },
+        }
+
+    def set_provider_api_key(self, provider: str, api_key: str, *, storage: str = "keyring") -> None:
+        """Store a provider API key in the configured secure backend."""
+        if not provider:
+            raise ConfigurationError("Provider name is required")
+        if not api_key:
+            raise ConfigurationError("API key is required")
+        if storage != "keyring":
+            raise ConfigurationError(
+                "Provider API keys must be stored in keyring or Bitwarden; "
+                "tracked files, stdout, logs, and local cleartext env files are not allowed."
+            )
+        if self._keyring is None:
+            raise ConfigurationError(
+                "keyring backend is not available. Install keyring or use Bitwarden via CofreBitwarden."
+            )
+        self._keyring.set_password("kabbalah", self._keyring_provider_username(provider), api_key)
+
+    def remove_provider_api_key(self, provider: str, *, storage: str = "keyring") -> None:
+        """Remove a provider API key from the configured secure backend."""
+        if storage != "keyring":
+            raise ConfigurationError("Only keyring removal is supported by ConfigurationManager")
+        if self._keyring is None:
+            raise ConfigurationError("keyring backend is not available")
+        try:
+            self._keyring.delete_password("kabbalah", self._keyring_provider_username(provider))
+        except Exception as exc:
+            raise ConfigurationError(f"Failed to remove provider key from keyring: {exc}") from exc
     
     def validate_configuration(self) -> bool:
         """
@@ -299,6 +425,51 @@ class ConfigurationManager:
         
         logger.debug("Configuration validation passed")
         return True
+
+    def _provider_env_names(self, provider: str) -> List[str]:
+        return list(
+            self.PROVIDER_KEY_ENVS.get(
+                provider,
+                [f"{provider.upper()}_API_KEY", f"KABBALAH_{provider.upper()}_API_KEY"],
+            )
+        )
+
+    @staticmethod
+    def _provider_status(
+        *,
+        provider: str,
+        status: str,
+        source: str,
+        last4: Optional[str],
+        env_names: List[str],
+    ) -> Dict[str, Any]:
+        return {
+            "provider": provider,
+            "status": status,
+            "source": source,
+            "last4": last4,
+            "env_names": env_names,
+        }
+
+    @staticmethod
+    def _last4(value: str) -> str:
+        return value[-4:] if len(value) >= 4 else value
+
+    @staticmethod
+    def _keyring_provider_username(provider: str) -> str:
+        return f"provider:{provider}"
+
+    def _get_keyring_provider_api_key(self, provider: str) -> Optional[str]:
+        if self._keyring is None:
+            return None
+        try:
+            return self._keyring.get_password(
+                "kabbalah",
+                self._keyring_provider_username(provider),
+            )
+        except Exception:
+            logger.debug("Failed to query keyring provider status", exc_info=True)
+            return None
     
     def to_dict(self) -> Dict[str, Any]:
         """

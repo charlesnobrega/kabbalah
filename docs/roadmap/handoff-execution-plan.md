@@ -351,6 +351,11 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
   5. Bridge: expor `get_config_status` (status sem valores) como tool.
   6. Existe `src/kabbalah/configuration_manager.py` (com testes) — **leia e
      estenda**, não crie um sistema paralelo.
+  *Progresso 2026-07-04*: `ConfigurationManager` agora expõe status seguro de
+  chaves por provider (ambiente/keyring/configuração, com apenas `last4`),
+  recusa armazenamento em cleartext e o bridge expõe `get_config_status` sem
+  valores secretos. Ainda faltam wizard `kabbalah setup`, menu CLI completo e
+  validação live de cada chave antes de marcar este item como concluído.
   *Aceite*: instalação limpa → wizard funciona ponta a ponta; nenhum segredo
   aparece em arquivo tracked, log ou saída de `kabbalah config list`; chave
   inválida é rejeitada na validação; suíte verde.

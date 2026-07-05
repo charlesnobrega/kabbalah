@@ -14,6 +14,7 @@ def test_acao_mcp_maps_bridge_tools():
     assert AcaoMCP.EXECUTE_COMMAND.value == "execute_command"
     assert AcaoMCP.NETWORK_REQUEST.value == "network_request"
     assert AcaoMCP.GET_BUDGET_STATS.value == "get_budget_stats"
+    assert AcaoMCP.GET_CONFIG_STATUS.value == "get_config_status"
 
 
 def test_hitl_solicitar_sync_wrapper_denies_without_provider():
@@ -386,6 +387,36 @@ async def test_bridge_budget_stats_tool_returns_budget_manager_stats(monkeypatch
     assert payload["ok"] is True
     assert payload["result"]["total_cost"] == 0.42
     assert payload["result"]["provider_costs"] == {"openrouter": 0.42}
+
+
+@pytest.mark.asyncio
+async def test_bridge_config_status_tool_returns_safe_provider_status(monkeypatch):
+    import kabbalah_mcp_bridge as bridge
+
+    class FakeConfigurationManager:
+        def get_config_status(self):
+            return {
+                "providers": [
+                    {
+                        "provider": "openai",
+                        "status": "present",
+                        "source": "environment",
+                        "last4": "1234",
+                    }
+                ],
+                "storage": {"keyring_available": True},
+            }
+
+    monkeypatch.setattr(bridge, "config_manager", FakeConfigurationManager())
+
+    response = await bridge.get_config_status(
+        bridge.BridgeBaseInput(agente_id="agent", papel_agente="viewer")
+    )
+    payload = json.loads(response)
+
+    assert payload["ok"] is True
+    assert payload["result"]["providers"][0]["last4"] == "1234"
+    assert "sk-" not in json.dumps(payload)
 
 
 @pytest.mark.asyncio

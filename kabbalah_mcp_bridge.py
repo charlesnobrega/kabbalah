@@ -43,6 +43,7 @@ from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
 
 from kabbalah.budget_manager import BudgetLedger, BudgetManager
+from kabbalah.configuration_manager import ConfigurationManager
 from kabbalah.contratos import Contratos, VerificationOutcome
 from kabbalah.contrato_store import ContratoStore
 from kabbalah.cofre import CofreBitwarden, CofreError
@@ -67,6 +68,7 @@ CONTRACT_EXEMPT_ACTIONS = {
     "check_hitl_status",
     "get_network_stats",
     "get_budget_stats",
+    "get_config_status",
 }
 
 
@@ -116,6 +118,9 @@ contratos = Contratos(qlipot=qlipot, hitl=hitl, store=ContratoStore(STATE_DB_PAT
 tickets = TicketStore(STATE_DB_PATH)
 budget_ledger = BudgetLedger(STATE_DB_PATH)
 budget_manager = BudgetManager.from_env(budget_ledger)
+config_manager = ConfigurationManager()
+config_manager.load_defaults()
+config_manager.load_from_env()
 
 
 def _contract_checker(request: MCPRequest) -> tuple[bool, Optional[str]]:
@@ -854,6 +859,23 @@ async def get_budget_stats(params: BridgeBaseInput) -> str:
         intencao=params.intencao,
         argumentos=params.model_dump(),
         executor=lambda: budget_manager.get_budget_stats(),
+    )
+
+
+@mcp.tool(
+    name=AcaoMCP.GET_CONFIG_STATUS.value,
+    annotations={"title": "Kabbalah Config Status", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+)
+async def get_config_status(params: BridgeBaseInput) -> str:
+    """Return safe installation configuration status without secret values."""
+
+    return await _authorize_and_execute(
+        acao=AcaoMCP.GET_CONFIG_STATUS,
+        agente_id=params.agente_id,
+        papel_agente=params.papel_agente,
+        intencao=params.intencao,
+        argumentos=params.model_dump(),
+        executor=lambda: config_manager.get_config_status(),
     )
 
 

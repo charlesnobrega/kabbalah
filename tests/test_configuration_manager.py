@@ -280,6 +280,50 @@ class TestConfigurationManager:
             assert manager.config.mode == "DAY2"
         finally:
             del os.environ["KABBALAH_MODE"]
+
+    def test_provider_key_status_reports_presence_without_exposing_secret(self, monkeypatch):
+        """Provider status must show only source and suffix, never full key."""
+        monkeypatch.setenv("OPENAI_API_KEY", "sk-test-openai-123456")
+        manager = ConfigurationManager()
+
+        status = manager.get_provider_key_status("openai")
+        config_status = manager.get_config_status(provider_names=["openai"])
+        serialized = json.dumps(config_status)
+
+        assert status["provider"] == "openai"
+        assert status["status"] == "present"
+        assert status["source"] == "environment"
+        assert status["last4"] == "3456"
+        assert "sk-test-openai-123456" not in serialized
+
+    def test_provider_key_status_uses_keyring_without_returning_value(self, monkeypatch):
+        """Keyring-backed status should not expose stored secret material."""
+
+        class FakeKeyring:
+            def get_password(self, service_name, username):
+                assert service_name == "kabbalah"
+                assert username == "provider:groq_compatible"
+                return "gsk-test-9999"
+
+        monkeypatch.delenv("GROQ_API_KEY", raising=False)
+        manager = ConfigurationManager(keyring_backend=FakeKeyring())
+
+        status = manager.get_provider_key_status("groq_compatible")
+
+        assert status == {
+            "provider": "groq_compatible",
+            "status": "present",
+            "source": "keyring",
+            "last4": "9999",
+            "env_names": ["GROQ_API_KEY", "KABBALAH_GROQ_COMPATIBLE_API_KEY"],
+        }
+
+    def test_set_provider_api_key_requires_secure_storage(self):
+        """Tracked/local cleartext storage must not be offered for provider keys."""
+        manager = ConfigurationManager(keyring_backend=None)
+
+        with pytest.raises(ConfigurationError, match="keyring"):
+            manager.set_provider_api_key("openai", "sk-test", storage="env")
     
     def test_load_from_file_with_domain_providers(self):
         """Test loading configuration with domain providers"""
