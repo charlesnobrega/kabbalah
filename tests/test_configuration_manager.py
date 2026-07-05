@@ -324,6 +324,35 @@ class TestConfigurationManager:
 
         with pytest.raises(ConfigurationError, match="keyring"):
             manager.set_provider_api_key("openai", "sk-test", storage="env")
+
+    def test_installation_config_persists_budget_and_routing_without_secrets(self, tmp_path):
+        """Non-secret installation settings may persist locally, secrets may not."""
+        config_path = tmp_path / "install.json"
+        manager = ConfigurationManager(keyring_backend=None, installation_config_path=config_path)
+
+        manager.set_budget_limits(mode="block", run_limit_usd=1.5, daily_limit_usd=5.0)
+        manager.set_routing_policy("budget_first")
+
+        reloaded = ConfigurationManager(keyring_backend=None, installation_config_path=config_path)
+        reloaded.load_installation_config()
+        status = reloaded.get_config_status(provider_names=["openai"])
+        serialized = json.dumps(status)
+        persisted = json.loads(config_path.read_text(encoding="utf-8"))
+
+        assert status["budget"]["mode"] == "block"
+        assert status["budget"]["run_limit_usd"] == 1.5
+        assert status["budget"]["daily_limit_usd"] == 5.0
+        assert status["routing"]["policy"] == "budget_first"
+        assert persisted == {
+            "budget": {
+                "daily_limit_usd": 5.0,
+                "mode": "block",
+                "run_limit_usd": 1.5,
+            },
+            "routing": {"policy": "budget_first"},
+        }
+        assert "sk-" not in serialized.lower()
+        assert "secret-value" not in serialized.lower()
     
     def test_load_from_file_with_domain_providers(self):
         """Test loading configuration with domain providers"""

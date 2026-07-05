@@ -9,10 +9,13 @@ import json
 import os
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 import platform
 
 logger = logging.getLogger(__name__)
+
+_SECRET_KEY_MARKERS = ("api_key", "apikey", "password", "secret", "token", "credential", "senha")
 
 
 class ConfigurationSource(Enum):
@@ -26,6 +29,19 @@ class ConfigurationSource(Enum):
 class ConfigurationError(Exception):
     """Raised when configuration fails"""
     pass
+
+
+def _reject_secret_like_payload(value: Any, *, path: str = "config") -> None:
+    """Prevent accidental persistence of secret-looking installation settings."""
+    if isinstance(value, dict):
+        for key, item in value.items():
+            key_text = str(key).lower()
+            if any(marker in key_text for marker in _SECRET_KEY_MARKERS):
+                raise ConfigurationError(f"Refusing to persist secret-like key at {path}.{key}")
+            _reject_secret_like_payload(item, path=f"{path}.{key}")
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            _reject_secret_like_payload(item, path=f"{path}[{index}]")
 
 
 @dataclass
@@ -122,11 +138,24 @@ class ConfigurationManager:
 
     _AUTO_KEYRING = object()
     
-    def __init__(self, *, keyring_backend: Any = _AUTO_KEYRING):
+    def __init__(
+        self,
+        *,
+        keyring_backend: Any = _AUTO_KEYRING,
+        installation_config_path: Optional[str | Path] = None,
+    ):
         """Initialize configuration manager"""
         self.config = Configuration()
         self.sources: Dict[str, ConfigurationSource] = {}
         self._keyring = self._load_keyring() if keyring_backend is self._AUTO_KEYRING else keyring_backend
+        self.installation_config_path = Path(
+            installation_config_path
+            or os.environ.get("KABBALAH_INSTALL_CONFIG_PATH", str(Path.home() / ".kabbalah" / "config.json"))
+        )
+        self.installation_settings: Dict[str, Any] = {
+            "budget": {},
+            "routing": {"policy": "balanced"},
+        }
         self._detect_environment()
 
     @staticmethod
@@ -227,6 +256,25 @@ class ConfigurationManager:
         
         except Exception as e:
             raise ConfigurationError(f"Failed to load configuration from {filepath}: {str(e)}")
+
+    def load_installation_config(self) -> None:
+        """Load non-secret installation settings from the user config file."""
+        if not self.installation_config_path.exists():
+            return
+        try:
+            with open(self.installation_config_path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except Exception as exc:
+            raise ConfigurationError(f"Failed to load installation config: {exc}") from exc
+        self.installation_settings["budget"] = dict(data.get("budget", {}))
+        self.installation_settings["routing"] = dict(data.get("routing", {"policy": "balanced"}))
+
+    def save_installation_config(self) -> None:
+        """Persist non-secret installation settings to the user config file."""
+        _reject_secret_like_payload(self.installation_settings)
+        self.installation_config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.installation_config_path, "w", encoding="utf-8") as handle:
+            json.dump(self.installation_settings, handle, ensure_ascii=False, indent=2, sort_keys=True)
     
     def _apply_config_dict(self, data: Dict[str, Any], source: ConfigurationSource) -> None:
         """
@@ -332,6 +380,8 @@ class ConfigurationManager:
     def get_config_status(self, *, provider_names: Optional[List[str]] = None) -> Dict[str, Any]:
         """Return safe installation/configuration status for humans and MCP."""
         names = provider_names or sorted(set(self.PROVIDER_KEY_ENVS) | set(self.config.providers))
+        budget_settings = self.installation_settings.get("budget", {})
+        routing_settings = self.installation_settings.get("routing", {"policy": "balanced"})
         return {
             "mode": self.config.mode,
             "environment": self.config.environment,
@@ -344,9 +394,13 @@ class ConfigurationManager:
                 "tracked_cleartext_supported": False,
             },
             "budget": {
-                "mode": os.environ.get("KABBALAH_BUDGET_MODE", "warn"),
-                "run_limit_usd": os.environ.get("KABBALAH_BUDGET_RUN_USD"),
-                "daily_limit_usd": os.environ.get("KABBALAH_BUDGET_DAILY_USD"),
+                "mode": budget_settings.get("mode", os.environ.get("KABBALAH_BUDGET_MODE", "warn")),
+                "run_limit_usd": budget_settings.get("run_limit_usd", os.environ.get("KABBALAH_BUDGET_RUN_USD")),
+                "daily_limit_usd": budget_settings.get("daily_limit_usd", os.environ.get("KABBALAH_BUDGET_DAILY_USD")),
+                "provider_limits_usd": budget_settings.get("provider_limits_usd", {}),
+            },
+            "routing": {
+                "policy": routing_settings.get("policy", "balanced"),
             },
         }
 
@@ -377,6 +431,49 @@ class ConfigurationManager:
             self._keyring.delete_password("kabbalah", self._keyring_provider_username(provider))
         except Exception as exc:
             raise ConfigurationError(f"Failed to remove provider key from keyring: {exc}") from exc
+
+    def get_provider_api_key(self, provider: str) -> Optional[str]:
+        """Return a provider key for internal validation without printing it."""
+        for env_name in self._provider_env_names(provider):
+            value = os.environ.get(env_name)
+            if value:
+                return value
+        return self._get_keyring_provider_api_key(provider)
+
+    def set_budget_limits(
+        self,
+        *,
+        mode: Optional[str] = None,
+        run_limit_usd: Optional[float] = None,
+        daily_limit_usd: Optional[float] = None,
+        provider_limits_usd: Optional[Dict[str, float]] = None,
+    ) -> None:
+        """Persist non-secret budget limits for this installation."""
+        budget = dict(self.installation_settings.get("budget", {}))
+        if mode is not None:
+            if mode not in {"warn", "block"}:
+                raise ConfigurationError("Budget mode must be 'warn' or 'block'")
+            budget["mode"] = mode
+        if run_limit_usd is not None:
+            budget["run_limit_usd"] = float(run_limit_usd)
+        if daily_limit_usd is not None:
+            budget["daily_limit_usd"] = float(daily_limit_usd)
+        if provider_limits_usd is not None:
+            budget["provider_limits_usd"] = {
+                provider: float(limit)
+                for provider, limit in provider_limits_usd.items()
+            }
+        self.installation_settings["budget"] = budget
+        self.save_installation_config()
+
+    def set_routing_policy(self, policy: str) -> None:
+        """Persist the routing policy for this installation."""
+        if policy not in {"balanced", "budget_first", "quality_first", "local_first"}:
+            raise ConfigurationError(
+                "Routing policy must be balanced, budget_first, quality_first, or local_first"
+            )
+        self.installation_settings["routing"] = {"policy": policy}
+        self.save_installation_config()
     
     def validate_configuration(self) -> bool:
         """
