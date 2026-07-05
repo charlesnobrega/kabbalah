@@ -2,10 +2,14 @@
 Kabbalah CLI - Command-line interface for the Kabbalah orchestration system.
 """
 
-import sys
 import argparse
+import json
 import logging
+import os
+import sys
+from pathlib import Path
 
+from kabbalah.budget_manager import BudgetLedger, BudgetManager
 from kabbalah.intake_node import IntakeNode
 from kabbalah.models import UserRequest
 from kabbalah.configuration_manager import ConfigurationManager
@@ -32,6 +36,7 @@ def parse_arguments() -> argparse.Namespace:
 Examples:
   kabbalah parse --name "My Project" --description "Project description"
   kabbalah config --show
+  kabbalah status --json
   kabbalah version
         """,
     )
@@ -92,6 +97,14 @@ Examples:
         nargs=2,
         metavar=("KEY", "VALUE"),
         help="Set configuration value",
+    )
+
+    # Version command
+    status_parser = subparsers.add_parser("status", help="Show safe runtime status")
+    status_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit machine-readable JSON",
     )
 
     # Version command
@@ -174,6 +187,52 @@ def cmd_version(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_status(args: argparse.Namespace) -> int:
+    """Handle status command."""
+    try:
+        config_manager = ConfigurationManager()
+        config_manager.load_defaults()
+        config_manager.load_from_env()
+        state_db = Path(
+            os.environ.get(
+                "KABBALAH_BRIDGE_STATE_DB",
+                str(Path.cwd() / ".kabbalah_bridge_state.sqlite3"),
+            )
+        )
+        budget_manager = BudgetManager.from_env(BudgetLedger(state_db))
+        result = {
+            "config": config_manager.get_config_status(),
+            "budget": budget_manager.get_budget_stats(),
+        }
+        if args.json:
+            print(json.dumps({"ok": True, "result": result}, ensure_ascii=False, indent=2))
+        else:
+            print("Kabbalah status")
+            print(f"- Mode: {result['config']['mode']}")
+            print(f"- Environment: {result['config']['environment']}")
+            print(f"- Budget mode: {result['budget']['mode']}")
+        return 0
+    except Exception as e:
+        logger.error(f"Error reading status: {str(e)}")
+        payload = {
+            "ok": False,
+            "error": {
+                "what_happened": "Could not read Kabbalah status.",
+                "why": str(e),
+                "what_to_do": "Run `kabbalah setup` or check KABBALAH_BRIDGE_STATE_DB.",
+            },
+        }
+        if getattr(args, "json", False):
+            print(json.dumps(payload, ensure_ascii=False, indent=2), file=sys.stderr)
+        else:
+            print(
+                "Could not read Kabbalah status. "
+                f"Why: {e}. What to do: run `kabbalah setup` or check KABBALAH_BRIDGE_STATE_DB.",
+                file=sys.stderr,
+            )
+        return 1
+
+
 def main() -> int:
     """Main entry point."""
     try:
@@ -188,6 +247,8 @@ def main() -> int:
             return cmd_parse(args)
         elif args.command == "config":
             return cmd_config(args)
+        elif args.command == "status":
+            return cmd_status(args)
         elif args.command == "version":
             return cmd_version(args)
         else:

@@ -381,6 +381,10 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
      comando para consumo por máquina; exit codes documentados e consistentes.
   4. Logging estruturado: silencioso por padrão, `-v/-vv` progressivo, nunca
      poluir stdout do bridge (stdio MCP é sagrado).
+  *Progresso 2026-07-04*: primeiro corte `kabbalah status --json`
+  implementado com status seguro de providers e budget, sem vazar chaves.
+  Ainda faltam painel rich, hardware profile, contratos ativos, tickets HITL,
+  exit codes documentados e `-v/-vv`.
 - [ ] **8.4 Empacotamento moderno** — migrar `setup.py` → `pyproject.toml`
   (PEP 621), single-source da versão (`kabbalah.__version__`), criar
   `CHANGELOG.md` retroativo por ondas (semver: 0.x enquanto alpha), extras

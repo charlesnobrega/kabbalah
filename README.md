@@ -92,6 +92,17 @@ require newer transitive dependency versions than the legacy provider stack:
 python -m pip install -r requirements-mcp.txt
 ```
 
+## CLI status
+
+The first Wave-8 CLI status panel is available as JSON:
+
+```bash
+kabbalah status --json
+```
+
+It returns safe provider key status (`present`/`absent`, source and `last4`) and
+budget stats. It must not print full API keys or secrets.
+
 ## SillyTavern MCP bridge
 
 The example config for SillyTavern is available in:
