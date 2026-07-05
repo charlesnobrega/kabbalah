@@ -25,10 +25,32 @@ MAX_DELTA_CORRECAO = 0.30
 
 # Common Cyrillic/Greek homoglyphs folded to Latin before keyword matching.
 _HOMOGLIFOS = {
-    "а": "a", "в": "b", "с": "c", "е": "e", "н": "h", "к": "k", "м": "m",
-    "о": "o", "р": "p", "т": "t", "х": "x", "у": "y", "і": "i", "ѕ": "s",
-    "ԁ": "d", "α": "a", "β": "b", "ε": "e", "ι": "i", "κ": "k", "ν": "v",
-    "ο": "o", "ρ": "p", "τ": "t", "υ": "u", "χ": "x",
+    "а": "a",
+    "в": "b",
+    "с": "c",
+    "е": "e",
+    "н": "h",
+    "к": "k",
+    "м": "m",
+    "о": "o",
+    "р": "p",
+    "т": "t",
+    "х": "x",
+    "у": "y",
+    "і": "i",
+    "ѕ": "s",
+    "ԁ": "d",
+    "α": "a",
+    "β": "b",
+    "ε": "e",
+    "ι": "i",
+    "κ": "k",
+    "ν": "v",
+    "ο": "o",
+    "ρ": "p",
+    "τ": "t",
+    "υ": "u",
+    "χ": "x",
 }
 
 # Real destructive command shapes, beyond simple keyword presence.
@@ -223,12 +245,19 @@ class Qlipot:
         if extra_score <= 0:
             return result
         risco = min(1.0, result.risco + extra_score)
+        status = (
+            QlipotStatus.BLOQUEADO
+            if risco > 0.95
+            else QlipotStatus.DIALOGO
+            if risco > 0.60
+            else QlipotStatus.RECUPERADO
+        )
         return IntentEvaluation(
             score_confianca=round(max(0.0, min(1.0, 1.0 - risco)), 4),
             risco=risco,
             bloqueado=risco > 0.95,
             motivo="supplied recent history increased suspicion",
-            status=QlipotStatus.BLOQUEADO if risco > 0.95 else QlipotStatus.DIALOGO if risco > 0.60 else QlipotStatus.RECUPERADO,
+            status=status,
             score_atual=result.score_atual,
             score_contexto=round(min(0.30, result.score_contexto + extra_score), 4),
             score_final=risco,
@@ -270,7 +299,10 @@ class Qlipot:
         for entry in historico_recente:
             action = str(entry.metadata.get("acao", "")).lower()
             params = str(entry.metadata.get("parametros", {})).lower()
-            if any(term in f"{action} {params}" for term in ("execute_command", "network_request", "secret", "token", "delete", "force")):
+            if any(
+                term in f"{action} {params}"
+                for term in ("execute_command", "network_request", "secret", "token", "delete", "force")
+            ):
                 high_impact_count += 1
 
         repeat_pressure = min(0.15, len(historico_recente) * 0.03)
@@ -284,7 +316,13 @@ class Qlipot:
 
         return [dict(entry) for entry in self._correcoes_log]
 
-    def aplicar_correcao(self, assinatura_acao: str, delta: float, *, origem: str = "sync_hub") -> None:
+    def aplicar_correcao(
+        self,
+        assinatura_acao: str,
+        delta: float,
+        *,
+        origem: str = "sync_hub",
+    ) -> None:
         """Apply a federated correction delta for a learned action signature.
 
         Wave-3 hardening: only authorized origins may apply corrections, the
@@ -308,7 +346,10 @@ class Qlipot:
         registro.update({"aplicado": True, "delta_aplicado": delta_aplicado})
         self._correcoes_log.append(registro)
         self._correcoes[assinatura_acao] = delta_aplicado
-        self._emit("correcao", {"assinatura_acao": assinatura_acao, "delta": delta_aplicado, "score": abs(delta_aplicado)})
+        self._emit(
+            "correcao",
+            {"assinatura_acao": assinatura_acao, "delta": delta_aplicado, "score": abs(delta_aplicado)},
+        )
 
     def registrar_callback(self, evento: str, fn: Callable[[str, Dict[str, Any]], Any]) -> None:
         self._callbacks.setdefault(evento, []).append(fn)
@@ -336,8 +377,7 @@ class Qlipot:
         entries = [
             entry
             for entry in self._memory.query_knowledge(f"agent:{agente_id}", limit=100)
-            if entry.category == "qlipot-agent-action"
-            and entry.metadata.get("agente_id") == agente_id
+            if entry.category == "qlipot-agent-action" and entry.metadata.get("agente_id") == agente_id
         ]
         return sorted(
             entries,
@@ -346,13 +386,35 @@ class Qlipot:
         )[:limit]
 
     _AUDIT_TERMS = (
-        "token", "secret", "credential", "produção", "production",
-        "senha", "password", "credencial", "api_key", "apikey", "chave privada", "private key",
+        "token",
+        "secret",
+        "credential",
+        "produção",
+        "production",
+        "senha",
+        "password",
+        "credencial",
+        "api_key",
+        "apikey",
+        "chave privada",
+        "private key",
     )
     _HIGH_TERMS = ("execute_command", "shell", "exec", "network_request", "post")
     _CRITICAL_TERMS = (
-        "delete", "remove", "drop", "reset", "force", "exfiltrate",
-        "apagar", "excluir", "destruir", "destroy", "wipe", "erase", "purge", "exfiltrar",
+        "delete",
+        "remove",
+        "drop",
+        "reset",
+        "force",
+        "exfiltrate",
+        "apagar",
+        "excluir",
+        "destruir",
+        "destroy",
+        "wipe",
+        "erase",
+        "purge",
+        "exfiltrar",
     )
 
     def _avaliar_score_isolado(

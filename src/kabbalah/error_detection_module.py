@@ -73,10 +73,7 @@ class ErrorDetectionModule:
             "Leaf_Node",
         }
 
-        logger.info(
-            f"ErrorDetectionModule initialized with deduplication window: "
-            f"{deduplication_window_seconds}s"
-        )
+        logger.info(f"ErrorDetectionModule initialized with deduplication window: " f"{deduplication_window_seconds}s")
 
     def capture_exception(
         self,
@@ -144,10 +141,7 @@ class ErrorDetectionModule:
         # Check for deduplication
         deduplicated_report = self.deduplicate_error(error_report)
         if deduplicated_report is None:
-            logger.debug(
-                f"Error deduplicated: {error_type} in {component} "
-                f"(occurrence count incremented)"
-            )
+            logger.debug(f"Error deduplicated: {error_type} in {component} " f"(occurrence count incremented)")
             return None
 
         # Add to history
@@ -219,18 +213,12 @@ class ErrorDetectionModule:
         # Check for deduplication
         deduplicated_report = self.deduplicate_error(error_report)
         if deduplicated_report is None:
-            logger.debug(
-                f"Test failure deduplicated: {test_name} "
-                f"(occurrence count incremented)"
-            )
+            logger.debug(f"Test failure deduplicated: {test_name} " f"(occurrence count incremented)")
             return None
 
         # Add to history
         self.error_history.append(error_report)
-        logger.info(
-            f"Test failure captured: {test_name} "
-            f"(error_id: {error_report.error_id})"
-        )
+        logger.info(f"Test failure captured: {test_name} " f"(error_id: {error_report.error_id})")
 
         return error_report
 
@@ -327,11 +315,9 @@ class ErrorDetectionModule:
                 and existing_report.message == error_report.message
                 and existing_report.component == error_report.component
             )
-            same_test = (
-                error_report.error_type != "TestFailure"
-                or existing_report.context.get("test_name")
-                == error_report.context.get("test_name")
-            )
+            same_test = error_report.error_type != "TestFailure" or existing_report.context.get(
+                "test_name"
+            ) == error_report.context.get("test_name")
             if same_error and same_test:
                 # Increment occurrence counter
                 existing_report.occurrence_count += 1
@@ -408,16 +394,12 @@ class ErrorDetectionModule:
             "total_errors": len(self.error_history),
             "by_severity": {},
             "by_component": {},
-            "total_occurrences": sum(
-                e.occurrence_count for e in self.error_history
-            ),
+            "total_occurrences": sum(e.occurrence_count for e in self.error_history),
         }
 
         # Count by severity
         for severity in ErrorSeverity:
-            count = sum(
-                1 for e in self.error_history if e.severity == severity
-            )
+            count = sum(1 for e in self.error_history if e.severity == severity)
             stats["by_severity"][severity.value] = count
 
         # Count by component

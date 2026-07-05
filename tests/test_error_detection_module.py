@@ -300,6 +300,7 @@ class TestErrorDeduplication:
 
         # Wait for window to expire
         import time
+
         time.sleep(1.1)
 
         report2 = module.capture_exception(exception, "Leaf_Node")
@@ -319,9 +320,7 @@ class TestErrorDeduplication:
         # Mock time to be within custom window
         with patch("kabbalah.error_detection_module.datetime") as mock_datetime:
             # Set current time to 60 seconds later
-            mock_datetime.now.return_value = (
-                report1.timestamp + timedelta(seconds=60)
-            )
+            mock_datetime.now.return_value = report1.timestamp + timedelta(seconds=60)
             report2 = module.capture_exception(exception, "Leaf_Node")
 
         # Should still be deduplicated (within 120s window)

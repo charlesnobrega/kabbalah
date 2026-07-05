@@ -98,9 +98,7 @@ def test_profiler_appends_new_profile_when_hardware_changes(tmp_path):
             _local_profile("large-local", min_vram_full=8192, min_vram_offload=4096),
         ]
     )
-    current_gpus = {
-        "value": [GPUInfo(model="Small GPU", vendor="nvidia", vram_total_mb=4096, backend="cuda")]
-    }
+    current_gpus = {"value": [GPUInfo(model="Small GPU", vendor="nvidia", vram_total_mb=4096, backend="cuda")]}
     profiler = HardwareProfiler(
         tmp_path / "hardware.sqlite3",
         gpu_probe=lambda: current_gpus["value"],
@@ -108,9 +106,7 @@ def test_profiler_appends_new_profile_when_hardware_changes(tmp_path):
     )
 
     first = profiler.profile(registry)
-    current_gpus["value"] = [
-        GPUInfo(model="Large GPU", vendor="nvidia", vram_total_mb=12288, backend="cuda")
-    ]
+    current_gpus["value"] = [GPUInfo(model="Large GPU", vendor="nvidia", vram_total_mb=12288, backend="cuda")]
     second = profiler.profile(registry)
 
     assert first.fingerprint != second.fingerprint

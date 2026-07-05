@@ -3,6 +3,14 @@
 from kabbalah.configuration_manager import ConfigurationManager
 from kabbalah.onboarding import ProviderValidationResult, run_setup_wizard
 
+PROVIDER_ENV_KEYS = [
+    "OPENAI_API_KEY",
+    "KABBALAH_OPENAI_API_KEY",
+    "GROQ_API_KEY",
+    "KABBALAH_GROQ_API_KEY",
+    "KABBALAH_GROQ_COMPATIBLE_API_KEY",
+]
+
 
 class FakeKeyring:
     def __init__(self):
@@ -29,7 +37,13 @@ class FakeValidator:
         )
 
 
-def test_setup_wizard_validates_and_stores_provider_key_without_printing_secret():
+def clear_provider_env(monkeypatch):
+    for key in PROVIDER_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+
+
+def test_setup_wizard_validates_and_stores_provider_key_without_printing_secret(monkeypatch):
+    clear_provider_env(monkeypatch)
     keyring = FakeKeyring()
     manager = ConfigurationManager(keyring_backend=keyring)
     outputs = []
@@ -50,7 +64,8 @@ def test_setup_wizard_validates_and_stores_provider_key_without_printing_secret(
     assert "sk-test-secret-4321" not in "\n".join(outputs)
 
 
-def test_setup_wizard_rejects_invalid_key_without_storing_it():
+def test_setup_wizard_rejects_invalid_key_without_storing_it(monkeypatch):
+    clear_provider_env(monkeypatch)
     keyring = FakeKeyring()
     manager = ConfigurationManager(keyring_backend=keyring)
     validator = FakeValidator(valid=False)

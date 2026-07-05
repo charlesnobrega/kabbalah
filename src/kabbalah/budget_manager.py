@@ -107,9 +107,7 @@ class BudgetExceededError(RuntimeError):
     def __init__(self, decision: "BudgetDecision"):
         self.decision = decision
         scopes = ", ".join(decision.exceeded)
-        super().__init__(
-            f"Budget exceeded for {scopes}; projected_cost={decision.projected_cost:.8f}"
-        )
+        super().__init__(f"Budget exceeded for {scopes}; projected_cost={decision.projected_cost:.8f}")
 
 
 @dataclass(frozen=True)
@@ -144,10 +142,7 @@ class BudgetManager:
         self.ledger = ledger
         self.run_limit_usd = run_limit_usd
         self.daily_limit_usd = daily_limit_usd
-        self.provider_limits_usd = {
-            provider: float(limit)
-            for provider, limit in (provider_limits_usd or {}).items()
-        }
+        self.provider_limits_usd = {provider: float(limit) for provider, limit in (provider_limits_usd or {}).items()}
         self.mode = normalized_mode
 
     @classmethod

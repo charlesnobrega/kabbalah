@@ -6,8 +6,8 @@ from kabbalah.firewall_mcp import FirewallMCP, MCPRequest, MCPRiskLevel, permiti
 from kabbalah.fsm_enforcement import (
     FSMEnforcementModule,
     Operation,
-    OperationType,
     OperationalMode,
+    OperationType,
 )
 
 
@@ -84,9 +84,7 @@ def test_with_logging_variant_is_deprecated_and_does_not_double_log():
     )
 
     with pytest.warns(DeprecationWarning):
-        allowed, message = module.check_operation_allowed_with_logging(
-            operation, OperationalMode.DAY2
-        )
+        allowed, message = module.check_operation_allowed_with_logging(operation, OperationalMode.DAY2)
 
     assert allowed is False
     assert message is not None

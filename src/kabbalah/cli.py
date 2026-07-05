@@ -18,8 +18,7 @@ from kabbalah.hardware_profile import HardwareProfiler
 from kabbalah.intake_node import IntakeNode
 from kabbalah.models import UserRequest
 from kabbalah.onboarding import ProviderKeyValidator, run_setup_wizard
-from kabbalah.specification_pretty_printer import SpecificationPrettyPrinter, OutputFormat
-
+from kabbalah.specification_pretty_printer import OutputFormat, SpecificationPrettyPrinter
 
 logger = logging.getLogger(__name__)
 
@@ -254,18 +253,22 @@ def cmd_config(args: argparse.Namespace) -> int:
                     json_output=args.json,
                 )
             validation = ProviderKeyValidator().validate(args.provider, api_key)
-            return _emit_success(
-                {
-                    "provider": args.provider,
-                    "valid": validation.valid,
-                    "message": validation.message,
-                },
-                json_output=args.json,
-            ) if validation.valid else _emit_error(
-                what_happened="Provider key validation failed.",
-                why=validation.message,
-                what_to_do=f"Run `kabbalah config add-key {args.provider}` with a valid key.",
-                json_output=args.json,
+            return (
+                _emit_success(
+                    {
+                        "provider": args.provider,
+                        "valid": validation.valid,
+                        "message": validation.message,
+                    },
+                    json_output=args.json,
+                )
+                if validation.valid
+                else _emit_error(
+                    what_happened="Provider key validation failed.",
+                    why=validation.message,
+                    what_to_do=f"Run `kabbalah config add-key {args.provider}` with a valid key.",
+                    json_output=args.json,
+                )
             )
 
         if args.config_command == "set-budget":

@@ -121,9 +121,7 @@ class HardwareProfiler:
         """Return persisted hardware snapshots in insertion order."""
         with self._lock:
             with self._connect() as conn:
-                rows = conn.execute(
-                    "SELECT profile_json FROM hardware_profiles ORDER BY seq ASC"
-                ).fetchall()
+                rows = conn.execute("SELECT profile_json FROM hardware_profiles ORDER BY seq ASC").fetchall()
         return [self._deserialize_profile(row[0]) for row in rows]
 
     def _ensure_schema(self) -> None:
@@ -147,9 +145,7 @@ class HardwareProfiler:
 
     def _latest_profile(self) -> Optional[HardwareProfile]:
         with self._connect() as conn:
-            row = conn.execute(
-                "SELECT profile_json FROM hardware_profiles ORDER BY seq DESC LIMIT 1"
-            ).fetchone()
+            row = conn.execute("SELECT profile_json FROM hardware_profiles ORDER BY seq DESC LIMIT 1").fetchone()
         if row is None:
             return None
         return self._deserialize_profile(row[0])
@@ -190,10 +186,7 @@ class HardwareProfiler:
                 model_fits[profile.name] = "cpu"
             elif profile.min_vram_full is not None and max_vram >= profile.min_vram_full:
                 model_fits[profile.name] = "full"
-            elif (
-                profile.min_vram_offload is not None
-                and max_vram >= profile.min_vram_offload
-            ):
+            elif profile.min_vram_offload is not None and max_vram >= profile.min_vram_offload:
                 model_fits[profile.name] = "offload"
             else:
                 model_fits[profile.name] = "unavailable"
@@ -296,6 +289,7 @@ def _detect_total_ram_mb() -> int:
             pass
 
     if platform.system().lower() == "windows":
+
         class MEMORYSTATUSEX(ctypes.Structure):
             _fields_ = [
                 ("dwLength", ctypes.c_ulong),
@@ -572,10 +566,7 @@ def _probe_windows_video_controllers() -> list[GPUInfo]:
                 powershell,
                 "-NoProfile",
                 "-Command",
-                (
-                    "Get-CimInstance Win32_VideoController | "
-                    "Select-Object Name,AdapterRAM | ConvertTo-Json -Compress"
-                ),
+                ("Get-CimInstance Win32_VideoController | " "Select-Object Name,AdapterRAM | ConvertTo-Json -Compress"),
             ],
             check=False,
             capture_output=True,

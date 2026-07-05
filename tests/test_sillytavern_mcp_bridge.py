@@ -381,9 +381,7 @@ async def test_bridge_budget_stats_tool_returns_budget_manager_stats(monkeypatch
 
     monkeypatch.setattr(bridge, "budget_manager", FakeBudgetManager())
 
-    response = await bridge.get_budget_stats(
-        bridge.BridgeBaseInput(agente_id="agent", papel_agente="viewer")
-    )
+    response = await bridge.get_budget_stats(bridge.BridgeBaseInput(agente_id="agent", papel_agente="viewer"))
     payload = json.loads(response)
 
     assert payload["ok"] is True
@@ -411,9 +409,7 @@ async def test_bridge_config_status_tool_returns_safe_provider_status(monkeypatc
 
     monkeypatch.setattr(bridge, "config_manager", FakeConfigurationManager())
 
-    response = await bridge.get_config_status(
-        bridge.BridgeBaseInput(agente_id="agent", papel_agente="viewer")
-    )
+    response = await bridge.get_config_status(bridge.BridgeBaseInput(agente_id="agent", papel_agente="viewer"))
     payload = json.loads(response)
 
     assert payload["ok"] is True

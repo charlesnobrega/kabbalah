@@ -404,11 +404,18 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
   *Implementado*: `.github/workflows/ci.yml` roda ruff e pytest em
   Windows/Ubuntu com Python 3.9/3.11 e inclui job separado de gitleaks; README
   usa badges reais de workflow, tag de versão e licença do GitHub.
-- [ ] **8.6 Qualidade de código fina** — ampliar `ruff.toml` além de F401/F841
+- [x] **8.6 Qualidade de código fina** *(Codex, 2026-07-05 — `ruff check src tests kabbalah_mcp_bridge.py`; `pytest tests -q`)* — ampliar `ruff.toml` além de F401/F841
   (adicionar `E`, `W`, `I` para ordenação de imports, `B` bugbear), corrigir o
   que apontar; type hints completos nos módulos públicos (gateway, contratos,
   firewall, cofre, profiler); docstring em toda classe/função pública seguindo
   o padrão do repo. Sem reescrever lógica — só acabamento.
+  *Implementado*: `ruff.toml` agora valida `E/W/F/I/B`; `ruff format` foi
+  aplicado de forma consistente; callbacks e métodos públicos de contratos,
+  store e firewall receberam docstrings; `tests/test_public_api_quality.py`
+  garante docstrings e type hints nos módulos públicos (`llm_gateway`,
+  `hardware_profile`, `cofre`, `contratos`, `contrato_store`, `firewall_mcp`).
+  *Validação*: `ruff check src tests kabbalah_mcp_bridge.py` passou; suíte
+  completa passou com `1206 passed, 89 skipped`.
 - [ ] **8.7 Documentação-vitrine** — o README é a cara do produto:
   1. Reescrever o README como pitch honesto: o que é (kernel de governance),
      demo em 5 minutos (quickstart testado do zero numa máquina limpa),

@@ -28,7 +28,6 @@ import time
 from dataclasses import dataclass
 from typing import Callable, Dict, Mapping, Optional, Sequence, Tuple
 
-
 CACHE_TTL = 300
 
 
@@ -56,13 +55,7 @@ class Segredo:
     created_at: float = 0.0
 
     def __repr__(self) -> str:
-        return (
-            "Segredo("
-            f"item_name={self.item_name!r}, "
-            f"field_name={self.field_name!r}, "
-            "value='***'"
-            ")"
-        )
+        return "Segredo(" f"item_name={self.item_name!r}, " f"field_name={self.field_name!r}, " "value='***'" ")"
 
 
 class CofreBitwarden:
@@ -159,9 +152,7 @@ class CofreBitwarden:
         if field_name in item and item[field_name]:
             return self._store_cache(cache_key, item_name, field_name, item[field_name])
 
-        raise CofreSecretNotFound(
-            f"Field '{field_name}' not found in Bitwarden item '{item_name}'"
-        )
+        raise CofreSecretNotFound(f"Field '{field_name}' not found in Bitwarden item '{item_name}'")
 
     def _session(self) -> Optional[str]:
         env = self._effective_env()

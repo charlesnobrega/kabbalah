@@ -4,19 +4,20 @@ Observability Module
 Collects traces, logs, and metrics for complete system visibility.
 """
 
-import time
+import json
 import logging
-from typing import Dict, List, Optional, Any
+import threading
+import time
 from dataclasses import dataclass, field
 from enum import Enum
-import threading
-import json
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class LogLevel(Enum):
     """Log levels"""
+
     DEBUG = "DEBUG"
     INFO = "INFO"
     WARNING = "WARNING"
@@ -26,6 +27,7 @@ class LogLevel(Enum):
 
 class OperationStatus(Enum):
     """Operation status"""
+
     SUCCESS = "success"
     ERROR = "error"
     TIMEOUT = "timeout"
@@ -35,6 +37,7 @@ class OperationStatus(Enum):
 @dataclass
 class Trace:
     """Trace information"""
+
     trace_id: str
     operation_name: str
     start_time: float
@@ -43,7 +46,7 @@ class Trace:
     duration_ms: float = 0.0
     metadata: Dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
@@ -61,12 +64,13 @@ class Trace:
 @dataclass
 class LogEntry:
     """Log entry"""
+
     trace_id: str
     level: str
     message: str
     timestamp: float
     context: Dict[str, Any] = field(default_factory=dict)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
@@ -81,11 +85,12 @@ class LogEntry:
 @dataclass
 class Metric:
     """Metric data"""
+
     name: str
     value: float
     timestamp: float
     tags: Dict[str, str] = field(default_factory=dict)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
@@ -99,7 +104,7 @@ class Metric:
 class ObservabilityModule:
     """
     Collects traces, logs, and metrics for system observability.
-    
+
     Features:
     - Trace collection with hierarchical trace_id
     - Structured logging
@@ -107,7 +112,7 @@ class ObservabilityModule:
     - Thread-safe operations
     - In-memory storage with optional export
     """
-    
+
     def __init__(
         self,
         max_traces: int = 10000,
@@ -116,7 +121,7 @@ class ObservabilityModule:
     ):
         """
         Initialize observability module.
-        
+
         Args:
             max_traces: Maximum traces to store
             max_logs: Maximum logs to store
@@ -125,14 +130,14 @@ class ObservabilityModule:
         self.max_traces = max_traces
         self.max_logs = max_logs
         self.max_metrics = max_metrics
-        
+
         self.traces: List[Trace] = []
         self.logs: List[LogEntry] = []
         self.metrics: List[Metric] = []
-        
+
         self._lock = threading.Lock()
         self._active_traces: Dict[str, Trace] = {}
-    
+
     def start_trace(
         self,
         trace_id: str,
@@ -141,12 +146,12 @@ class ObservabilityModule:
     ) -> Trace:
         """
         Start a trace.
-        
+
         Args:
             trace_id: Unique trace identifier
             operation_name: Name of operation
             metadata: Additional metadata
-            
+
         Returns:
             Trace object
         """
@@ -156,13 +161,13 @@ class ObservabilityModule:
             start_time=time.time(),
             metadata=metadata or {},
         )
-        
+
         with self._lock:
             self._active_traces[trace_id] = trace
-        
+
         logger.debug(f"Trace started: {trace_id} - {operation_name}")
         return trace
-    
+
     def end_trace(
         self,
         trace_id: str,
@@ -171,12 +176,12 @@ class ObservabilityModule:
     ) -> Optional[Trace]:
         """
         End a trace.
-        
+
         Args:
             trace_id: Trace identifier
             status: Operation status
             error: Error message if failed
-            
+
         Returns:
             Completed trace or None
         """
@@ -184,21 +189,21 @@ class ObservabilityModule:
             if trace_id not in self._active_traces:
                 logger.warning(f"Trace not found: {trace_id}")
                 return None
-            
+
             trace = self._active_traces.pop(trace_id)
             trace.end_time = time.time()
             trace.status = status
             trace.error = error
             trace.duration_ms = (trace.end_time - trace.start_time) * 1000
-            
+
             # Add to traces list (with eviction if needed)
             if len(self.traces) >= self.max_traces:
                 self.traces.pop(0)
             self.traces.append(trace)
-        
+
         logger.debug(f"Trace ended: {trace_id} - {status} ({trace.duration_ms:.2f}ms)")
         return trace
-    
+
     def emit_log(
         self,
         trace_id: str,
@@ -208,13 +213,13 @@ class ObservabilityModule:
     ) -> LogEntry:
         """
         Emit a log entry.
-        
+
         Args:
             trace_id: Trace identifier
             level: Log level
             message: Log message
             context: Additional context
-            
+
         Returns:
             Log entry
         """
@@ -225,19 +230,19 @@ class ObservabilityModule:
             timestamp=time.time(),
             context=context or {},
         )
-        
+
         with self._lock:
             # Add to logs list (with eviction if needed)
             if len(self.logs) >= self.max_logs:
                 self.logs.pop(0)
             self.logs.append(log_entry)
-        
+
         # Also log using Python logging
         log_func = getattr(logger, level.lower(), logger.info)
         log_func(f"[{trace_id}] {message}")
-        
+
         return log_entry
-    
+
     def emit_metric(
         self,
         name: str,
@@ -246,12 +251,12 @@ class ObservabilityModule:
     ) -> Metric:
         """
         Emit a metric.
-        
+
         Args:
             name: Metric name
             value: Metric value
             tags: Metric tags
-            
+
         Returns:
             Metric object
         """
@@ -261,16 +266,16 @@ class ObservabilityModule:
             timestamp=time.time(),
             tags=tags or {},
         )
-        
+
         with self._lock:
             # Add to metrics list (with eviction if needed)
             if len(self.metrics) >= self.max_metrics:
                 self.metrics.pop(0)
             self.metrics.append(metric)
-        
+
         logger.debug(f"Metric emitted: {name}={value}")
         return metric
-    
+
     def get_traces(
         self,
         trace_id: Optional[str] = None,
@@ -279,18 +284,18 @@ class ObservabilityModule:
     ) -> List[Trace]:
         """
         Get traces with optional filtering.
-        
+
         Args:
             trace_id: Filter by trace_id
             operation_name: Filter by operation_name
             status: Filter by status
-            
+
         Returns:
             List of traces
         """
         with self._lock:
             traces = self.traces.copy()
-        
+
         # Apply filters
         if trace_id:
             traces = [t for t in traces if t.trace_id == trace_id]
@@ -298,9 +303,9 @@ class ObservabilityModule:
             traces = [t for t in traces if t.operation_name == operation_name]
         if status:
             traces = [t for t in traces if t.status == status]
-        
+
         return traces
-    
+
     def get_logs(
         self,
         trace_id: Optional[str] = None,
@@ -308,51 +313,51 @@ class ObservabilityModule:
     ) -> List[LogEntry]:
         """
         Get logs with optional filtering.
-        
+
         Args:
             trace_id: Filter by trace_id
             level: Filter by level
-            
+
         Returns:
             List of logs
         """
         with self._lock:
             logs = self.logs.copy()
-        
+
         # Apply filters
         if trace_id:
-            logs = [l for l in logs if l.trace_id == trace_id]
+            logs = [log_entry for log_entry in logs if log_entry.trace_id == trace_id]
         if level:
-            logs = [l for l in logs if l.level == level]
-        
+            logs = [log_entry for log_entry in logs if log_entry.level == level]
+
         return logs
-    
+
     def get_metrics(
         self,
         name: Optional[str] = None,
     ) -> List[Metric]:
         """
         Get metrics with optional filtering.
-        
+
         Args:
             name: Filter by metric name
-            
+
         Returns:
             List of metrics
         """
         with self._lock:
             metrics = self.metrics.copy()
-        
+
         # Apply filters
         if name:
             metrics = [m for m in metrics if m.name == name]
-        
+
         return metrics
-    
+
     def get_statistics(self) -> Dict[str, Any]:
         """
         Get observability statistics.
-        
+
         Returns:
             Statistics dictionary
         """
@@ -360,7 +365,7 @@ class ObservabilityModule:
             traces = self.traces.copy()
             logs = self.logs.copy()
             metrics = self.metrics.copy()
-        
+
         # Calculate trace statistics
         trace_stats = {
             "total": len(traces),
@@ -368,22 +373,22 @@ class ObservabilityModule:
             "error": len([t for t in traces if t.status == OperationStatus.ERROR.value]),
             "avg_duration_ms": sum(t.duration_ms for t in traces) / len(traces) if traces else 0,
         }
-        
+
         # Calculate log statistics
         log_stats = {
             "total": len(logs),
-            "debug": len([l for l in logs if l.level == LogLevel.DEBUG.value]),
-            "info": len([l for l in logs if l.level == LogLevel.INFO.value]),
-            "warning": len([l for l in logs if l.level == LogLevel.WARNING.value]),
-            "error": len([l for l in logs if l.level == LogLevel.ERROR.value]),
+            "debug": len([log_entry for log_entry in logs if log_entry.level == LogLevel.DEBUG.value]),
+            "info": len([log_entry for log_entry in logs if log_entry.level == LogLevel.INFO.value]),
+            "warning": len([log_entry for log_entry in logs if log_entry.level == LogLevel.WARNING.value]),
+            "error": len([log_entry for log_entry in logs if log_entry.level == LogLevel.ERROR.value]),
         }
-        
+
         # Calculate metric statistics
         metric_stats = {
             "total": len(metrics),
             "unique_names": len(set(m.name for m in metrics)),
         }
-        
+
         return {
             "traces": trace_stats,
             "logs": log_stats,
@@ -394,7 +399,7 @@ class ObservabilityModule:
                 "metrics_capacity": f"{len(metrics)}/{self.max_metrics}",
             },
         }
-    
+
     def clear(self) -> None:
         """Clear all observability data"""
         with self._lock:
@@ -402,13 +407,13 @@ class ObservabilityModule:
             self.logs.clear()
             self.metrics.clear()
             self._active_traces.clear()
-        
+
         logger.info("Observability data cleared")
-    
+
     def export_json(self) -> str:
         """
         Export all observability data as JSON.
-        
+
         Returns:
             JSON string
         """
@@ -416,7 +421,7 @@ class ObservabilityModule:
             traces = self.traces.copy()
             logs = self.logs.copy()
             metrics = self.metrics.copy()
-        
+
         # Calculate statistics without holding the lock
         trace_stats = {
             "total": len(traces),
@@ -424,20 +429,20 @@ class ObservabilityModule:
             "error": len([t for t in traces if t.status == OperationStatus.ERROR.value]),
             "avg_duration_ms": sum(t.duration_ms for t in traces) / len(traces) if traces else 0,
         }
-        
+
         log_stats = {
             "total": len(logs),
-            "debug": len([l for l in logs if l.level == LogLevel.DEBUG.value]),
-            "info": len([l for l in logs if l.level == LogLevel.INFO.value]),
-            "warning": len([l for l in logs if l.level == LogLevel.WARNING.value]),
-            "error": len([l for l in logs if l.level == LogLevel.ERROR.value]),
+            "debug": len([log_entry for log_entry in logs if log_entry.level == LogLevel.DEBUG.value]),
+            "info": len([log_entry for log_entry in logs if log_entry.level == LogLevel.INFO.value]),
+            "warning": len([log_entry for log_entry in logs if log_entry.level == LogLevel.WARNING.value]),
+            "error": len([log_entry for log_entry in logs if log_entry.level == LogLevel.ERROR.value]),
         }
-        
+
         metric_stats = {
             "total": len(metrics),
             "unique_names": len(set(m.name for m in metrics)),
         }
-        
+
         statistics = {
             "traces": trace_stats,
             "logs": log_stats,
@@ -448,12 +453,12 @@ class ObservabilityModule:
                 "metrics_capacity": f"{len(metrics)}/{self.max_metrics}",
             },
         }
-        
+
         data = {
             "traces": [t.to_dict() for t in traces],
-            "logs": [l.to_dict() for l in logs],
+            "logs": [log_entry.to_dict() for log_entry in logs],
             "metrics": [m.to_dict() for m in metrics],
             "statistics": statistics,
         }
-        
+
         return json.dumps(data, indent=2, default=str)

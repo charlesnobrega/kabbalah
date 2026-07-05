@@ -8,7 +8,6 @@ import os
 
 import pytest
 
-
 LIVE_PROVIDER_TESTS_ENV = "KABBALAH_RUN_LIVE_PROVIDER_TESTS"
 
 LIVE_PROVIDER_TEST_FILES = {
@@ -25,9 +24,7 @@ def pytest_collection_modifyitems(config, items):
     if os.getenv(LIVE_PROVIDER_TESTS_ENV) == "1":
         return
 
-    skip_live = pytest.mark.skip(
-        reason=f"live provider tests require {LIVE_PROVIDER_TESTS_ENV}=1"
-    )
+    skip_live = pytest.mark.skip(reason=f"live provider tests require {LIVE_PROVIDER_TESTS_ENV}=1")
 
     for item in items:
         if item.path.name in LIVE_PROVIDER_TEST_FILES:

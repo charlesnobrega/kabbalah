@@ -6,7 +6,6 @@ import time
 from pathlib import Path
 from unittest.mock import patch
 
-
 from kabbalah.memory_subsystem import (
     CogneeBackend,
     JSONLBackend,
@@ -103,12 +102,8 @@ class TestJSONLBackend:
         with tempfile.TemporaryDirectory() as tmpdir:
             backend = JSONLBackend(tmpdir)
 
-            k1 = Knowledge(
-                knowledge_id="k1", content="Python programming", category="shared"
-            )
-            k2 = Knowledge(
-                knowledge_id="k2", content="JavaScript basics", category="shared"
-            )
+            k1 = Knowledge(knowledge_id="k1", content="Python programming", category="shared")
+            k2 = Knowledge(knowledge_id="k2", content="JavaScript basics", category="shared")
 
             backend.store(k1)
             backend.store(k2)
@@ -156,14 +151,10 @@ class TestJSONLBackend:
         with tempfile.TemporaryDirectory() as tmpdir:
             backend = JSONLBackend(tmpdir)
 
-            k1 = Knowledge(
-                knowledge_id="k1", content="Original content", category="shared"
-            )
+            k1 = Knowledge(knowledge_id="k1", content="Original content", category="shared")
             backend.store(k1)
 
-            k1_updated = Knowledge(
-                knowledge_id="k1", content="Updated content", category="shared"
-            )
+            k1_updated = Knowledge(knowledge_id="k1", content="Updated content", category="shared")
             backend.store(k1_updated)
 
             # Should only have one entry
@@ -190,9 +181,7 @@ class TestJSONLBackend:
                 result = backend.store(k)
                 results.append(result)
 
-            threads = [
-                threading.Thread(target=store_knowledge, args=(i,)) for i in range(5)
-            ]
+            threads = [threading.Thread(target=store_knowledge, args=(i,)) for i in range(5)]
 
             for t in threads:
                 t.start()
@@ -226,9 +215,7 @@ class TestCogneeBackend:
         backend = CogneeBackend()
         backend.available = False
 
-        knowledge = Knowledge(
-            knowledge_id="k1", content="Test", category="shared"
-        )
+        knowledge = Knowledge(knowledge_id="k1", content="Test", category="shared")
         result = backend.store(knowledge)
         assert result is False
 
@@ -404,14 +391,10 @@ class TestMemorySubsystem:
                     content=f"Content {idx}",
                     category="shared",
                 )
-                result = subsystem.store_knowledge(
-                    k, f"run_001:branch_001:leaf_{idx:03d}"
-                )
+                result = subsystem.store_knowledge(k, f"run_001:branch_001:leaf_{idx:03d}")
                 results.append(result)
 
-            threads = [
-                threading.Thread(target=store_knowledge, args=(i,)) for i in range(5)
-            ]
+            threads = [threading.Thread(target=store_knowledge, args=(i,)) for i in range(5)]
 
             for t in threads:
                 t.start()

@@ -6,10 +6,10 @@ This module contains two compatible contract layers:
 * `Contratos`: agent-to-agent operational contracts used by MCP authorization.
 """
 
-from dataclasses import dataclass, field
-from datetime import datetime
 import threading
 import uuid
+from dataclasses import dataclass, field
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 if TYPE_CHECKING:
@@ -17,6 +17,8 @@ if TYPE_CHECKING:
 
 
 class ContractStatus:
+    """Lifecycle states for agent-to-agent operational contracts."""
+
     PROPOSTO = "PROPOSTO"
     ATIVO = "ATIVO"
     CONCLUIDO = "CONCLUIDO"
@@ -124,9 +126,13 @@ class Contratos:
 
     @property
     def contratos(self) -> Dict[str, ContratoAgente]:
+        """Return a shallow copy of the in-memory contract index."""
+
         return dict(self._contratos)
 
     def registrar_callback(self, evento: str, fn: ContractCallback) -> None:
+        """Register a callback invoked when a contract lifecycle event occurs."""
+
         self._callbacks.setdefault(evento, []).append(fn)
 
     def propor(
@@ -175,6 +181,8 @@ class Contratos:
         return contrato
 
     def assinar(self, contrato_id: str, provedor: str) -> bool:
+        """Activate a proposed contract when the expected provider signs it."""
+
         with self._lock:
             contrato = self._get(contrato_id)
             if contrato.provedor != provedor:
@@ -187,6 +195,8 @@ class Contratos:
         return True
 
     def rejeitar(self, contrato_id: str, provedor: str, motivo: str = "") -> bool:
+        """Reject a proposed contract when the expected provider declines it."""
+
         with self._lock:
             contrato = self._get(contrato_id)
             if contrato.provedor != provedor:
@@ -273,9 +283,7 @@ class Contratos:
             {"agente_id": agente_id, "acao": acao, "motivo": motivo, "contrato_id": None},
         )
 
-    def _registrar_violacao_contrato(
-        self, contrato: ContratoAgente, agente_id: str, acao: str, motivo: str
-    ) -> None:
+    def _registrar_violacao_contrato(self, contrato: ContratoAgente, agente_id: str, acao: str, motivo: str) -> None:
         with self._lock:
             contrato.status = ContractStatus.VIOLADO
             contrato.motivo = motivo
@@ -329,6 +337,8 @@ class Contratos:
         return affected
 
     def revogar(self, contrato_id: str, aprovado_por: str, motivo: str = "") -> bool:
+        """Revoke a proposed or active contract after external approval."""
+
         with self._lock:
             contrato = self._get(contrato_id)
             if contrato.status not in {ContractStatus.PROPOSTO, ContractStatus.ATIVO}:
@@ -340,6 +350,8 @@ class Contratos:
         return True
 
     def contratos_por_task(self, task_id: str) -> List[ContratoAgente]:
+        """List all contracts associated with a task identifier."""
+
         return [contrato for contrato in self._contratos.values() if contrato.task_id == task_id]
 
     def _avaliar_risco(self, requisitante: str, acao: str, limites: Dict[str, Any]) -> float:

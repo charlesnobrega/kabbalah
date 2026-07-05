@@ -77,4 +77,6 @@ def test_compare_models_returns_honest_error_for_unavailable_requested_provider(
 
     rows = {row["provider"]: row for row in result["comparisons"]}
     assert rows["mock_a"]["error"] is None
-    assert rows["missing_provider"]["error"] == "Provider not available for this role/capability. Run `kabbalah setup` or update the registry."
+    assert rows["missing_provider"]["error"] == (
+        "Provider not available for this role/capability. Run `kabbalah setup` or update the registry."
+    )

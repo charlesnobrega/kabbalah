@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import ipaddress
 import inspect
+import ipaddress
 import json
 import logging
 import os
@@ -43,10 +43,10 @@ from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
 
 from kabbalah.budget_manager import BudgetLedger, BudgetManager
-from kabbalah.configuration_manager import ConfigurationManager
-from kabbalah.contratos import Contratos, VerificationOutcome
-from kabbalah.contrato_store import ContratoStore
 from kabbalah.cofre import CofreBitwarden, CofreError
+from kabbalah.configuration_manager import ConfigurationManager
+from kabbalah.contrato_store import ContratoStore
+from kabbalah.contratos import Contratos, VerificationOutcome
 from kabbalah.firewall_mcp import AcaoMCP, FirewallMCP, MCPRequest, permitir_tudo
 from kabbalah.hitl import HITL, NivelUrgencia
 from kabbalah.llm_gateway import LLMGateway
@@ -113,6 +113,7 @@ class TicketStore:
             return None
         return json.loads(row[0])
 
+
 STATE_DB_PATH = Path(os.environ.get("KABBALAH_BRIDGE_STATE_DB", str(PROJECT_ROOT / ".kabbalah_bridge_state.sqlite3")))
 
 hitl = HITL()
@@ -143,7 +144,11 @@ def _contract_checker(request: MCPRequest) -> tuple[bool, Optional[str]]:
         return True, None
     if outcome == VerificationOutcome.NO_CONTRACT:
         contratos.registrar_ausencia(request.agente_id, request.ferramenta, "Chamada MCP sem contrato ativo")
-        return False, "Nenhum contrato ativo autoriza esta ação para este agente. Use propose_contract/sign_contract primeiro."
+        return (
+            False,
+            "Nenhum contrato ativo autoriza esta ação para este agente. "
+            "Use propose_contract/sign_contract primeiro.",
+        )
     return False, f"Contrato ativo violado ({outcome}). Proponha um novo contrato antes de continuar."
 
 
@@ -167,6 +172,24 @@ sync = SyncHub(qlipot=qlipot, contratos=contratos, firewall=firewall)
 _retry_attempts: Dict[tuple[str, str, str], tuple[int, float]] = {}
 MAX_RETRIES = 3
 RETRY_WINDOW_SECONDS = 60
+
+
+def _tool_annotations(
+    title: str,
+    *,
+    read_only: bool,
+    destructive: bool,
+    idempotent: bool,
+    open_world: bool,
+) -> Dict[str, Any]:
+    """Build MCP tool annotations with consistent Kabbalah policy hints."""
+    return {
+        "title": title,
+        "readOnlyHint": read_only,
+        "destructiveHint": destructive,
+        "idempotentHint": idempotent,
+        "openWorldHint": open_world,
+    }
 
 
 class BridgeBaseInput(BaseModel):
@@ -234,7 +257,10 @@ class RenderGroupEventInput(BridgeBaseInput):
     event_type: str = Field(..., description="allow, deny, hitl, budget, config, or error.", min_length=1)
     agent: str = Field(..., description="Visible SillyTavern group member/domain name.", min_length=1)
     summary: str = Field(..., description="Human-readable status summary.", min_length=1)
-    details: Dict[str, Any] = Field(default_factory=dict, description="Structured details; secret-like keys are redacted.")
+    details: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Structured details; secret-like keys are redacted.",
+    )
     ticket_id: Optional[str] = Field(default=None, description="Optional HITL ticket ID.")
     next_step: Optional[str] = Field(default=None, description="Suggested next action.")
 
@@ -377,12 +403,23 @@ def _assert_url_allowed(url: str) -> None:
     if os.environ.get("KABBALAH_BRIDGE_ALLOW_PRIVATE_NETWORKS") == "1":
         return
     try:
-        infos = socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80), type=socket.SOCK_STREAM)
+        infos = socket.getaddrinfo(
+            parsed.hostname,
+            parsed.port or (443 if parsed.scheme == "https" else 80),
+            type=socket.SOCK_STREAM,
+        )
     except socket.gaierror as exc:
         raise BridgePolicyError(f"Falha ao resolver hostname: {parsed.hostname}") from exc
     for info in infos:
         ip = ipaddress.ip_address(info[4][0])
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved or ip.is_unspecified:
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_multicast
+            or ip.is_reserved
+            or ip.is_unspecified
+        ):
             raise BridgePolicyError(f"Destino de rede bloqueado por política anti-SSRF: {ip}")
 
 
@@ -540,18 +577,34 @@ async def _authorize_and_execute(
         return _ok(result, trace_id=trace_id, decision=decision, intent=intent)
     except CofreError as exc:
         logger.exception("Cofre failure")
-        return _error("Cofre bloqueado ou indisponível", trace_id=trace_id, code="COFRE_ERROR", details={"error": str(exc)})
+        return _error(
+            "Cofre bloqueado ou indisponível",
+            trace_id=trace_id,
+            code="COFRE_ERROR",
+            details={"error": str(exc)},
+        )
     except BridgePolicyError as exc:
         logger.warning("Bridge policy denied request: %s", exc)
         return _error(str(exc), trace_id=trace_id, code="POLICY_DENIED")
     except Exception as exc:
         logger.exception("Bridge execution failure")
-        return _error("Erro interno no Kabbalah MCP Bridge", trace_id=trace_id, code="BRIDGE_ERROR", details={"error": str(exc)})
+        return _error(
+            "Erro interno no Kabbalah MCP Bridge",
+            trace_id=trace_id,
+            code="BRIDGE_ERROR",
+            details={"error": str(exc)},
+        )
 
 
 @mcp.tool(
     name=AcaoMCP.READ_FILE.value,
-    annotations={"title": "Kabbalah Read File", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    annotations=_tool_annotations(
+        "Kabbalah Read File",
+        read_only=True,
+        destructive=False,
+        idempotent=True,
+        open_world=False,
+    ),
 )
 async def read_file(params: ReadFileInput) -> str:
     """Read a text file only after qlipot, FirewallMCP, RBAC, and HITL checks."""
@@ -576,7 +629,13 @@ async def read_file(params: ReadFileInput) -> str:
 
 @mcp.tool(
     name=AcaoMCP.WRITE_FILE.value,
-    annotations={"title": "Kabbalah Write File", "readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
+    annotations=_tool_annotations(
+        "Kabbalah Write File",
+        read_only=False,
+        destructive=True,
+        idempotent=False,
+        open_world=False,
+    ),
 )
 async def write_file(params: WriteFileInput) -> str:
     """Write a text file only after Kabbalah authorization."""
@@ -599,7 +658,13 @@ async def write_file(params: WriteFileInput) -> str:
 
 @mcp.tool(
     name=AcaoMCP.EXECUTE_COMMAND.value,
-    annotations={"title": "Kabbalah Execute Command", "readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
+    annotations=_tool_annotations(
+        "Kabbalah Execute Command",
+        read_only=False,
+        destructive=True,
+        idempotent=False,
+        open_world=False,
+    ),
 )
 async def execute_command(params: ExecuteCommandInput) -> str:
     """Execute a local command only after qlipot, FirewallMCP, RBAC, and HITL checks."""
@@ -636,7 +701,13 @@ async def execute_command(params: ExecuteCommandInput) -> str:
 
 @mcp.tool(
     name=AcaoMCP.READ_ENV_VAR.value,
-    annotations={"title": "Kabbalah Read Env Var", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    annotations=_tool_annotations(
+        "Kabbalah Read Env Var",
+        read_only=True,
+        destructive=False,
+        idempotent=True,
+        open_world=False,
+    ),
 )
 async def read_env_var(params: ReadEnvVarInput) -> str:
     """Read a non-sensitive environment variable after authorization."""
@@ -663,7 +734,13 @@ async def read_env_var(params: ReadEnvVarInput) -> str:
 
 @mcp.tool(
     name=AcaoMCP.CALL_TOOL.value,
-    annotations={"title": "Kabbalah Call Tool", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+    annotations=_tool_annotations(
+        "Kabbalah Call Tool",
+        read_only=False,
+        destructive=False,
+        idempotent=False,
+        open_world=True,
+    ),
 )
 async def call_tool(params: CallToolInput) -> str:
     """Authorize a cross-agent/delegated tool call without bypassing contracts."""
@@ -684,7 +761,13 @@ async def call_tool(params: CallToolInput) -> str:
 
 @mcp.tool(
     name=AcaoMCP.DATABASE_QUERY.value,
-    annotations={"title": "Kabbalah Database Query", "readOnlyHint": False, "destructiveHint": True, "idempotentHint": False, "openWorldHint": False},
+    annotations=_tool_annotations(
+        "Kabbalah Database Query",
+        read_only=False,
+        destructive=True,
+        idempotent=False,
+        open_world=False,
+    ),
 )
 async def database_query(params: DatabaseQueryInput) -> str:
     """Execute a local SQLite query after Kabbalah authorization."""
@@ -712,7 +795,13 @@ async def database_query(params: DatabaseQueryInput) -> str:
 
 @mcp.tool(
     name=AcaoMCP.NETWORK_REQUEST.value,
-    annotations={"title": "Kabbalah Network Request", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+    annotations=_tool_annotations(
+        "Kabbalah Network Request",
+        read_only=False,
+        destructive=False,
+        idempotent=False,
+        open_world=True,
+    ),
 )
 async def network_request(params: NetworkRequestInput) -> str:
     """Perform an HTTP request after Kabbalah authorization and optional vault lookup."""
@@ -752,7 +841,13 @@ async def network_request(params: NetworkRequestInput) -> str:
 
 @mcp.tool(
     name=AcaoMCP.CHECK_HITL_STATUS.value,
-    annotations={"title": "Kabbalah HITL Status", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    annotations=_tool_annotations(
+        "Kabbalah HITL Status",
+        read_only=True,
+        destructive=False,
+        idempotent=True,
+        open_world=False,
+    ),
 )
 async def check_hitl_status(params: HITLStatusInput) -> str:
     """Return the current status of a pending HITL ticket."""
@@ -775,7 +870,13 @@ hitl_status = check_hitl_status
 
 @mcp.tool(
     name=AcaoMCP.PROPOSE_CONTRACT.value,
-    annotations={"title": "Kabbalah Propose Contract", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
+    annotations=_tool_annotations(
+        "Kabbalah Propose Contract",
+        read_only=False,
+        destructive=False,
+        idempotent=False,
+        open_world=False,
+    ),
 )
 async def propose_contract(params: ProposeContractInput) -> str:
     """Propose an agent contract. Only coordinator roles are allowed."""
@@ -803,7 +904,13 @@ async def propose_contract(params: ProposeContractInput) -> str:
 
 @mcp.tool(
     name=AcaoMCP.SIGN_CONTRACT.value,
-    annotations={"title": "Kabbalah Sign Contract", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
+    annotations=_tool_annotations(
+        "Kabbalah Sign Contract",
+        read_only=False,
+        destructive=False,
+        idempotent=False,
+        open_world=False,
+    ),
 )
 async def sign_contract(params: ContractIdInput) -> str:
     """Sign a proposed agent contract as the provider."""
@@ -814,13 +921,22 @@ async def sign_contract(params: ContractIdInput) -> str:
         papel_agente=params.papel_agente,
         intencao=params.intencao,
         argumentos=params.model_dump(),
-        executor=lambda: {"signed": contratos.assinar(params.contrato_id, params.agente_id), "contrato_id": params.contrato_id},
+        executor=lambda: {
+            "signed": contratos.assinar(params.contrato_id, params.agente_id),
+            "contrato_id": params.contrato_id,
+        },
     )
 
 
 @mcp.tool(
     name=AcaoMCP.REJECT_CONTRACT.value,
-    annotations={"title": "Kabbalah Reject Contract", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
+    annotations=_tool_annotations(
+        "Kabbalah Reject Contract",
+        read_only=False,
+        destructive=False,
+        idempotent=False,
+        open_world=False,
+    ),
 )
 async def reject_contract(params: ContractIdInput) -> str:
     """Reject a proposed agent contract as the provider."""
@@ -831,13 +947,22 @@ async def reject_contract(params: ContractIdInput) -> str:
         papel_agente=params.papel_agente,
         intencao=params.intencao,
         argumentos=params.model_dump(),
-        executor=lambda: {"rejected": contratos.rejeitar(params.contrato_id, params.agente_id, params.motivo), "contrato_id": params.contrato_id},
+        executor=lambda: {
+            "rejected": contratos.rejeitar(params.contrato_id, params.agente_id, params.motivo),
+            "contrato_id": params.contrato_id,
+        },
     )
 
 
 @mcp.tool(
     name=AcaoMCP.COMPLETE_TASK.value,
-    annotations={"title": "Kabbalah Complete Task", "readOnlyHint": False, "destructiveHint": False, "idempotentHint": False, "openWorldHint": False},
+    annotations=_tool_annotations(
+        "Kabbalah Complete Task",
+        read_only=False,
+        destructive=False,
+        idempotent=False,
+        open_world=False,
+    ),
 )
 async def complete_task(params: CompleteTaskInput) -> str:
     """Mark a task complete and close all associated contracts."""
@@ -858,7 +983,13 @@ async def complete_task(params: CompleteTaskInput) -> str:
 
 @mcp.tool(
     name=AcaoMCP.GET_NETWORK_STATS.value,
-    annotations={"title": "Kabbalah Network Stats", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    annotations=_tool_annotations(
+        "Kabbalah Network Stats",
+        read_only=True,
+        destructive=False,
+        idempotent=True,
+        open_world=False,
+    ),
 )
 async def get_network_stats(params: BridgeBaseInput) -> str:
     """Return Sync Hub local network statistics."""
@@ -875,7 +1006,13 @@ async def get_network_stats(params: BridgeBaseInput) -> str:
 
 @mcp.tool(
     name=AcaoMCP.GET_BUDGET_STATS.value,
-    annotations={"title": "Kabbalah Budget Stats", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    annotations=_tool_annotations(
+        "Kabbalah Budget Stats",
+        read_only=True,
+        destructive=False,
+        idempotent=True,
+        open_world=False,
+    ),
 )
 async def get_budget_stats(params: BridgeBaseInput) -> str:
     """Return local LLM budget and consumption statistics."""
@@ -892,7 +1029,13 @@ async def get_budget_stats(params: BridgeBaseInput) -> str:
 
 @mcp.tool(
     name=AcaoMCP.COMPARE_MODELS.value,
-    annotations={"title": "Kabbalah Compare Models", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": False, "openWorldHint": True},
+    annotations=_tool_annotations(
+        "Kabbalah Compare Models",
+        read_only=True,
+        destructive=False,
+        idempotent=False,
+        open_world=True,
+    ),
 )
 async def compare_models(params: CompareModelsInput) -> str:
     """Run the same task through selected LLM providers and return comparison rows."""
@@ -922,7 +1065,13 @@ async def compare_models(params: CompareModelsInput) -> str:
 
 @mcp.tool(
     name=AcaoMCP.RENDER_GROUP_EVENT.value,
-    annotations={"title": "Kabbalah Render Group Event", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    annotations=_tool_annotations(
+        "Kabbalah Render Group Event",
+        read_only=True,
+        destructive=False,
+        idempotent=True,
+        open_world=False,
+    ),
 )
 async def render_group_event(params: RenderGroupEventInput) -> str:
     """Render a Kabbalah status event for a SillyTavern group chat."""
@@ -946,7 +1095,13 @@ async def render_group_event(params: RenderGroupEventInput) -> str:
 
 @mcp.tool(
     name=AcaoMCP.GET_CONFIG_STATUS.value,
-    annotations={"title": "Kabbalah Config Status", "readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False},
+    annotations=_tool_annotations(
+        "Kabbalah Config Status",
+        read_only=True,
+        destructive=False,
+        idempotent=True,
+        open_world=False,
+    ),
 )
 async def get_config_status(params: BridgeBaseInput) -> str:
     """Return safe installation configuration status without secret values."""

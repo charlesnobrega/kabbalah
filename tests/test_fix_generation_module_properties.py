@@ -10,11 +10,13 @@ Tests correctness properties using Hypothesis:
 Requirements: 3.1, 3.4, 3.8, 3.9
 """
 
-from hypothesis import given, strategies as st, settings, HealthCheck
 from unittest.mock import patch
 
-from kabbalah.fix_generation_module import FixGenerationModule
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
+
 from kabbalah.error_analysis_module import ErrorAnalysis
+from kabbalah.fix_generation_module import FixGenerationModule
 from kabbalah.self_healing_models import CodeChange, FixProposal
 
 
@@ -28,9 +30,7 @@ class TestFixGenerationModuleProperties:
         confidence=st.floats(min_value=0.0, max_value=1.0),
     )
     @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-    def test_property_unique_fix_id_generation(
-        self, error_id, root_cause, confidence
-    ):
+    def test_property_unique_fix_id_generation(self, error_id, root_cause, confidence):
         """
         **Validates: Requirements 3.1**
 
@@ -39,7 +39,7 @@ class TestFixGenerationModuleProperties:
         with no duplicates.
         """
         fix_generation_module = FixGenerationModule()
-        
+
         error_analysis = ErrorAnalysis(
             error_id=error_id,
             root_cause=root_cause,
@@ -60,12 +60,8 @@ class TestFixGenerationModuleProperties:
             diff="",
         )
 
-        with patch.object(
-            fix_generation_module, "extract_code_changes", return_value=[code_change]
-        ):
-            with patch.object(
-                fix_generation_module, "validate_syntax", return_value=True
-            ):
+        with patch.object(fix_generation_module, "extract_code_changes", return_value=[code_change]):
+            with patch.object(fix_generation_module, "validate_syntax", return_value=True):
                 result1 = fix_generation_module.generate_fix(error_analysis)
                 result2 = fix_generation_module.generate_fix(error_analysis)
 
@@ -101,7 +97,7 @@ class TestFixGenerationModuleProperties:
         0.0 and 1.0 (inclusive).
         """
         fix_generation_module = FixGenerationModule()
-        
+
         error_analysis = ErrorAnalysis(
             error_id=error_id,
             root_cause=root_cause,
@@ -125,19 +121,13 @@ class TestFixGenerationModuleProperties:
             for i in range(num_files)
         ]
 
-        with patch.object(
-            fix_generation_module, "extract_code_changes", return_value=code_changes
-        ):
-            with patch.object(
-                fix_generation_module, "validate_syntax", return_value=True
-            ):
+        with patch.object(fix_generation_module, "extract_code_changes", return_value=code_changes):
+            with patch.object(fix_generation_module, "validate_syntax", return_value=True):
                 result = fix_generation_module.generate_fix(error_analysis)
 
         if result.fixes:
             confidence = result.fixes[0].confidence_score
-            assert (
-                0.0 <= confidence <= 1.0
-            ), f"Confidence {confidence} out of bounds [0.0, 1.0]"
+            assert 0.0 <= confidence <= 1.0, f"Confidence {confidence} out of bounds [0.0, 1.0]"
 
     # Property 10: Manual Review Requirement
     @given(
@@ -146,9 +136,7 @@ class TestFixGenerationModuleProperties:
         confidence=st.floats(min_value=0.0, max_value=1.0),
     )
     @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-    def test_property_manual_review_requirement(
-        self, error_id, root_cause, confidence
-    ):
+    def test_property_manual_review_requirement(self, error_id, root_cause, confidence):
         """
         **Validates: Requirements 3.8, 13.3**
 
@@ -157,7 +145,7 @@ class TestFixGenerationModuleProperties:
         requires_manual_review flag SHALL be True.
         """
         fix_generation_module = FixGenerationModule()
-        
+
         error_analysis = ErrorAnalysis(
             error_id=error_id,
             root_cause=root_cause,
@@ -178,31 +166,19 @@ class TestFixGenerationModuleProperties:
             diff="",
         )
 
-        with patch.object(
-            fix_generation_module, "extract_code_changes", return_value=[code_change]
-        ):
-            with patch.object(
-                fix_generation_module, "validate_syntax", return_value=True
-            ):
+        with patch.object(fix_generation_module, "extract_code_changes", return_value=[code_change]):
+            with patch.object(fix_generation_module, "validate_syntax", return_value=True):
                 result = fix_generation_module.generate_fix(error_analysis)
 
         if result.fixes:
             fix = result.fixes[0]
             if fix.confidence_score < 0.5:
-                assert (
-                    fix.requires_manual_review is True
-                ), "Low confidence fixes must require manual review"
+                assert fix.requires_manual_review is True, "Low confidence fixes must require manual review"
 
     # Property 11: Fix Ranking by Confidence
-    @given(
-        confidences=st.lists(
-            st.floats(min_value=0.0, max_value=1.0), min_size=1, max_size=10
-        )
-    )
+    @given(confidences=st.lists(st.floats(min_value=0.0, max_value=1.0), min_size=1, max_size=10))
     @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-    def test_property_fix_ranking_by_confidence(
-        self, confidences
-    ):
+    def test_property_fix_ranking_by_confidence(self, confidences):
         """
         **Validates: Requirements 3.9**
 
@@ -211,7 +187,7 @@ class TestFixGenerationModuleProperties:
         the fixes SHALL be ordered by confidence_score in descending order.
         """
         fix_generation_module = FixGenerationModule()
-        
+
         fixes = [
             FixProposal(
                 fix_id=f"fix-{i}",
@@ -240,16 +216,14 @@ class TestFixGenerationModuleProperties:
         num_files=st.integers(min_value=1, max_value=10),
     )
     @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-    def test_property_confidence_calculation_consistency(
-        self, base_confidence, num_files
-    ):
+    def test_property_confidence_calculation_consistency(self, base_confidence, num_files):
         """
         Property: Confidence Score Calculation Consistency
         For the same error analysis and code changes, the confidence score
         calculation should be deterministic and consistent.
         """
         fix_generation_module = FixGenerationModule()
-        
+
         error_analysis = ErrorAnalysis(
             error_id="err-001",
             root_cause="Test error",
@@ -274,17 +248,11 @@ class TestFixGenerationModuleProperties:
         ]
 
         # Calculate confidence twice
-        confidence1 = fix_generation_module._calculate_confidence_score(
-            error_analysis, code_changes
-        )
-        confidence2 = fix_generation_module._calculate_confidence_score(
-            error_analysis, code_changes
-        )
+        confidence1 = fix_generation_module._calculate_confidence_score(error_analysis, code_changes)
+        confidence2 = fix_generation_module._calculate_confidence_score(error_analysis, code_changes)
 
         # Should be identical
-        assert (
-            confidence1 == confidence2
-        ), "Confidence calculation must be deterministic"
+        assert confidence1 == confidence2, "Confidence calculation must be deterministic"
 
     # Property: Syntax validation consistency
     @given(
@@ -292,51 +260,35 @@ class TestFixGenerationModuleProperties:
         valid_code=st.just("def test():\n    return True"),
     )
     @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-    def test_property_syntax_validation_consistency(
-        self, file_path, valid_code
-    ):
+    def test_property_syntax_validation_consistency(self, file_path, valid_code):
         """
         Property: Syntax Validation Consistency
         For the same file and code content, syntax validation should always
         return the same result.
         """
         fix_generation_module = FixGenerationModule()
-        
+
         result1 = fix_generation_module.validate_syntax(file_path, valid_code)
         result2 = fix_generation_module.validate_syntax(file_path, valid_code)
 
-        assert (
-            result1 == result2
-        ), "Syntax validation must be deterministic"
+        assert result1 == result2, "Syntax validation must be deterministic"
 
     # Property: Code change extraction consistency
-    @given(
-        suggested_fixes=st.lists(
-            st.text(min_size=1, max_size=100), min_size=0, max_size=5
-        )
-    )
+    @given(suggested_fixes=st.lists(st.text(min_size=1, max_size=100), min_size=0, max_size=5))
     @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-    def test_property_code_change_extraction_consistency(
-        self, suggested_fixes
-    ):
+    def test_property_code_change_extraction_consistency(self, suggested_fixes):
         """
         Property: Code Change Extraction Consistency
         For the same suggested fixes, code change extraction should always
         return the same result.
         """
         fix_generation_module = FixGenerationModule()
-        
+
         changes1 = fix_generation_module.extract_code_changes(suggested_fixes)
         changes2 = fix_generation_module.extract_code_changes(suggested_fixes)
 
-        assert len(changes1) == len(
-            changes2
-        ), "Code change extraction must be deterministic"
+        assert len(changes1) == len(changes2), "Code change extraction must be deterministic"
 
         for c1, c2 in zip(changes1, changes2):
-            assert (
-                c1.file_path == c2.file_path
-            ), "Extracted file paths must be identical"
-            assert (
-                c1.new_content == c2.new_content
-            ), "Extracted content must be identical"
+            assert c1.file_path == c2.file_path, "Extracted file paths must be identical"
+            assert c1.new_content == c2.new_content, "Extracted content must be identical"

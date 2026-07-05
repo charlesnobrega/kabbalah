@@ -5,11 +5,11 @@ import logging
 import os
 import platform
 import threading
-from dataclasses import dataclass, field, asdict
+from abc import ABC, abstractmethod
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from abc import ABC, abstractmethod
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Knowledge:
     """Knowledge item to store in semantic memory."""
+
     knowledge_id: str
     content: str
     category: str  # shared, domain-specific, role-specific
@@ -29,6 +30,7 @@ class Knowledge:
 @dataclass
 class MemoryConsistencyState:
     """State tracking for memory consistency."""
+
     last_sync_time: float
     pending_operations: List[Dict[str, Any]] = field(default_factory=list)
     conflicts: List[Dict[str, Any]] = field(default_factory=list)
@@ -73,6 +75,7 @@ class CogneeBackend(MemoryBackend):
             # Try to import and initialize Cognee
             # This is a placeholder - actual Cognee integration would go here
             import cognee
+
             self.cognee_client = cognee
             self.available = True
             logger.info("Cognee backend initialized successfully")
@@ -135,9 +138,7 @@ class JSONLBackend(MemoryBackend):
     def __init__(self, storage_path: Optional[str] = None):
         """Initialize JSONL backend."""
         if storage_path is None:
-            storage_path = os.path.join(
-                os.path.expanduser("~"), ".kabbalah", "memory"
-            )
+            storage_path = os.path.join(os.path.expanduser("~"), ".kabbalah", "memory")
         self.storage_path = Path(storage_path)
         self.storage_path.mkdir(parents=True, exist_ok=True)
         self.knowledge_file = self.storage_path / "knowledge.jsonl"
@@ -151,11 +152,7 @@ class JSONLBackend(MemoryBackend):
         try:
             with self.lock:
                 if knowledge.knowledge_id in self._known_ids:
-                    existing = [
-                        k
-                        for k in self._read_all_knowledge()
-                        if k.knowledge_id != knowledge.knowledge_id
-                    ]
+                    existing = [k for k in self._read_all_knowledge() if k.knowledge_id != knowledge.knowledge_id]
                     existing.append(knowledge)
                     self._write_all_knowledge(existing)
                 else:
@@ -181,8 +178,7 @@ class JSONLBackend(MemoryBackend):
                 results = [
                     k
                     for k in all_knowledge
-                    if query.lower() in k.content.lower()
-                    or query.lower() in k.category.lower()
+                    if query.lower() in k.content.lower() or query.lower() in k.category.lower()
                 ]
 
                 return results[:limit]
@@ -257,9 +253,7 @@ class MemorySubsystem:
         """
         self.cognee_backend = CogneeBackend()
         self.jsonl_backend = JSONLBackend(jsonl_storage_path)
-        self.consistency_state = MemoryConsistencyState(
-            last_sync_time=datetime.now().timestamp()
-        )
+        self.consistency_state = MemoryConsistencyState(last_sync_time=datetime.now().timestamp())
         self.lock = threading.RLock()
         self._select_primary_backend()
         logger.info(f"MemorySubsystem initialized with primary backend: {self.primary_backend.__class__.__name__}")
@@ -306,9 +300,7 @@ class MemorySubsystem:
                     return True
 
                 # Fallback to secondary backend
-                logger.warning(
-                    f"Primary backend failed, attempting fallback for knowledge {knowledge.knowledge_id}"
-                )
+                logger.warning(f"Primary backend failed, attempting fallback for knowledge {knowledge.knowledge_id}")
                 if self.fallback_backend.store(knowledge):
                     logger.info(
                         f"Stored knowledge {knowledge.knowledge_id} via {self.fallback_backend.__class__.__name__} "
@@ -316,9 +308,7 @@ class MemorySubsystem:
                     )
                     return True
 
-                logger.error(
-                    f"Failed to store knowledge {knowledge.knowledge_id} in both backends"
-                )
+                logger.error(f"Failed to store knowledge {knowledge.knowledge_id} in both backends")
                 return False
 
         except Exception as e:
@@ -342,21 +332,15 @@ class MemorySubsystem:
                 results = self.primary_backend.query(query, limit)
 
                 if results:
-                    logger.debug(
-                        f"Found {len(results)} results from {self.primary_backend.__class__.__name__}"
-                    )
+                    logger.debug(f"Found {len(results)} results from {self.primary_backend.__class__.__name__}")
                     return results
 
                 # Fallback to secondary backend
-                logger.debug(
-                    f"No results from primary backend, trying fallback"
-                )
+                logger.debug("No results from primary backend, trying fallback")
                 results = self.fallback_backend.query(query, limit)
 
                 if results:
-                    logger.debug(
-                        f"Found {len(results)} results from {self.fallback_backend.__class__.__name__}"
-                    )
+                    logger.debug(f"Found {len(results)} results from {self.fallback_backend.__class__.__name__}")
 
                 return results
 
@@ -406,10 +390,8 @@ class MemorySubsystem:
 
                 # Both backends must be consistent if both are available
                 # If one is unavailable, the available one is sufficient
-                self.consistency_state.is_consistent = (
-                    primary_consistent and fallback_consistent
-                )
-                
+                self.consistency_state.is_consistent = primary_consistent and fallback_consistent
+
                 self.consistency_state.last_sync_time = datetime.now().timestamp()
 
                 if self.consistency_state.is_consistent:
@@ -448,9 +430,7 @@ class MemorySubsystem:
                     logger.info("Cleared JSONL backend")
 
                 # Reset consistency state
-                self.consistency_state = MemoryConsistencyState(
-                    last_sync_time=datetime.now().timestamp()
-                )
+                self.consistency_state = MemoryConsistencyState(last_sync_time=datetime.now().timestamp())
 
                 return True
         except Exception as e:

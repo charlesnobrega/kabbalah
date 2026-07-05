@@ -5,7 +5,6 @@ from kabbalah.firewall_mcp import AcaoMCP, FirewallMCP, MCPRequest, permitir_tud
 from kabbalah.hitl import HITL
 from kabbalah.qlipot import Qlipot
 
-
 CONTRACT_EXEMPT_ACTIONS = {
     "propose_contract",
     "sign_contract",
@@ -28,7 +27,11 @@ def make_firewall():
             return True, None
         if contratos.verificar(request.agente_id, request.ferramenta):
             return True, None
-        return False, "Nenhum contrato ativo autoriza esta ação para este agente. Use propose_contract/sign_contract primeiro."
+        return (
+            False,
+            "Nenhum contrato ativo autoriza esta ação para este agente. "
+            "Use propose_contract/sign_contract primeiro.",
+        )
 
     firewall = FirewallMCP(
         rbac_checker=permitir_tudo,

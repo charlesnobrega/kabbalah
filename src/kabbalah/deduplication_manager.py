@@ -18,9 +18,9 @@ Requirements: 1.6, 11.6
 """
 
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass, field
 
 from kabbalah.self_healing_models import ErrorReport, ErrorSeverity
 
@@ -182,16 +182,11 @@ class DeduplicationManager:
         Requirements: 1.6
         """
         self.deduplication_window_seconds = deduplication_window_seconds
-        self.deduplication_rule = (
-            deduplication_rule or DeduplicationRule()
-        )
+        self.deduplication_rule = deduplication_rule or DeduplicationRule()
         self.error_groups: Dict[str, DuplicateGroup] = {}
         self.error_history: List[ErrorReport] = []
 
-        logger.info(
-            f"DeduplicationManager initialized with window: "
-            f"{deduplication_window_seconds}s"
-        )
+        logger.info(f"DeduplicationManager initialized with window: " f"{deduplication_window_seconds}s")
 
     def set_deduplication_rule(
         self,
@@ -266,10 +261,7 @@ class DeduplicationManager:
                     error1.message,
                     error2.message,
                 )
-                if (
-                    similarity
-                    < self.deduplication_rule.message_similarity_threshold
-                ):
+                if similarity < self.deduplication_rule.message_similarity_threshold:
                     return False
             else:
                 if error1.message != error2.message:
@@ -400,9 +392,7 @@ class DeduplicationManager:
         Requirements: 1.6
         """
         signature = self._generate_error_signature(error)
-        cutoff_time = datetime.now() - timedelta(
-            seconds=self.deduplication_window_seconds
-        )
+        cutoff_time = datetime.now() - timedelta(seconds=self.deduplication_window_seconds)
 
         # Check if error group exists and is within window
         if signature in self.error_groups:
@@ -443,9 +433,7 @@ class DeduplicationManager:
         self.error_groups[signature] = group
         self.error_history.append(error)
 
-        logger.debug(
-            f"New error group created: {error.error_type} in {error.component}"
-        )
+        logger.debug(f"New error group created: {error.error_type} in {error.component}")
 
         return (False, error)
 
@@ -522,14 +510,8 @@ class DeduplicationManager:
         """
         stats = DeduplicationStats(
             total_errors_detected=len(self.error_groups),
-            total_duplicates_found=sum(
-                group.duplicate_count
-                for group in self.error_groups.values()
-            ),
-            total_occurrences=sum(
-                group.occurrence_count
-                for group in self.error_groups.values()
-            ),
+            total_duplicates_found=sum(group.duplicate_count for group in self.error_groups.values()),
+            total_occurrences=sum(group.occurrence_count for group in self.error_groups.values()),
             deduplication_window_seconds=self.deduplication_window_seconds,
             timestamp=datetime.now(),
         )
@@ -576,11 +558,7 @@ class DeduplicationManager:
 
         Requirements: 1.6
         """
-        return [
-            group
-            for group in self.error_groups.values()
-            if group.original_error.component == component
-        ]
+        return [group for group in self.error_groups.values() if group.original_error.component == component]
 
     def get_duplicate_groups_by_error_type(
         self,
@@ -597,11 +575,7 @@ class DeduplicationManager:
 
         Requirements: 1.6
         """
-        return [
-            group
-            for group in self.error_groups.values()
-            if group.original_error.error_type == error_type
-        ]
+        return [group for group in self.error_groups.values() if group.original_error.error_type == error_type]
 
     def get_duplicate_groups_by_severity(
         self,
@@ -618,11 +592,7 @@ class DeduplicationManager:
 
         Requirements: 1.6
         """
-        return [
-            group
-            for group in self.error_groups.values()
-            if group.original_error.severity == severity
-        ]
+        return [group for group in self.error_groups.values() if group.original_error.severity == severity]
 
     def clear_expired_groups(self) -> int:
         """
@@ -633,23 +603,15 @@ class DeduplicationManager:
 
         Requirements: 1.6
         """
-        cutoff_time = datetime.now() - timedelta(
-            seconds=self.deduplication_window_seconds
-        )
+        cutoff_time = datetime.now() - timedelta(seconds=self.deduplication_window_seconds)
 
-        expired_signatures = [
-            sig
-            for sig, group in self.error_groups.items()
-            if group.last_occurrence < cutoff_time
-        ]
+        expired_signatures = [sig for sig, group in self.error_groups.items() if group.last_occurrence < cutoff_time]
 
         for sig in expired_signatures:
             del self.error_groups[sig]
 
         if expired_signatures:
-            logger.debug(
-                f"Cleared {len(expired_signatures)} expired error groups"
-            )
+            logger.debug(f"Cleared {len(expired_signatures)} expired error groups")
 
         return len(expired_signatures)
 

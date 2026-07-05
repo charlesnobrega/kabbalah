@@ -11,20 +11,21 @@ Tests error analysis functionality including:
 Requirements: 2.1, 2.2, 2.3, 2.5, 2.6, 2.7
 """
 
-import pytest
 from datetime import datetime
 from unittest.mock import Mock
 
+import pytest
+
 from kabbalah.error_analysis_module import (
-    ErrorAnalysisModule,
     ErrorAnalysis,
+    ErrorAnalysisModule,
     TimeoutException,
 )
 from kabbalah.llm_local_provider import LocalLLMConfig, LocalLLMProvider
 from kabbalah.self_healing_models import (
+    CodeChange,
     ErrorReport,
     ErrorSeverity,
-    CodeChange,
     LearningEntry,
 )
 
@@ -51,7 +52,11 @@ class TestErrorAnalysisModule:
             timestamp=datetime.now(),
             component="Root_Orchestrator",
             context={"trace_id": "trace-123", "request_id": "req-456"},
-            stack_trace="Traceback (most recent call last):\n  File 'test.py', line 10\n    raise ValueError('Invalid input')",
+            stack_trace=(
+                "Traceback (most recent call last):\n"
+                "  File 'test.py', line 10\n"
+                "    raise ValueError('Invalid input')"
+            ),
             file_path="src/test.py",
             line_number=10,
         )
@@ -94,9 +99,7 @@ class TestErrorAnalysisModule:
     def test_initialization_with_learning_database(self, mock_llm_provider, learning_entry):
         """Test initialization with learning database."""
         learning_db = [learning_entry]
-        module = ErrorAnalysisModule(
-            llm_provider=mock_llm_provider, learning_database=learning_db
-        )
+        module = ErrorAnalysisModule(llm_provider=mock_llm_provider, learning_database=learning_db)
 
         assert module.learning_database == learning_db
 
@@ -112,9 +115,7 @@ class TestErrorAnalysisModule:
         assert "ANALYSIS REQUIRED" in prompt
         assert "RESPONSE FORMAT" in prompt
 
-    def test_generate_analysis_prompt_with_learning_context(
-        self, mock_llm_provider, error_report, learning_entry
-    ):
+    def test_generate_analysis_prompt_with_learning_context(self, mock_llm_provider, error_report, learning_entry):
         """Test analysis prompt generation with learning context."""
         module = ErrorAnalysisModule(llm_provider=mock_llm_provider)
         prompt = module.generate_analysis_prompt(error_report, [learning_entry])
@@ -210,13 +211,9 @@ This should fix the issue."""
         with pytest.raises(Exception, match="Invalid JSON"):
             module.parse_llm_response(response)
 
-    def test_analyze_error_with_llm_success(
-        self, mock_llm_provider, error_report, learning_entry
-    ):
+    def test_analyze_error_with_llm_success(self, mock_llm_provider, error_report, learning_entry):
         """Test successful error analysis with LLM."""
-        module = ErrorAnalysisModule(
-            llm_provider=mock_llm_provider, learning_database=[learning_entry]
-        )
+        module = ErrorAnalysisModule(llm_provider=mock_llm_provider, learning_database=[learning_entry])
 
         llm_response = """{
             "root_cause": "Missing input validation",
@@ -239,14 +236,10 @@ This should fix the issue."""
         assert not analysis.used_learning_database
         assert analysis.analysis_time_ms >= 0  # Can be 0 for very fast execution
 
-    def test_analyze_error_llm_unavailable_fallback(
-        self, mock_llm_provider, error_report, learning_entry
-    ):
+    def test_analyze_error_llm_unavailable_fallback(self, mock_llm_provider, error_report, learning_entry):
         """Test fallback to learning database when LLM unavailable."""
         mock_llm_provider.available = False
-        module = ErrorAnalysisModule(
-            llm_provider=mock_llm_provider, learning_database=[learning_entry]
-        )
+        module = ErrorAnalysisModule(llm_provider=mock_llm_provider, learning_database=[learning_entry])
 
         analysis = module.analyze_error(error_report, learning_context=[learning_entry])
 
@@ -255,13 +248,9 @@ This should fix the issue."""
         assert analysis.used_learning_database
         assert analysis.confidence_score > 0
 
-    def test_analyze_error_llm_timeout_fallback(
-        self, mock_llm_provider, error_report, learning_entry
-    ):
+    def test_analyze_error_llm_timeout_fallback(self, mock_llm_provider, error_report, learning_entry):
         """Test fallback to learning database on LLM timeout."""
-        module = ErrorAnalysisModule(
-            llm_provider=mock_llm_provider, learning_database=[learning_entry]
-        )
+        module = ErrorAnalysisModule(llm_provider=mock_llm_provider, learning_database=[learning_entry])
 
         mock_llm_provider.analyze.side_effect = TimeoutException("Timeout")
 
@@ -270,13 +259,9 @@ This should fix the issue."""
         assert analysis.error_id == "err-001"
         assert analysis.used_learning_database
 
-    def test_analyze_error_llm_exception_fallback(
-        self, mock_llm_provider, error_report, learning_entry
-    ):
+    def test_analyze_error_llm_exception_fallback(self, mock_llm_provider, error_report, learning_entry):
         """Test fallback to learning database on LLM exception."""
-        module = ErrorAnalysisModule(
-            llm_provider=mock_llm_provider, learning_database=[learning_entry]
-        )
+        module = ErrorAnalysisModule(llm_provider=mock_llm_provider, learning_database=[learning_entry])
 
         mock_llm_provider.analyze.side_effect = Exception("LLM error")
 
@@ -285,9 +270,7 @@ This should fix the issue."""
         assert analysis.error_id == "err-001"
         assert analysis.used_learning_database
 
-    def test_analyze_error_malformed_llm_response(
-        self, mock_llm_provider, error_report
-    ):
+    def test_analyze_error_malformed_llm_response(self, mock_llm_provider, error_report):
         """Test handling of malformed LLM response."""
         module = ErrorAnalysisModule(llm_provider=mock_llm_provider)
 
@@ -312,9 +295,7 @@ This should fix the issue."""
         assert analysis.used_learning_database
         assert analysis.confidence_score == 0.1  # Low confidence for no patterns
 
-    def test_analyze_error_with_learning_context(
-        self, mock_llm_provider, error_report, learning_entry
-    ):
+    def test_analyze_error_with_learning_context(self, mock_llm_provider, error_report, learning_entry):
         """Test error analysis with learning context."""
         module = ErrorAnalysisModule(llm_provider=mock_llm_provider)
 
@@ -328,16 +309,12 @@ This should fix the issue."""
 
         mock_llm_provider.analyze.return_value = llm_response
 
-        analysis = module.analyze_error(
-            error_report, learning_context=[learning_entry]
-        )
+        analysis = module.analyze_error(error_report, learning_context=[learning_entry])
 
         assert analysis.confidence_score == 0.9
         assert "similar pattern" in analysis.reasoning.lower()
 
-    def test_analyze_error_stores_in_history(
-        self, mock_llm_provider, error_report
-    ):
+    def test_analyze_error_stores_in_history(self, mock_llm_provider, error_report):
         """Test that analysis is stored in history."""
         module = ErrorAnalysisModule(llm_provider=mock_llm_provider)
 
@@ -356,9 +333,7 @@ This should fix the issue."""
         assert error_report.error_id in module.analysis_history
         assert module.analysis_history[error_report.error_id] == analysis
 
-    def test_analyze_with_learning_database_no_context(
-        self, mock_llm_provider, error_report
-    ):
+    def test_analyze_with_learning_database_no_context(self, mock_llm_provider, error_report):
         """Test learning database analysis with no context."""
         mock_llm_provider.available = False
         module = ErrorAnalysisModule(llm_provider=mock_llm_provider)
@@ -369,9 +344,7 @@ This should fix the issue."""
         assert analysis.confidence_score == 0.1
         assert "No similar patterns" in analysis.root_cause
 
-    def test_analyze_with_learning_database_with_context(
-        self, mock_llm_provider, error_report, learning_entry
-    ):
+    def test_analyze_with_learning_database_with_context(self, mock_llm_provider, error_report, learning_entry):
         """Test learning database analysis with context."""
         mock_llm_provider.available = False
         module = ErrorAnalysisModule(llm_provider=mock_llm_provider)
@@ -556,9 +529,7 @@ class TestErrorAnalysisIntegration:
         )
 
         # Create module with learning database
-        module = ErrorAnalysisModule(
-            llm_provider=mock_provider, learning_database=[learning_entry]
-        )
+        module = ErrorAnalysisModule(llm_provider=mock_provider, learning_database=[learning_entry])
 
         # Analyze error
         analysis = module.analyze_error(error_report, learning_context=[learning_entry])

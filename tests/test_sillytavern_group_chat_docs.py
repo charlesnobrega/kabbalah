@@ -3,7 +3,6 @@
 import json
 from pathlib import Path
 
-
 EXAMPLE_DIR = Path("docs/examples/sillytavern/kabbalah-group-chat")
 
 

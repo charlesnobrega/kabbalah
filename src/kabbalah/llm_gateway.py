@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import os
 import logging
+import os
 from dataclasses import dataclass, field
 from typing import Any, Iterable, List, Optional, Protocol, Set
 
@@ -221,11 +221,7 @@ class CapabilityRegistry:
                 api_key_env="MISTRAL_API_KEY",
             ),
         ]
-        return cls(
-            profile
-            for profile in profiles
-            if profile.api_key_env is None or os.getenv(profile.api_key_env)
-        )
+        return cls(profile for profile in profiles if profile.api_key_env is None or os.getenv(profile.api_key_env))
 
     def available_for(
         self,
@@ -342,11 +338,7 @@ class LLMGateway:
             capability=capability,
             budget_hint=budget_hint,
         )
-        candidates = [
-            profile
-            for profile in candidates
-            if profile.name not in self._unavailable_profiles
-        ]
+        candidates = [profile for profile in candidates if profile.name not in self._unavailable_profiles]
         if not candidates:
             budget_msg = f" within budget {budget_hint}" if budget_hint is not None else ""
             raise ValueError(
@@ -418,9 +410,7 @@ class LLMGateway:
         candidates = [
             provider
             for provider in self.providers
-            if provider.available
-            and required.issubset(provider.capabilities)
-            and risk_score <= provider.max_risk
+            if provider.available and required.issubset(provider.capabilities) and risk_score <= provider.max_risk
         ]
         if not candidates:
             raise ValueError("No suitable provider available")

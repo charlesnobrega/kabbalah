@@ -97,6 +97,8 @@ class ContratoStore:
             )
 
     def update_status(self, contrato_id: str, status: str, motivo: Optional[str] = None) -> None:
+        """Update the status and optional reason for an existing contract."""
+
         with self._lock, self._connect() as conn:
             if motivo is None:
                 conn.execute("UPDATE contratos SET status = ? WHERE id = ?", (status, contrato_id))
@@ -131,6 +133,8 @@ class ContratoStore:
             return cursor.rowcount == 1
 
     def get(self, contrato_id: str) -> Optional[ContratoAgente]:
+        """Load one contract by ID, returning None when it is absent."""
+
         with self._lock, self._connect() as conn:
             row = conn.execute(
                 """
@@ -143,6 +147,8 @@ class ContratoStore:
         return self._row_to_contrato(row) if row else None
 
     def load_all(self) -> List[ContratoAgente]:
+        """Load all persisted contracts ordered by creation time."""
+
         with self._lock, self._connect() as conn:
             rows = conn.execute(
                 """
@@ -154,6 +160,8 @@ class ContratoStore:
         return [self._row_to_contrato(row) for row in rows]
 
     def find_active(self, provedor: str, acao: str) -> Optional[ContratoAgente]:
+        """Find the oldest active contract authorizing a provider/action pair."""
+
         with self._lock, self._connect() as conn:
             row = conn.execute(
                 """
@@ -190,10 +198,9 @@ class ContratoStore:
             )
 
     def list_events(self, tipo: Optional[str] = None) -> List[Dict[str, Any]]:
-        query = (
-            "SELECT seq, contrato_id, agente_id, acao, tipo, motivo, criado_em "
-            "FROM contrato_eventos"
-        )
+        """List append-only audit events, optionally filtered by event type."""
+
+        query = "SELECT seq, contrato_id, agente_id, acao, tipo, motivo, criado_em " "FROM contrato_eventos"
         params: tuple = ()
         if tipo is not None:
             query += " WHERE tipo = ?"

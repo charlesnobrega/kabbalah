@@ -4,16 +4,17 @@ This module enforces operational modes (BOOTSTRAP, DAY1, DAY2) at runtime,
 ensuring that bootstrap operations cannot occur in production (DAY2) mode.
 """
 
-from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
-from enum import Enum
 import os
 import time
 import warnings
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import List, Optional, Tuple
 
 
 class OperationalMode(Enum):
     """Operational modes for the system."""
+
     BOOTSTRAP = "BOOTSTRAP"
     DAY1 = "DAY1"
     WAITING_APPROVAL = "WAITING_APPROVAL"
@@ -22,6 +23,7 @@ class OperationalMode(Enum):
 
 class OperationType(Enum):
     """Types of operations that can be performed."""
+
     BOOTSTRAP_OPERATION = "bootstrap_operation"
     AGENT_INITIALIZATION = "agent_initialization"
     MEMORY_RESET = "memory_reset"
@@ -35,6 +37,7 @@ class OperationType(Enum):
 @dataclass
 class Operation:
     """Represents an operation to be checked."""
+
     operation_type: OperationType
     operation_name: str
     metadata: dict = field(default_factory=dict)
@@ -43,6 +46,7 @@ class Operation:
 @dataclass
 class ModeTransitionRecord:
     """Record of a mode transition."""
+
     from_mode: OperationalMode
     to_mode: OperationalMode
     timestamp: float
@@ -54,6 +58,7 @@ class ModeTransitionRecord:
 @dataclass
 class OperationViolation:
     """Record of an operation violation."""
+
     operation: Operation
     current_mode: OperationalMode
     timestamp: float
@@ -63,7 +68,7 @@ class OperationViolation:
 
 class FSMEnforcementModule:
     """Enforces operational modes at runtime.
-    
+
     This module ensures that:
     - Bootstrap operations are blocked in DAY2 mode
     - Mode transitions are validated and logged
@@ -122,7 +127,7 @@ class FSMEnforcementModule:
 
     def _detect_initial_mode(self) -> OperationalMode:
         """Detect the initial operational mode from environment.
-        
+
         Returns:
             OperationalMode: The detected operational mode
         """
@@ -136,7 +141,7 @@ class FSMEnforcementModule:
     @property
     def current_mode(self) -> OperationalMode:
         """Get the current operational mode.
-        
+
         Returns:
             OperationalMode: The current mode
         """
@@ -145,7 +150,7 @@ class FSMEnforcementModule:
     @property
     def transition_log(self) -> List[ModeTransitionRecord]:
         """Get the immutable transition log.
-        
+
         Returns:
             List[ModeTransitionRecord]: Copy of the transition log
         """
@@ -154,17 +159,13 @@ class FSMEnforcementModule:
     @property
     def violation_log(self) -> List[OperationViolation]:
         """Get the immutable violation log.
-        
+
         Returns:
             List[OperationViolation]: Copy of the violation log
         """
         return list(self._violation_log)
 
-    def check_operation_allowed(
-        self,
-        operation: Operation,
-        current_mode: Optional[OperationalMode] = None
-    ) -> bool:
+    def check_operation_allowed(self, operation: Operation, current_mode: Optional[OperationalMode] = None) -> bool:
         """Check if an operation is allowed in the current mode.
 
         Wave-6 hardening: every BLOCK through this main enforcement path is
@@ -182,9 +183,7 @@ class FSMEnforcementModule:
         return is_allowed
 
     def check_operation_allowed_with_logging(
-        self,
-        operation: Operation,
-        current_mode: Optional[OperationalMode] = None
+        self, operation: Operation, current_mode: Optional[OperationalMode] = None
     ) -> Tuple[bool, Optional[str]]:
         """Deprecated alias: `check_operation_allowed` already logs violations.
 
@@ -192,26 +191,19 @@ class FSMEnforcementModule:
             Tuple[bool, Optional[str]]: (is_allowed, error_message)
         """
         warnings.warn(
-            "check_operation_allowed_with_logging is deprecated; "
-            "check_operation_allowed now always logs violations",
+            "check_operation_allowed_with_logging is deprecated; " "check_operation_allowed now always logs violations",
             DeprecationWarning,
             stacklevel=2,
         )
         return self._check_and_log_operation(operation, current_mode)
 
-    def _is_operation_allowed(
-        self,
-        operation: Operation,
-        mode: OperationalMode
-    ) -> bool:
+    def _is_operation_allowed(self, operation: Operation, mode: OperationalMode) -> bool:
         """Pure permission check, no logging."""
         allowed_operations = self.MODE_PERMISSIONS.get(mode, set())
         return operation.operation_type in allowed_operations
 
     def _check_and_log_operation(
-        self,
-        operation: Operation,
-        current_mode: Optional[OperationalMode] = None
+        self, operation: Operation, current_mode: Optional[OperationalMode] = None
     ) -> Tuple[bool, Optional[str]]:
         mode = current_mode or self._current_mode
         is_allowed = self._is_operation_allowed(operation, mode)
@@ -232,41 +224,35 @@ class FSMEnforcementModule:
                 current_mode=mode,
                 timestamp=time.time(),
                 violation_type=violation_type,
-                message=message
+                message=message,
             )
             self._violation_log.append(violation)
 
         return is_allowed, None if is_allowed else f"Operation not allowed in {mode.value} mode"
 
     def transition_mode(
-        self,
-        from_mode: OperationalMode,
-        to_mode: OperationalMode,
-        reason: Optional[str] = None
+        self, from_mode: OperationalMode, to_mode: OperationalMode, reason: Optional[str] = None
     ) -> Tuple[bool, Optional[str]]:
         """Transition between operational modes.
-        
+
         Args:
             from_mode: The current mode
             to_mode: The target mode
             reason: Optional reason for the transition
-            
+
         Returns:
             Tuple[bool, Optional[str]]: (success, error_message)
         """
         # Validate that from_mode matches current mode
         if from_mode != self._current_mode:
-            error_msg = (
-                f"Cannot transition from {from_mode.value}: "
-                f"current mode is {self._current_mode.value}"
-            )
+            error_msg = f"Cannot transition from {from_mode.value}: " f"current mode is {self._current_mode.value}"
             record = ModeTransitionRecord(
                 from_mode=from_mode,
                 to_mode=to_mode,
                 timestamp=time.time(),
                 reason=reason,
                 success=False,
-                error_message=error_msg
+                error_message=error_msg,
             )
             self._transition_log.append(record)
             return False, error_msg
@@ -280,7 +266,7 @@ class FSMEnforcementModule:
                 timestamp=time.time(),
                 reason=reason,
                 success=False,
-                error_message=error_msg
+                error_message=error_msg,
             )
             self._transition_log.append(record)
             return False, error_msg
@@ -288,22 +274,14 @@ class FSMEnforcementModule:
         # Perform transition
         self._current_mode = to_mode
         record = ModeTransitionRecord(
-            from_mode=from_mode,
-            to_mode=to_mode,
-            timestamp=time.time(),
-            reason=reason,
-            success=True
+            from_mode=from_mode, to_mode=to_mode, timestamp=time.time(), reason=reason, success=True
         )
         self._transition_log.append(record)
         return True, None
 
-    def _is_valid_transition(
-        self,
-        from_mode: OperationalMode,
-        to_mode: OperationalMode
-    ) -> bool:
+    def _is_valid_transition(self, from_mode: OperationalMode, to_mode: OperationalMode) -> bool:
         """Validate that a mode transition is allowed.
-        
+
         Valid transitions:
         - BOOTSTRAP -> DAY1
         - BOOTSTRAP -> DAY2
@@ -314,11 +292,11 @@ class FSMEnforcementModule:
         - WAITING_APPROVAL -> DAY2
         - DAY2 -> DAY1 (not allowed in production)
         - DAY2 -> BOOTSTRAP (not allowed in production)
-        
+
         Args:
             from_mode: The current mode
             to_mode: The target mode
-            
+
         Returns:
             bool: True if the transition is valid
         """
@@ -341,7 +319,7 @@ class FSMEnforcementModule:
 
     def get_transition_history(self) -> List[ModeTransitionRecord]:
         """Get the complete transition history.
-        
+
         Returns:
             List[ModeTransitionRecord]: Immutable copy of transition history
         """
@@ -349,35 +327,29 @@ class FSMEnforcementModule:
 
     def get_violation_history(self) -> List[OperationViolation]:
         """Get the complete violation history.
-        
+
         Returns:
             List[OperationViolation]: Immutable copy of violation history
         """
         return list(self._violation_log)
 
-    def get_violations_in_mode(
-        self,
-        mode: OperationalMode
-    ) -> List[OperationViolation]:
+    def get_violations_in_mode(self, mode: OperationalMode) -> List[OperationViolation]:
         """Get all violations that occurred in a specific mode.
-        
+
         Args:
             mode: The operational mode to filter by
-            
+
         Returns:
             List[OperationViolation]: Violations in the specified mode
         """
         return [v for v in self._violation_log if v.current_mode == mode]
 
-    def get_violations_by_type(
-        self,
-        violation_type: str
-    ) -> List[OperationViolation]:
+    def get_violations_by_type(self, violation_type: str) -> List[OperationViolation]:
         """Get all violations of a specific type.
-        
+
         Args:
             violation_type: The type of violation to filter by
-            
+
         Returns:
             List[OperationViolation]: Violations of the specified type
         """

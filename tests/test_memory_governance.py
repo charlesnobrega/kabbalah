@@ -8,12 +8,12 @@ from pathlib import Path
 import pytest
 
 from kabbalah.memory_governance import (
-    MemoryGovernanceModule,
-    MemoryCategory,
-    MemoryOperation,
+    CANONICAL_ROLES,
     AccessControlPolicy,
     MemoryAccessLog,
-    CANONICAL_ROLES,
+    MemoryCategory,
+    MemoryGovernanceModule,
+    MemoryOperation,
 )
 
 
@@ -66,12 +66,8 @@ class TestCheckMemoryAccess:
         module = MemoryGovernanceModule()
 
         for role in CANONICAL_ROLES:
-            assert module.check_memory_access(
-                role, MemoryCategory.SHARED.value, MemoryOperation.READ.value
-            )
-            assert module.check_memory_access(
-                role, MemoryCategory.SHARED.value, MemoryOperation.WRITE.value
-            )
+            assert module.check_memory_access(role, MemoryCategory.SHARED.value, MemoryOperation.READ.value)
+            assert module.check_memory_access(role, MemoryCategory.SHARED.value, MemoryOperation.WRITE.value)
 
     def test_domain_specific_memory_accessible_to_domain_roles(self):
         """Test that domain-specific memory is accessible to domain roles."""
@@ -85,12 +81,8 @@ class TestCheckMemoryAccess:
         }
 
         for role in domain_roles:
-            assert module.check_memory_access(
-                role, MemoryCategory.DOMAIN_SPECIFIC.value, MemoryOperation.READ.value
-            )
-            assert module.check_memory_access(
-                role, MemoryCategory.DOMAIN_SPECIFIC.value, MemoryOperation.WRITE.value
-            )
+            assert module.check_memory_access(role, MemoryCategory.DOMAIN_SPECIFIC.value, MemoryOperation.READ.value)
+            assert module.check_memory_access(role, MemoryCategory.DOMAIN_SPECIFIC.value, MemoryOperation.WRITE.value)
 
     def test_domain_specific_memory_denied_to_non_domain_roles(self):
         """Test that domain-specific memory is denied to non-domain roles."""
@@ -111,39 +103,29 @@ class TestCheckMemoryAccess:
         module = MemoryGovernanceModule()
 
         for role in CANONICAL_ROLES:
-            assert module.check_memory_access(
-                role, MemoryCategory.ROLE_SPECIFIC.value, MemoryOperation.READ.value
-            )
-            assert module.check_memory_access(
-                role, MemoryCategory.ROLE_SPECIFIC.value, MemoryOperation.WRITE.value
-            )
+            assert module.check_memory_access(role, MemoryCategory.ROLE_SPECIFIC.value, MemoryOperation.READ.value)
+            assert module.check_memory_access(role, MemoryCategory.ROLE_SPECIFIC.value, MemoryOperation.WRITE.value)
 
     def test_invalid_agent_role_raises_error(self):
         """Test that invalid agent role raises ValueError."""
         module = MemoryGovernanceModule()
 
         with pytest.raises(ValueError, match="Invalid agent role"):
-            module.check_memory_access(
-                "Invalid_Role", MemoryCategory.SHARED.value, MemoryOperation.READ.value
-            )
+            module.check_memory_access("Invalid_Role", MemoryCategory.SHARED.value, MemoryOperation.READ.value)
 
     def test_invalid_memory_category_raises_error(self):
         """Test that invalid memory category raises ValueError."""
         module = MemoryGovernanceModule()
 
         with pytest.raises(ValueError, match="Invalid memory category"):
-            module.check_memory_access(
-                "Leaf_Builder", "invalid_category", MemoryOperation.READ.value
-            )
+            module.check_memory_access("Leaf_Builder", "invalid_category", MemoryOperation.READ.value)
 
     def test_invalid_operation_raises_error(self):
         """Test that invalid operation raises ValueError."""
         module = MemoryGovernanceModule()
 
         with pytest.raises(ValueError, match="Invalid operation"):
-            module.check_memory_access(
-                "Leaf_Builder", MemoryCategory.SHARED.value, "invalid_operation"
-            )
+            module.check_memory_access("Leaf_Builder", MemoryCategory.SHARED.value, "invalid_operation")
 
 
 class TestLogMemoryAccess:
@@ -501,7 +483,7 @@ class TestThreadSafety:
         results = []
 
         def check_access(thread_id):
-            for i in range(10):
+            for _i in range(10):
                 result = module.check_memory_access(
                     "Leaf_Builder",
                     MemoryCategory.SHARED.value,

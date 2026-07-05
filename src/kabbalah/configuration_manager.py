@@ -4,14 +4,14 @@ Configuration Manager
 Manages system configuration from multiple sources with precedence.
 """
 
-import logging
 import json
+import logging
 import os
+import platform
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-import platform
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,7 @@ _SECRET_KEY_MARKERS = ("api_key", "apikey", "password", "secret", "token", "cred
 
 class ConfigurationSource(Enum):
     """Configuration sources"""
+
     ENVIRONMENT = "environment"
     FILE = "file"
     CLI = "cli"
@@ -28,6 +29,7 @@ class ConfigurationSource(Enum):
 
 class ConfigurationError(Exception):
     """Raised when configuration fails"""
+
     pass
 
 
@@ -47,6 +49,7 @@ def _reject_secret_like_payload(value: Any, *, path: str = "config") -> None:
 @dataclass
 class ProviderConfig:
     """Provider configuration"""
+
     name: str
     api_key: Optional[str] = None
     model: Optional[str] = None
@@ -59,34 +62,35 @@ class ProviderConfig:
 @dataclass
 class Configuration:
     """System configuration"""
+
     mode: str = "DAY1"
     environment: str = "development"
     log_level: str = "INFO"
-    
+
     # Provider configuration
     default_provider: str = "openai"
     providers: Dict[str, ProviderConfig] = field(default_factory=dict)
     provider_fallback_chain: List[str] = field(default_factory=list)
-    
+
     # Per-domain provider configuration
     domain_providers: Dict[str, str] = field(default_factory=dict)
-    
+
     # Memory configuration
     memory_backend: str = "cognee"
     memory_max_size: int = 1000000
-    
+
     # Tool execution configuration
     tool_timeout: int = 300
     tool_max_retries: int = 3
-    
+
     # Observability configuration
     observability_enabled: bool = True
     trace_sampling_rate: float = 1.0
-    
+
     # Resource limits
     max_concurrent_tasks: int = 10
     max_memory_mb: int = 4096
-    
+
     # Additional metadata
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -94,7 +98,7 @@ class Configuration:
 class ConfigurationManager:
     """
     Manages system configuration from multiple sources.
-    
+
     Features:
     - Load from environment variables
     - Load from JSON/YAML files
@@ -103,7 +107,7 @@ class ConfigurationManager:
     - Per-domain provider configuration
     - Validation and defaults
     """
-    
+
     # Default configuration
     DEFAULTS = {
         "mode": "DAY1",
@@ -137,7 +141,7 @@ class ConfigurationManager:
     }
 
     _AUTO_KEYRING = object()
-    
+
     def __init__(
         self,
         *,
@@ -166,7 +170,7 @@ class ConfigurationManager:
         except Exception:
             return None
         return keyring
-    
+
     def _detect_environment(self) -> None:
         """Detect runtime environment"""
         system = platform.system()
@@ -176,43 +180,43 @@ class ConfigurationManager:
             self.config.metadata["platform"] = "macos"
         else:
             self.config.metadata["platform"] = "linux"
-    
+
     def load_defaults(self) -> None:
         """Load default configuration"""
         for key, value in self.DEFAULTS.items():
             if hasattr(self.config, key):
                 setattr(self.config, key, value)
                 self.sources[key] = ConfigurationSource.DEFAULT
-        
+
         logger.debug("Default configuration loaded")
-    
+
     def load_from_env(self) -> None:
         """Load configuration from environment variables"""
         # Mode
         if "KABBALAH_MODE" in os.environ:
             self.config.mode = os.environ["KABBALAH_MODE"]
             self.sources["mode"] = ConfigurationSource.ENVIRONMENT
-        
+
         # Environment
         if "KABBALAH_ENV" in os.environ:
             self.config.environment = os.environ["KABBALAH_ENV"]
             self.sources["environment"] = ConfigurationSource.ENVIRONMENT
-        
+
         # Log level
         if "KABBALAH_LOG_LEVEL" in os.environ:
             self.config.log_level = os.environ["KABBALAH_LOG_LEVEL"]
             self.sources["log_level"] = ConfigurationSource.ENVIRONMENT
-        
+
         # Default provider
         if "KABBALAH_DEFAULT_PROVIDER" in os.environ:
             self.config.default_provider = os.environ["KABBALAH_DEFAULT_PROVIDER"]
             self.sources["default_provider"] = ConfigurationSource.ENVIRONMENT
-        
+
         # Memory backend
         if "KABBALAH_MEMORY_BACKEND" in os.environ:
             self.config.memory_backend = os.environ["KABBALAH_MEMORY_BACKEND"]
             self.sources["memory_backend"] = ConfigurationSource.ENVIRONMENT
-        
+
         # Tool timeout
         if "KABBALAH_TOOL_TIMEOUT" in os.environ:
             try:
@@ -220,7 +224,7 @@ class ConfigurationManager:
                 self.sources["tool_timeout"] = ConfigurationSource.ENVIRONMENT
             except ValueError:
                 logger.warning("Invalid KABBALAH_TOOL_TIMEOUT value")
-        
+
         # Provider API keys
         for provider in ["openai", "anthropic", "google", "groq", "mistral", "deepseek", "together"]:
             env_key = f"KABBALAH_{provider.upper()}_API_KEY"
@@ -228,34 +232,35 @@ class ConfigurationManager:
                 if provider not in self.config.providers:
                     self.config.providers[provider] = ProviderConfig(name=provider)
                 self.config.providers[provider].api_key = os.environ[env_key]
-        
+
         logger.debug("Environment configuration loaded")
-    
+
     def load_from_file(self, filepath: str) -> None:
         """
         Load configuration from JSON/YAML file.
-        
+
         Args:
             filepath: Path to configuration file
         """
         if not os.path.exists(filepath):
             raise ConfigurationError(f"Configuration file not found: {filepath}")
-        
+
         try:
-            with open(filepath, 'r') as f:
-                if filepath.endswith('.json'):
+            with open(filepath, "r") as f:
+                if filepath.endswith(".json"):
                     data = json.load(f)
-                elif filepath.endswith('.yaml') or filepath.endswith('.yml'):
+                elif filepath.endswith(".yaml") or filepath.endswith(".yml"):
                     import yaml
+
                     data = yaml.safe_load(f)
                 else:
                     raise ConfigurationError(f"Unsupported file format: {filepath}")
-            
+
             self._apply_config_dict(data, ConfigurationSource.FILE)
             logger.debug(f"Configuration loaded from {filepath}")
-        
+
         except Exception as e:
-            raise ConfigurationError(f"Failed to load configuration from {filepath}: {str(e)}")
+            raise ConfigurationError(f"Failed to load configuration from {filepath}: {str(e)}") from e
 
     def load_installation_config(self) -> None:
         """Load non-secret installation settings from the user config file."""
@@ -275,11 +280,11 @@ class ConfigurationManager:
         self.installation_config_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.installation_config_path, "w", encoding="utf-8") as handle:
             json.dump(self.installation_settings, handle, ensure_ascii=False, indent=2, sort_keys=True)
-    
+
     def _apply_config_dict(self, data: Dict[str, Any], source: ConfigurationSource) -> None:
         """
         Apply configuration from dictionary.
-        
+
         Args:
             data: Configuration dictionary
             source: Configuration source
@@ -288,10 +293,7 @@ class ConfigurationManager:
             if key == "providers" and isinstance(value, dict):
                 for provider_name, provider_config in value.items():
                     if isinstance(provider_config, dict):
-                        self.config.providers[provider_name] = ProviderConfig(
-                            name=provider_name,
-                            **provider_config
-                        )
+                        self.config.providers[provider_name] = ProviderConfig(name=provider_name, **provider_config)
             elif key == "domain_providers" and isinstance(value, dict):
                 self.config.domain_providers.update(value)
             elif key == "provider_fallback_chain" and isinstance(value, list):
@@ -299,11 +301,11 @@ class ConfigurationManager:
             elif hasattr(self.config, key):
                 setattr(self.config, key, value)
                 self.sources[key] = source
-    
+
     def set_config(self, key: str, value: Any) -> None:
         """
         Set a configuration value.
-        
+
         Args:
             key: Configuration key
             value: Configuration value
@@ -313,15 +315,15 @@ class ConfigurationManager:
             self.sources[key] = ConfigurationSource.CLI
         else:
             raise ConfigurationError(f"Unknown configuration key: {key}")
-    
+
     def get_config(self, key: str, default: Any = None) -> Any:
         """
         Get a configuration value.
-        
+
         Args:
             key: Configuration key
             default: Default value if not found
-            
+
         Returns:
             Configuration value
         """
@@ -459,26 +461,21 @@ class ConfigurationManager:
         if daily_limit_usd is not None:
             budget["daily_limit_usd"] = float(daily_limit_usd)
         if provider_limits_usd is not None:
-            budget["provider_limits_usd"] = {
-                provider: float(limit)
-                for provider, limit in provider_limits_usd.items()
-            }
+            budget["provider_limits_usd"] = {provider: float(limit) for provider, limit in provider_limits_usd.items()}
         self.installation_settings["budget"] = budget
         self.save_installation_config()
 
     def set_routing_policy(self, policy: str) -> None:
         """Persist the routing policy for this installation."""
         if policy not in {"balanced", "budget_first", "quality_first", "local_first"}:
-            raise ConfigurationError(
-                "Routing policy must be balanced, budget_first, quality_first, or local_first"
-            )
+            raise ConfigurationError("Routing policy must be balanced, budget_first, quality_first, or local_first")
         self.installation_settings["routing"] = {"policy": policy}
         self.save_installation_config()
-    
+
     def validate_configuration(self) -> bool:
         """
         Validate configuration.
-        
+
         Returns:
             True if valid, False otherwise
         """
@@ -487,39 +484,39 @@ class ConfigurationManager:
         if self.config.mode not in valid_modes:
             logger.error(f"Invalid mode: {self.config.mode}")
             return False
-        
+
         # Validate environment
         valid_envs = ["development", "staging", "production"]
         if self.config.environment not in valid_envs:
             logger.error(f"Invalid environment: {self.config.environment}")
             return False
-        
+
         # Validate log level
         valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
         if self.config.log_level not in valid_levels:
             logger.error(f"Invalid log level: {self.config.log_level}")
             return False
-        
+
         # Validate memory backend
         valid_backends = ["cognee", "jsonl"]
         if self.config.memory_backend not in valid_backends:
             logger.error(f"Invalid memory backend: {self.config.memory_backend}")
             return False
-        
+
         # Validate timeouts
         if self.config.tool_timeout <= 0:
             logger.error("Tool timeout must be positive")
             return False
-        
+
         # Validate resource limits
         if self.config.max_concurrent_tasks <= 0:
             logger.error("Max concurrent tasks must be positive")
             return False
-        
+
         if self.config.max_memory_mb <= 0:
             logger.error("Max memory must be positive")
             return False
-        
+
         logger.debug("Configuration validation passed")
         return True
 
@@ -567,11 +564,11 @@ class ConfigurationManager:
         except Exception:
             logger.debug("Failed to query keyring provider status", exc_info=True)
             return None
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """
         Convert configuration to dictionary.
-        
+
         Returns:
             Configuration dictionary
         """
@@ -601,11 +598,11 @@ class ConfigurationManager:
             "max_memory_mb": self.config.max_memory_mb,
             "metadata": self.config.metadata,
         }
-    
+
     def to_json(self) -> str:
         """
         Convert configuration to JSON.
-        
+
         Returns:
             JSON string
         """

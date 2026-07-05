@@ -9,7 +9,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from .hitl import ApprovalRequest, HITL
+from .hitl import HITL, ApprovalRequest
 
 
 class MCPRiskLevel(Enum):
@@ -169,7 +169,11 @@ class FirewallMCP:
             )
 
         contract_ok, contract_reason = self._contract_checker(request)
-        if contract_ok and request.metadata.get("envolve_outro_agente") and not request.metadata.get("contract_checked"):
+        if (
+            contract_ok
+            and request.metadata.get("envolve_outro_agente")
+            and not request.metadata.get("contract_checked")
+        ):
             contract_ok = self.verificar_contrato(request.agente_id, request.ferramenta)
             contract_reason = None if contract_ok else "CONTRACT_REQUIRED"
         if not contract_ok:
@@ -266,6 +270,8 @@ class FirewallMCP:
         return ok
 
     def registrar_callback(self, evento: str, fn: Callable[[str, Dict[str, Any]], Any]) -> None:
+        """Register a callback invoked for firewall authorization decisions."""
+
         self._callbacks.setdefault(evento, []).append(fn)
 
     def _emit(self, evento: str, dados: Dict[str, Any]) -> None:

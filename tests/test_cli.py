@@ -8,8 +8,16 @@ import time
 from kabbalah import cli
 from kabbalah.configuration_manager import ConfigurationManager
 from kabbalah.contrato_store import ContratoStore
-from kabbalah.contratos import ContratoAgente, ContractStatus
+from kabbalah.contratos import ContractStatus, ContratoAgente
 from kabbalah.onboarding import ProviderValidationResult
+
+PROVIDER_ENV_KEYS = [
+    "OPENAI_API_KEY",
+    "KABBALAH_OPENAI_API_KEY",
+    "GROQ_API_KEY",
+    "KABBALAH_GROQ_API_KEY",
+    "KABBALAH_GROQ_COMPATIBLE_API_KEY",
+]
 
 
 class FakeKeyring:
@@ -35,6 +43,11 @@ class FakeValidator:
         return ProviderValidationResult(provider=provider, valid=True, message="ok")
 
 
+def clear_provider_env(monkeypatch):
+    for key in PROVIDER_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+
+
 def test_status_json_outputs_safe_config_and_budget(monkeypatch, capsys, tmp_path):
     monkeypatch.setenv("OPENAI_API_KEY", "sk-test-secret-7890")
     monkeypatch.setenv("KABBALAH_BRIDGE_STATE_DB", str(tmp_path / "state.sqlite3"))
@@ -50,15 +63,12 @@ def test_status_json_outputs_safe_config_and_budget(monkeypatch, capsys, tmp_pat
     assert "budget" in payload["result"]
     assert payload["result"]["hardware"]["active"] is False
     assert "sk-test-secret-7890" not in captured.out
-    openai = next(
-        provider
-        for provider in payload["result"]["config"]["providers"]
-        if provider["provider"] == "openai"
-    )
+    openai = next(provider for provider in payload["result"]["config"]["providers"] if provider["provider"] == "openai")
     assert openai["last4"] == "7890"
 
 
 def test_setup_command_validates_and_stores_key_without_printing_secret(monkeypatch, capsys, tmp_path):
+    clear_provider_env(monkeypatch)
     manager = ConfigurationManager(
         keyring_backend=FakeKeyring(),
         installation_config_path=tmp_path / "config.json",
@@ -81,6 +91,7 @@ def test_setup_command_validates_and_stores_key_without_printing_secret(monkeypa
 
 
 def test_config_key_budget_and_routing_commands(monkeypatch, capsys, tmp_path):
+    clear_provider_env(monkeypatch)
     manager = ConfigurationManager(
         keyring_backend=FakeKeyring(),
         installation_config_path=tmp_path / "config.json",
