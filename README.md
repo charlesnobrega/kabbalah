@@ -125,6 +125,9 @@ kabbalah status --json
 It returns safe provider key status (`present`/`absent`, source and `last4`) and
 budget/hardware stats. It must not print full API keys or secrets.
 
+Use `-v` or `-vv` for progressive logging. CLI exit codes are documented in
+`docs/specs/cli-exit-codes.md`.
+
 ## SillyTavern MCP bridge
 
 The example config for SillyTavern is available in:

@@ -1,10 +1,14 @@
 """Tests for Kabbalah CLI commands."""
 
 import json
+import sqlite3
 import sys
+import time
 
 from kabbalah import cli
 from kabbalah.configuration_manager import ConfigurationManager
+from kabbalah.contrato_store import ContratoStore
+from kabbalah.contratos import ContratoAgente, ContractStatus
 from kabbalah.onboarding import ProviderValidationResult
 
 
@@ -133,3 +137,47 @@ def test_config_list_json_includes_hardware_status(monkeypatch, capsys, tmp_path
         "active": False,
         "message": "No hardware profile recorded yet.",
     }
+
+
+def test_status_json_includes_contracts_and_pending_hitl(monkeypatch, capsys, tmp_path):
+    state_db = tmp_path / "state.sqlite3"
+    ContratoStore(state_db).save(
+        ContratoAgente(
+            id="contract-1",
+            task_id="task-1",
+            requisitante="coord",
+            provedor="worker",
+            acao="read_file",
+            limites={"max_calls": 3},
+            status=ContractStatus.ATIVO,
+            score_risco=0.2,
+            criado_em=time.time(),
+        )
+    )
+    with sqlite3.connect(state_db) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS hitl_tickets (
+                ticket_id TEXT PRIMARY KEY,
+                payload TEXT NOT NULL,
+                created_at REAL NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO hitl_tickets(ticket_id, payload, created_at) VALUES (?, ?, ?)",
+            (
+                "hitl_1",
+                json.dumps({"ticket_id": "hitl_1", "status": "pending", "acao": "execute_command"}),
+                time.time(),
+            ),
+        )
+
+    monkeypatch.setenv("KABBALAH_BRIDGE_STATE_DB", str(state_db))
+    monkeypatch.setattr(sys, "argv", ["kabbalah", "status", "--json"])
+
+    assert cli.main() == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["result"]["governance"]["active_contracts"] == 1
+    assert payload["result"]["governance"]["pending_hitl_tickets"] == 1

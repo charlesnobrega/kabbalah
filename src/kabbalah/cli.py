@@ -7,6 +7,7 @@ import getpass
 import json
 import logging
 import os
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -57,6 +58,13 @@ Examples:
         default="INFO",
         choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
         help="Set logging level (default: INFO)",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="Increase logging verbosity (-v=INFO, -vv=DEBUG)",
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -348,14 +356,12 @@ def cmd_status(args: argparse.Namespace) -> int:
             "config": config_manager.get_config_status(),
             "budget": budget_manager.get_budget_stats(),
             "hardware": _hardware_status(state_db),
+            "governance": _governance_status(state_db),
         }
         if args.json:
             print(json.dumps({"ok": True, "result": result}, ensure_ascii=False, indent=2))
         else:
-            print("Kabbalah status")
-            print(f"- Mode: {result['config']['mode']}")
-            print(f"- Environment: {result['config']['environment']}")
-            print(f"- Budget mode: {result['budget']['mode']}")
+            _print_status_text(result)
         return 0
     except Exception as e:
         logger.error(f"Error reading status: {str(e)}")
@@ -413,6 +419,61 @@ def _hardware_status(state_db: Path) -> dict:
     }
 
 
+def _governance_status(state_db: Path) -> dict:
+    if not state_db.exists():
+        return {
+            "active_contracts": 0,
+            "pending_hitl_tickets": 0,
+        }
+    with sqlite3.connect(state_db) as conn:
+        active_contracts = _count_rows(
+            conn,
+            "SELECT COUNT(*) FROM contratos WHERE status = 'ATIVO'",
+        )
+        pending_hitl = _count_rows(
+            conn,
+            "SELECT COUNT(*) FROM hitl_tickets WHERE json_extract(payload, '$.status') = 'pending'",
+        )
+    return {
+        "active_contracts": active_contracts,
+        "pending_hitl_tickets": pending_hitl,
+    }
+
+
+def _count_rows(conn: sqlite3.Connection, query: str) -> int:
+    try:
+        row = conn.execute(query).fetchone()
+    except sqlite3.Error:
+        return 0
+    return int(row[0]) if row else 0
+
+
+def _print_status_text(result: dict) -> None:
+    try:
+        from rich.console import Console
+        from rich.table import Table
+    except Exception:
+        print("Kabbalah status")
+        print(f"- Mode: {result['config']['mode']}")
+        print(f"- Environment: {result['config']['environment']}")
+        print(f"- Budget mode: {result['budget']['mode']}")
+        print(f"- Active contracts: {result['governance']['active_contracts']}")
+        print(f"- Pending HITL tickets: {result['governance']['pending_hitl_tickets']}")
+        return
+
+    console = Console()
+    table = Table(title="Kabbalah status")
+    table.add_column("Area")
+    table.add_column("Value")
+    table.add_row("Mode", str(result["config"]["mode"]))
+    table.add_row("Environment", str(result["config"]["environment"]))
+    table.add_row("Budget mode", str(result["budget"]["mode"]))
+    table.add_row("Hardware active", str(result["hardware"]["active"]))
+    table.add_row("Active contracts", str(result["governance"]["active_contracts"]))
+    table.add_row("Pending HITL tickets", str(result["governance"]["pending_hitl_tickets"]))
+    console.print(table)
+
+
 def _emit_success(result: dict, *, json_output: bool) -> int:
     if json_output:
         print(json.dumps({"ok": True, "result": result}, ensure_ascii=False, indent=2))
@@ -447,7 +508,8 @@ def main() -> int:
     """Main entry point."""
     try:
         args = parse_arguments()
-        setup_logging(args.log_level)
+        log_level = "DEBUG" if args.verbose >= 2 else "INFO" if args.verbose == 1 else args.log_level
+        setup_logging(log_level)
 
         if not args.command:
             print("No command specified. Use --help for usage information.")

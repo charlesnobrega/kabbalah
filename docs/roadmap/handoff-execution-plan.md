@@ -370,7 +370,7 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
   renderer `src/kabbalah/sillytavern_group_chat.py`, tool MCP
   `render_group_event`, e exemplo MCP-only em
   `docs/examples/sillytavern/kabbalah-group-chat/` com Blank Cards e routing.
-- [ ] **8.3 CLI e experiência de uso** — a interface tem que ser bonita e
+- [x] **8.3 CLI e experiência de uso** *(Codex, 2026-07-05 — testes em `tests/test_cli.py`; exit codes em `docs/specs/cli-exit-codes.md`)* — a interface tem que ser bonita e
   consistente:
   1. `kabbalah status` — painel único: perfil de hardware ativo, providers e
      saúde das chaves (sem valores), gasto do dia (ledger), contratos ativos,
@@ -381,10 +381,10 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
      comando para consumo por máquina; exit codes documentados e consistentes.
   4. Logging estruturado: silencioso por padrão, `-v/-vv` progressivo, nunca
      poluir stdout do bridge (stdio MCP é sagrado).
-  *Progresso 2026-07-04*: primeiro corte `kabbalah status --json`
-  implementado com status seguro de providers e budget, sem vazar chaves.
-  Ainda faltam painel rich, hardware profile, contratos ativos, tickets HITL,
-  exit codes documentados e `-v/-vv`.
+  *Implementado*: `kabbalah status --json` e painel texto/rich incluem config
+  segura, budget, hardware ativo conhecido, contratos ativos e tickets HITL
+  pendentes; `-v/-vv` aumentam logging; JSON errors usam `what_happened/why/
+  what_to_do`; exit codes documentados.
 - [ ] **8.4 Empacotamento moderno** — migrar `setup.py` → `pyproject.toml`
   (PEP 621), single-source da versão (`kabbalah.__version__`), criar
   `CHANGELOG.md` retroativo por ondas (semver: 0.x enquanto alpha), extras
