@@ -80,12 +80,12 @@ class ProviderFactory:
         "cerebras": {
             "base_url": "https://api.cerebras.ai/v1",
             "api_key_env": "CEREBRAS_API_KEY",
-            "model": "llama3.1-8b",
+            "model": "gpt-oss-120b",
         },
         "sambanova": {
             "base_url": "https://api.sambanova.ai/v1",
             "api_key_env": "SAMBANOVA_API_KEY",
-            "model": "Meta-Llama-3.1-8B-Instruct",
+            "model": "Meta-Llama-3.3-70B-Instruct",
         },
     }
     

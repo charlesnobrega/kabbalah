@@ -151,7 +151,7 @@ class CapabilityRegistry:
             ModelProfile(
                 name="cerebras-fast-default",
                 provider_name="cerebras",
-                model=os.getenv("KABBALAH_CEREBRAS_MODEL", "llama3.1-8b"),
+                model=os.getenv("KABBALAH_CEREBRAS_MODEL", "gpt-oss-120b"),
                 roles={"Leaf_Builder", "Leaf_Verifier"},
                 capabilities={"chat", "code"},
                 context_window=8192,
@@ -166,7 +166,7 @@ class CapabilityRegistry:
             ModelProfile(
                 name="sambanova-fast-default",
                 provider_name="sambanova",
-                model=os.getenv("KABBALAH_SAMBANOVA_MODEL", "Meta-Llama-3.1-8B-Instruct"),
+                model=os.getenv("KABBALAH_SAMBANOVA_MODEL", "Meta-Llama-3.3-70B-Instruct"),
                 roles={"Leaf_Builder", "Leaf_Verifier"},
                 capabilities={"chat", "code"},
                 context_window=8192,
@@ -181,12 +181,12 @@ class CapabilityRegistry:
             ModelProfile(
                 name="openai-premium-default",
                 provider_name="openai",
-                model=os.getenv("KABBALAH_OPENAI_MODEL", "gpt-4.1"),
+                model=os.getenv("KABBALAH_OPENAI_MODEL", "gpt-4o"),
                 roles={"Root_Orchestrator", "Domain_Coordinator"},
                 capabilities={"chat", "reasoning"},
                 context_window=128000,
-                input_cost_per_1m_tokens=2.0,
-                output_cost_per_1m_tokens=8.0,
+                input_cost_per_1m_tokens=2.5,
+                output_cost_per_1m_tokens=10.0,
                 license_type="paga",
                 location="cloud",
                 tier="premium",
@@ -195,7 +195,7 @@ class CapabilityRegistry:
             ModelProfile(
                 name="gemini-premium-default",
                 provider_name="google_gemini",
-                model=os.getenv("KABBALAH_GEMINI_MODEL", "gemini-pro"),
+                model=os.getenv("KABBALAH_GEMINI_MODEL", "gemini-2.5-pro"),
                 roles={"Root_Orchestrator", "Domain_Coordinator"},
                 capabilities={"chat", "reasoning"},
                 context_window=32768,
@@ -209,7 +209,7 @@ class CapabilityRegistry:
             ModelProfile(
                 name="mistral-premium-default",
                 provider_name="mistral",
-                model=os.getenv("KABBALAH_MISTRAL_MODEL", "mistral-large-latest"),
+                model=os.getenv("KABBALAH_MISTRAL_MODEL", "mistral-large"),
                 roles={"Root_Orchestrator", "Domain_Coordinator"},
                 capabilities={"chat", "reasoning"},
                 context_window=32768,

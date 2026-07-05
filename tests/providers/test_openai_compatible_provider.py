@@ -109,3 +109,12 @@ def test_provider_factory_registers_openai_compatible_entries(monkeypatch):
     assert isinstance(ollama, OpenAICompatibleProvider)
     assert ollama.api_key is None
     assert ollama.base_url == "http://localhost:11434/v1"
+
+
+def test_provider_factory_uses_current_openai_compatible_defaults():
+    defaults = ProviderFactory.PROVIDER_DEFAULTS
+
+    assert defaults["cerebras"]["base_url"] == "https://api.cerebras.ai/v1"
+    assert defaults["cerebras"]["model"] == "gpt-oss-120b"
+    assert defaults["sambanova"]["base_url"] == "https://api.sambanova.ai/v1"
+    assert defaults["sambanova"]["model"] == "Meta-Llama-3.3-70B-Instruct"

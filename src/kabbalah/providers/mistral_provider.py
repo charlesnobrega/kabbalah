@@ -6,7 +6,7 @@ Implements the BaseProvider interface for Mistral's models.
 
 import os
 import time
-from typing import Dict, Optional, Iterator
+from typing import Any, Dict, Optional, Iterator
 
 try:
     from mistralai.client import MistralClient as Mistral
@@ -107,8 +107,8 @@ class MistralProvider(BaseProvider):
             
             latency_ms = (time.time() - start_time) * 1000
             
-            # Extract content
-            content = response.choices[0].message.content if response.choices else ""
+            # Extract content across SDK response shapes.
+            content = self._extract_response_content(response)
             
             # Get token counts from response
             input_tokens = response.usage.prompt_tokens if response.usage else 0
@@ -187,7 +187,7 @@ class MistralProvider(BaseProvider):
             for chunk in response:
                 # Extract content from chunk
                 if chunk.choices and chunk.choices[0].delta.content:
-                    chunk_text = chunk.choices[0].delta.content
+                    chunk_text = self._extract_text(chunk.choices[0].delta.content)
                     accumulated_content += chunk_text
                     
                     latency_ms = (time.time() - start_time) * 1000
@@ -265,6 +265,39 @@ class MistralProvider(BaseProvider):
             raise ValueError(f"Unknown model: {model}")
         
         return True
+
+    @classmethod
+    def _extract_response_content(cls, response: Any) -> str:
+        """Extract assistant text from supported Mistral response shapes."""
+        choices = getattr(response, "choices", None) or []
+        if not choices:
+            return ""
+        message = getattr(choices[0], "message", None)
+        return cls._extract_text(getattr(message, "content", ""))
+
+    @classmethod
+    def _extract_text(cls, value: Any) -> str:
+        """Normalize Mistral string, dict, object, or list content to text."""
+        if value is None:
+            return ""
+        if isinstance(value, str):
+            return value
+        if isinstance(value, dict):
+            if "text" in value:
+                return cls._extract_text(value["text"])
+            if "content" in value:
+                return cls._extract_text(value["content"])
+            return ""
+        if isinstance(value, (list, tuple)):
+            return "".join(cls._extract_text(item) for item in value)
+
+        text = getattr(value, "text", None)
+        if text is not None:
+            return cls._extract_text(text)
+        content = getattr(value, "content", None)
+        if content is not None and content is not value:
+            return cls._extract_text(content)
+        return ""
     
     def calculate_cost(self, tokens_used: int, model: str) -> float:
         """

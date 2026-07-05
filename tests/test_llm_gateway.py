@@ -4,6 +4,9 @@ import pytest
 
 from kabbalah.budget_manager import BudgetExceededError, BudgetLedger, BudgetManager
 from kabbalah.llm_gateway import CapabilityRegistry, LLMGateway, ModelProfile
+from kabbalah.providers.google_gemini_provider import GoogleGeminiProvider
+from kabbalah.providers.mistral_provider import MistralProvider
+from kabbalah.providers.openai_provider import OpenAIProvider
 
 
 class DummyProvider:
@@ -334,6 +337,54 @@ def test_default_registry_includes_cloud_profiles_when_api_key_exists(monkeypatc
     provider_names = {profile.provider_name for profile in registry.list_profiles()}
 
     assert "openrouter" in provider_names
+
+
+def test_default_registry_premium_models_match_native_provider_allowlists(monkeypatch):
+    for env_name in (
+        "KABBALAH_OPENAI_MODEL",
+        "KABBALAH_GEMINI_MODEL",
+        "KABBALAH_MISTRAL_MODEL",
+    ):
+        monkeypatch.delenv(env_name, raising=False)
+    for env_name in (
+        "OPENAI_API_KEY",
+        "GOOGLE_GEMINI_API_KEY",
+        "MISTRAL_API_KEY",
+    ):
+        monkeypatch.setenv(env_name, "test-key")
+
+    registry = CapabilityRegistry.default()
+    profiles_by_provider = {
+        profile.provider_name: profile
+        for profile in registry.list_profiles()
+        if profile.provider_name in {"openai", "google_gemini", "mistral"}
+    }
+
+    assert profiles_by_provider["openai"].model in OpenAIProvider.PRICING
+    assert profiles_by_provider["google_gemini"].model in GoogleGeminiProvider.PRICING
+    assert profiles_by_provider["mistral"].model in MistralProvider.PRICING
+
+
+def test_default_registry_uses_current_openai_compatible_provider_models(monkeypatch):
+    for env_name in (
+        "KABBALAH_CEREBRAS_MODEL",
+        "KABBALAH_SAMBANOVA_MODEL",
+    ):
+        monkeypatch.delenv(env_name, raising=False)
+    monkeypatch.setenv("CEREBRAS_API_KEY", "test-key")
+    monkeypatch.setenv("SAMBANOVA_API_KEY", "test-key")
+
+    registry = CapabilityRegistry.default()
+    profiles_by_provider = {
+        profile.provider_name: profile
+        for profile in registry.list_profiles()
+        if profile.provider_name in {"cerebras", "sambanova"}
+    }
+
+    assert profiles_by_provider["cerebras"].base_url == "https://api.cerebras.ai/v1"
+    assert profiles_by_provider["cerebras"].model == "gpt-oss-120b"
+    assert profiles_by_provider["sambanova"].base_url == "https://api.sambanova.ai/v1"
+    assert profiles_by_provider["sambanova"].model == "Meta-Llama-3.3-70B-Instruct"
 
 
 def test_gateway_warns_budget_excess_but_returns_provider_in_warn_mode(tmp_path):

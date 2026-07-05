@@ -296,7 +296,7 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
 
 ### ONDA 8 — Features visíveis + AJUSTES FINOS (M8+M9+config+polimento) — esforço: 2-3 semanas — depende das Ondas 5 e 7
 
-- [ ] **8.-1 Achados do teste REAL de matriz de providers (2026-07-04, chaves live do Charles)** —
+- [x] **8.-1 Achados do teste REAL de matriz de providers (2026-07-04, chaves live do Charles)** *(Codex, 2026-07-04 — testes em `tests/test_llm_gateway.py`, `tests/test_mistral_provider_unit.py`, `tests/providers/test_openai_compatible_provider.py`)* —
   probe ao vivo de 1 frase por tier. **Estes são bugs reais, prioridade nesta onda:**
   1. **Modelos premium DOA (bug de config)**: os defaults do registro `gpt-4.1`,
      `gemini-pro` e `mistral-large-latest` NÃO existem na allowlist dos providers
@@ -314,6 +314,11 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
   4. **Mistral resposta vazia**: conecta e autentica, mas retornou content vazio
      e 0 tokens com `mistral-large` — investigar parsing da resposta no
      `mistral_provider.py` (pode ser formato de retorno ou `max_tokens`).
+  **Status da correção**: defaults premium agora usam modelos aceitos pelos
+  providers nativos (`gpt-4o`, `gemini-2.5-pro`, `mistral-large`); Cerebras e
+  SambaNova mantêm os base URLs OpenAI-compatible oficiais e usam modelos
+  atuais (`gpt-oss-120b`, `Meta-Llama-3.3-70B-Instruct`); Mistral normaliza
+  conteúdo retornado como string, dict, objeto ou lista de text chunks.
   **Confirmado funcionando ponta a ponta com chave real**: OpenRouter, Groq,
   OpenAI, Gemini (custo real gravado no ledger; enforcement `block` levantou
   `BudgetExceededError`, `warn` permitiu com decisão negada). O caminho barato
