@@ -131,6 +131,7 @@ The example config for SillyTavern is available in:
 
 - `sillytavern_config.json`
 - `sillytavern_mcp_config.json`
+- `docs/examples/sillytavern/kabbalah-group-chat/`
 
 Current bridge tools include:
 

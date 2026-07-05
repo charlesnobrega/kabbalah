@@ -1,0 +1,36 @@
+{
+  "mode": "MCP-only",
+  "reply_order": "manual_or_list_order",
+  "coordinator": "Root Orchestrator",
+  "domains": [
+    "Backend Domain",
+    "Security Domain",
+    "QA Domain",
+    "Docs Domain"
+  ],
+  "mcp_server": "kabbalah-firewall",
+  "mcp_tools": [
+    "get_config_status",
+    "get_budget_stats",
+    "compare_models",
+    "render_group_event",
+    "check_hitl_status",
+    "read_file",
+    "write_file",
+    "execute_command"
+  ],
+  "event_prefixes": [
+    "[KABBALAH:ALLOW]",
+    "[KABBALAH:DENY]",
+    "[KABBALAH:HITL]",
+    "[KABBALAH:BUDGET]",
+    "[KABBALAH:CONFIG]",
+    "[KABBALAH:ERROR]"
+  ],
+  "security_rules": [
+    "All tool calls go through kabbalah_mcp_bridge.py.",
+    "HITL pending is visible as a chat event with a ticket_id.",
+    "Provider errors are shown as real errors, never simulated output.",
+    "Manual or list order is recommended for deterministic audit trails."
+  ]
+}
