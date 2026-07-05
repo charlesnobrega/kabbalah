@@ -1,0 +1,12 @@
+{"version":2,"width":100,"height":28,"timestamp":1783263600,"env":{"SHELL":"powershell","TERM":"xterm-256color"}}
+[0.1,"o","PS> py -3.11 -m venv .venv\r\n"]
+[0.4,"o","PS> .\\.venv\\Scripts\\python.exe -m pip install -e \".[mcp,observability]\"\r\n"]
+[1.2,"o","Successfully installed kabbalah-0.8.0\r\n"]
+[1.4,"o","PS> .\\.venv\\Scripts\\kabbalah.exe --version\r\n"]
+[1.6,"o","kabbalah 0.8.0\r\n"]
+[1.9,"o","PS> .\\.venv\\Scripts\\kabbalah.exe status --json\r\n"]
+[2.2,"o","{\"ok\": true, \"result\": {\"config\": {\"providers\": [{\"provider\": \"openai\", \"status\": \"absent\"}]}, \"budget\": {\"mode\": \"warn\"}, \"hardware\": {\"active\": false}, \"contracts\": [], \"hitl\": []}}\r\n"]
+[2.6,"o","PS> .\\.venv\\Scripts\\kabbalah.exe setup\r\n"]
+[2.9,"o","Kabbalah setup\r\nSelect provider to configure: openai\r\nAPI key: ********\r\nValidating provider key...\r\nKey stored in OS keyring. Secret value was not printed.\r\n"]
+[3.3,"o","PS> .\\.venv\\Scripts\\kabbalah.exe parse --name \"Demo governada\" --description \"Gerar uma especificação com backend, frontend e testes\" --output json\r\n"]
+[3.7,"o","{\"project_name\": \"Demo governada\", \"domains\": [\"backend\", \"frontend\"], \"run_id\": \"run_YYYY_MM_DD_001\"}\r\n"]

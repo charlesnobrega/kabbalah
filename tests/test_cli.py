@@ -67,6 +67,28 @@ def test_status_json_outputs_safe_config_and_budget(monkeypatch, capsys, tmp_pat
     assert openai["last4"] == "7890"
 
 
+def test_parse_json_command_matches_quickstart(monkeypatch, capsys):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "kabbalah",
+            "parse",
+            "--name",
+            "Demo governada",
+            "--description",
+            "Gerar uma especificação com backend, frontend e testes",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert cli.main() == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["project_name"] == "Demo governada"
+    assert payload["run_id"].startswith("run_")
+
+
 def test_setup_command_validates_and_stores_key_without_printing_secret(monkeypatch, capsys, tmp_path):
     clear_provider_env(monkeypatch)
     manager = ConfigurationManager(

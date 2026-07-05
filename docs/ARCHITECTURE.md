@@ -35,6 +35,67 @@ performs real provider work when `DomainOrchestrator` is constructed with an
 `status="skipped"` rather than fake success. Root-level orchestration still
 constructs `DomainOrchestrator` without a gateway by default.
 
+## Security pipeline diagram
+
+```mermaid
+sequenceDiagram
+    participant Client as SillyTavern or MCP client
+    participant Bridge as kabbalah_mcp_bridge.py
+    participant Qlipot as Qlipot risk scorer
+    participant Firewall as FirewallMCP
+    participant Contracts as Contratos and ContratoStore
+    participant HITL as HITL tickets
+    participant Tool as Guarded executor
+
+    Client->>Bridge: tool call plus agent metadata
+    Bridge->>Qlipot: evaluate action, parameters, recent agent history
+    Qlipot-->>Bridge: risk score and decision context
+    Bridge->>Firewall: authorize action, role, score, contract metadata
+    Firewall->>Contracts: verify active contract and consume max_calls
+    Contracts-->>Firewall: allowed, no contract, expired, or limit exceeded
+    alt human approval required
+        Firewall->>HITL: create ticket
+        HITL-->>Bridge: pending ticket id
+        Bridge-->>Client: HITL_REQUIRED
+    else denied
+        Firewall-->>Bridge: policy denial
+        Bridge-->>Client: POLICY_DENIED
+    else allowed
+        Firewall-->>Bridge: authorized
+        Bridge->>Tool: execute constrained action
+        Tool-->>Bridge: result or structured error
+        Bridge-->>Client: JSON response
+    end
+```
+
+## Gateway, registry, and budget flow
+
+```mermaid
+flowchart TD
+    Role["Role and capability request"] --> Gateway["LLMGateway"]
+    Gateway --> Registry["CapabilityRegistry<br/>role, capability, model profiles"]
+    Registry --> Candidates["Ordered ProviderSelection candidates"]
+    Candidates --> Budget["BudgetManager<br/>run/day/provider policy"]
+    Budget -->|warn mode| Provider["ProviderFactory"]
+    Budget -->|block mode over limit| Denied["BudgetExceededError"]
+    Provider --> Native["Native providers<br/>OpenAI, Gemini, Groq, Mistral, Together, DeepSeek"]
+    Provider --> Compatible["OpenAI-compatible providers<br/>Ollama, OpenRouter, Cerebras, SambaNova"]
+    Native --> Ledger["BudgetLedger<br/>tokens and cost"]
+    Compatible --> Ledger
+```
+
+## Hardware profiler flow
+
+```mermaid
+flowchart LR
+    Profiler["HardwareProfiler"] --> Probe["CPU, RAM, GPU probes"]
+    Probe --> Profile["HardwareProfile"]
+    Profile --> Store["SQLite hardware_profiles"]
+    Profile --> Fit["Static model fit classification"]
+    Fit --> GatewayHint["Local tier and routing hint"]
+    GatewayHint --> Registry["CapabilityRegistry / LLMGateway"]
+```
+
 ## Layers
 
 ```text

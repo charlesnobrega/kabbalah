@@ -184,7 +184,7 @@ def cmd_parse(args: argparse.Namespace) -> int:
 
         # Format output
         printer = SpecificationPrettyPrinter()
-        output_format = OutputFormat(args.output.upper())
+        output_format = OutputFormat(args.output.lower())
 
         if output_format == OutputFormat.JSON:
             output = printer.format_json(spec.__dict__)

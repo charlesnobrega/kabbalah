@@ -416,7 +416,7 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
   `hardware_profile`, `cofre`, `contratos`, `contrato_store`, `firewall_mcp`).
   *Validação*: `ruff check src tests kabbalah_mcp_bridge.py` passou; suíte
   completa passou com `1206 passed, 89 skipped`.
-- [ ] **8.7 Documentação-vitrine** — o README é a cara do produto:
+- [x] **8.7 Documentação-vitrine** *(Codex, 2026-07-05 — testes em `tests/test_docs_vitrine.py`; quickstart validado em clone temporário limpo)* — o README é a cara do produto:
   1. Reescrever o README como pitch honesto: o que é (kernel de governance),
      demo em 5 minutos (quickstart testado do zero numa máquina limpa),
      diagrama de arquitetura renderizado (mermaid), GIF/asciinema do
@@ -426,6 +426,20 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
   3. Guia "instalando em 5 minutos" validado por execução real em clone limpo.
   *Aceite*: um dev que nunca viu o projeto instala e roda o demo só com o
   README, sem perguntar nada.
+  *Implementado*: README reescrito com pitch honesto, limites alpha, diagrama
+  Mermaid, quickstart Windows/Linux em 5 minutos, setup/config, bridge
+  SillyTavern, tools expostas e estado atual; criado cast em
+  `docs/assets/kabbalah-setup-demo.cast`; `docs/ARCHITECTURE.md` recebeu
+  diagramas Mermaid de pipeline de segurança, gateway/registry/budget e
+  profiler de hardware; adicionado `tests/test_docs_vitrine.py`.
+  *Correção descoberta na validação*: `kabbalah parse --output json` falhava
+  porque a CLI convertia o valor para `JSON` antes de instanciar
+  `OutputFormat`; corrigido para usar valor minúsculo e coberto em
+  `tests/test_cli.py`.
+  *Validação*: clone temporário limpo com diff aplicado → `py -3.11 -m venv`,
+  `pip install -e ".[mcp,observability]"`, `kabbalah --version`,
+  `kabbalah status --json` com state DB isolado e `kabbalah parse --output
+  json` passaram.
 
 ---
 
