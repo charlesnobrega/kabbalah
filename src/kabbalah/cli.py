@@ -153,6 +153,18 @@ Examples:
     )
     config_routing.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
 
+    config_network = config_subparsers.add_parser("set-network", help="Persist federated network mode")
+    config_network.add_argument("mode", choices=["off", "receber", "receber+contribuir"], help="Network mode")
+    config_network.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+
+    config_trust_add = config_subparsers.add_parser("trust-add", help="Trust a federated publisher public key")
+    config_trust_add.add_argument("public_key", help="Publisher Ed25519 public key")
+    config_trust_add.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+
+    config_trust_remove = config_subparsers.add_parser("trust-remove", help="Remove a trusted publisher public key")
+    config_trust_remove.add_argument("public_key", help="Publisher Ed25519 public key")
+    config_trust_remove.add_argument("--json", action="store_true", help="Emit machine-readable JSON")
+
     # Version command
     status_parser = subparsers.add_parser("status", help="Show safe runtime status")
     status_parser.add_argument(
@@ -286,6 +298,31 @@ def cmd_config(args: argparse.Namespace) -> int:
             config_manager.set_routing_policy(args.policy)
             return _emit_success(
                 {"routing": config_manager.get_config_status()["routing"]},
+                json_output=args.json,
+            )
+
+        if args.config_command == "set-network":
+            identity = config_manager.ensure_federation_identity()
+            config_manager.set_network_mode(args.mode)
+            return _emit_success(
+                {
+                    "network": config_manager.get_config_status()["network"],
+                    "identity": identity,
+                },
+                json_output=args.json,
+            )
+
+        if args.config_command == "trust-add":
+            config_manager.add_trusted_publisher(args.public_key)
+            return _emit_success(
+                {"network": config_manager.get_config_status()["network"]},
+                json_output=args.json,
+            )
+
+        if args.config_command == "trust-remove":
+            config_manager.remove_trusted_publisher(args.public_key)
+            return _emit_success(
+                {"network": config_manager.get_config_status()["network"]},
                 json_output=args.json,
             )
 

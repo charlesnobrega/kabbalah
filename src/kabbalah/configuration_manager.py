@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-_SECRET_KEY_MARKERS = ("api_key", "apikey", "password", "secret", "token", "credential", "senha")
+_SECRET_KEY_MARKERS = ("api_key", "apikey", "private_key", "password", "secret", "token", "credential", "senha")
 
 
 class ConfigurationSource(Enum):
@@ -158,6 +158,7 @@ class ConfigurationManager:
         )
         self.installation_settings: Dict[str, Any] = {
             "budget": {},
+            "network": {"mode": "off", "trust_list": []},
             "routing": {"policy": "balanced"},
         }
         self._detect_environment()
@@ -272,6 +273,7 @@ class ConfigurationManager:
         except Exception as exc:
             raise ConfigurationError(f"Failed to load installation config: {exc}") from exc
         self.installation_settings["budget"] = dict(data.get("budget", {}))
+        self.installation_settings["network"] = dict(data.get("network", {"mode": "off", "trust_list": []}))
         self.installation_settings["routing"] = dict(data.get("routing", {"policy": "balanced"}))
 
     def save_installation_config(self) -> None:
@@ -383,6 +385,7 @@ class ConfigurationManager:
         """Return safe installation/configuration status for humans and MCP."""
         names = provider_names or sorted(set(self.PROVIDER_KEY_ENVS) | set(self.config.providers))
         budget_settings = self.installation_settings.get("budget", {})
+        network_settings = self.installation_settings.get("network", {"mode": "off", "trust_list": []})
         routing_settings = self.installation_settings.get("routing", {"policy": "balanced"})
         return {
             "mode": self.config.mode,
@@ -403,6 +406,12 @@ class ConfigurationManager:
             },
             "routing": {
                 "policy": routing_settings.get("policy", "balanced"),
+            },
+            "network": {
+                "mode": network_settings.get("mode", "off"),
+                "public_key": network_settings.get("public_key"),
+                "publisher_id": network_settings.get("publisher_id"),
+                "trusted_publishers": len(network_settings.get("trust_list", [])),
             },
         }
 
@@ -441,6 +450,64 @@ class ConfigurationManager:
             if value:
                 return value
         return self._get_keyring_provider_api_key(provider)
+
+    def ensure_federation_identity(self) -> Dict[str, str]:
+        """Generate or return this installation's Ed25519 federation identity."""
+
+        if self._keyring is None:
+            raise ConfigurationError("keyring backend is required for federation private keys")
+        network = dict(self.installation_settings.get("network", {"mode": "off", "trust_list": []}))
+        private_key = self._keyring.get_password("kabbalah", "federation:private_key")
+        public_key = network.get("public_key")
+        from .sync_hub import gerar_par_chaves_federacao, publisher_id
+
+        if not public_key or not private_key:
+            public_key, private_key = gerar_par_chaves_federacao()
+            self._keyring.set_password("kabbalah", "federation:private_key", private_key)
+            network["public_key"] = public_key
+            network.setdefault("mode", "off")
+            network.setdefault("trust_list", [])
+        network["publisher_id"] = publisher_id(str(public_key))
+        self.installation_settings["network"] = network
+        self.save_installation_config()
+        return {"public_key": str(public_key), "publisher_id": str(network.get("publisher_id"))}
+
+    def get_federation_private_key(self) -> Optional[str]:
+        """Return the private federation key for internal signing only."""
+
+        if self._keyring is None:
+            return None
+        return self._keyring.get_password("kabbalah", "federation:private_key")
+
+    def set_network_mode(self, mode: str) -> None:
+        """Persist the federated-network mode for this installation."""
+
+        if mode not in {"off", "receber", "receber+contribuir"}:
+            raise ConfigurationError("Network mode must be off, receber, or receber+contribuir")
+        network = dict(self.installation_settings.get("network", {"trust_list": []}))
+        network["mode"] = mode
+        network.setdefault("trust_list", [])
+        self.installation_settings["network"] = network
+        self.save_installation_config()
+
+    def add_trusted_publisher(self, public_key: str) -> None:
+        """Trust one federated publisher public key."""
+
+        network = dict(self.installation_settings.get("network", {"mode": "off", "trust_list": []}))
+        trust_list = list(network.get("trust_list", []))
+        if public_key not in trust_list:
+            trust_list.append(public_key)
+        network["trust_list"] = sorted(trust_list)
+        self.installation_settings["network"] = network
+        self.save_installation_config()
+
+    def remove_trusted_publisher(self, public_key: str) -> None:
+        """Remove one federated publisher public key from the trust list."""
+
+        network = dict(self.installation_settings.get("network", {"mode": "off", "trust_list": []}))
+        network["trust_list"] = [item for item in network.get("trust_list", []) if item != public_key]
+        self.installation_settings["network"] = network
+        self.save_installation_config()
 
     def set_budget_limits(
         self,

@@ -108,9 +108,16 @@ def run_setup_wizard(
             )
             output_func(f"[ERROR] {provider}: validation failed — {validation.message}")
 
+    identity = config_manager.ensure_federation_identity()
+
     return {
         "ok": all(result["valid"] and result["stored"] for result in results) if results else False,
         "providers": results,
+        "network": {
+            "mode": config_manager.get_config_status()["network"]["mode"],
+            "public_key": identity["public_key"],
+            "publisher_id": identity["publisher_id"],
+        },
     }
 
 

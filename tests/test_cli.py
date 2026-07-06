@@ -148,6 +148,19 @@ def test_config_key_budget_and_routing_commands(monkeypatch, capsys, tmp_path):
     routing_payload = json.loads(capsys.readouterr().out)
     assert routing_payload["result"]["routing"]["policy"] == "budget_first"
 
+    monkeypatch.setattr(sys, "argv", ["kabbalah", "config", "set-network", "receber", "--json"])
+    assert cli.main() == 0
+    network_payload = json.loads(capsys.readouterr().out)
+    assert network_payload["result"]["network"]["mode"] == "receber"
+    assert network_payload["result"]["network"]["public_key"]
+    assert "private_key" not in json.dumps(network_payload)
+
+    publisher = "trusted-publisher-public-key"
+    monkeypatch.setattr(sys, "argv", ["kabbalah", "config", "trust-add", publisher, "--json"])
+    assert cli.main() == 0
+    trust_payload = json.loads(capsys.readouterr().out)
+    assert trust_payload["result"]["network"]["trusted_publishers"] == 1
+
     monkeypatch.setattr(sys, "argv", ["kabbalah", "config", "remove-key", "groq_compatible", "--json"])
     assert cli.main() == 0
     assert manager.get_provider_key_status("groq_compatible")["status"] == "absent"

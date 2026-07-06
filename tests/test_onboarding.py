@@ -59,6 +59,8 @@ def test_setup_wizard_validates_and_stores_provider_key_without_printing_secret(
     )
 
     assert result["ok"] is True
+    assert result["network"]["mode"] == "off"
+    assert result["network"]["public_key"]
     assert validator.calls == [("openai", "sk-test-secret-4321")]
     assert manager.get_provider_key_status("openai")["last4"] == "4321"
     assert "sk-test-secret-4321" not in "\n".join(outputs)

@@ -351,10 +351,52 @@ class TestConfigurationManager:
                 "mode": "block",
                 "run_limit_usd": 1.5,
             },
+            "network": {"mode": "off", "trust_list": []},
             "routing": {"policy": "budget_first"},
         }
         assert "sk-" not in serialized.lower()
         assert "secret-value" not in serialized.lower()
+
+    def test_federation_identity_stores_private_key_only_in_keyring(self, tmp_path):
+        class FakeKeyring:
+            def __init__(self):
+                self.values = {}
+
+            def get_password(self, service_name, username):
+                return self.values.get((service_name, username))
+
+            def set_password(self, service_name, username, value):
+                self.values[(service_name, username)] = value
+
+        keyring = FakeKeyring()
+        config_path = tmp_path / "install.json"
+        manager = ConfigurationManager(keyring_backend=keyring, installation_config_path=config_path)
+
+        identity = manager.ensure_federation_identity()
+        status = manager.get_config_status(provider_names=[])
+        persisted = json.loads(config_path.read_text(encoding="utf-8"))
+        serialized = json.dumps(persisted)
+
+        assert identity["public_key"] == status["network"]["public_key"]
+        assert identity["publisher_id"] == status["network"]["publisher_id"]
+        assert keyring.get_password("kabbalah", "federation:private_key")
+        assert "private_key" not in serialized
+        assert keyring.get_password("kabbalah", "federation:private_key") not in serialized
+
+    def test_network_mode_and_trust_list_are_non_secret_installation_settings(self, tmp_path):
+        config_path = tmp_path / "install.json"
+        manager = ConfigurationManager(keyring_backend=None, installation_config_path=config_path)
+
+        manager.set_network_mode("receber")
+        manager.add_trusted_publisher("publisher-public-key")
+        manager.remove_trusted_publisher("missing")
+
+        reloaded = ConfigurationManager(keyring_backend=None, installation_config_path=config_path)
+        reloaded.load_installation_config()
+        status = reloaded.get_config_status(provider_names=[])
+
+        assert status["network"]["mode"] == "receber"
+        assert status["network"]["trusted_publishers"] == 1
 
     def test_load_from_file_with_domain_providers(self):
         """Test loading configuration with domain providers"""
