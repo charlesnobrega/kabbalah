@@ -68,6 +68,11 @@ Recent decisions:
   event rendering (`render_group_event`), and `kabbalah status --json`.
   Remaining visible-product work: full `kabbalah setup/config` wizard, rich
   status panel, packaging/CI, and README-vitrine.
+- Onda 9 added Kabbalah-Bench and optional tree search behind
+  `KABBALAH_SEARCH_MODE=tree`; default orchestration remains linear.
+- Onda 11 added offline signed SyncHub bundles: Ed25519 identity, trust list,
+  modes `off|receber|receber+contribuir`, replay/tamper/version gates, and
+  benchmark before/after evidence for federated corrections.
 
 Validation baseline:
 

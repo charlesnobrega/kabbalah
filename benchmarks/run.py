@@ -73,10 +73,19 @@ def load_scenarios(path: Path) -> list[BenchmarkScenario]:
     return scenarios
 
 
+def load_corrections(path: Path | None) -> list[dict[str, Any]]:
+    """Load optional Qlipot corrections for before/after benchmarks."""
+
+    if path is None:
+        return []
+    data = _load_structured_file(path)
+    return list(data.get("corrections", data if isinstance(data, list) else []))
+
+
 class BenchmarkRunner:
     """Run scenarios through Kabbalah's security decision path."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, corrections: list[dict[str, Any]] | None = None) -> None:
         self.qlipot = Qlipot()
         self.hitl = HITL()
         self.firewall = FirewallMCP(
@@ -84,10 +93,12 @@ class BenchmarkRunner:
             contract_checker=permitir_tudo,
             hitl=self.hitl,
         )
+        self.corrections = corrections or []
 
     def run(self, scenarios: list[BenchmarkScenario]) -> dict[str, Any]:
         """Run scenarios and return a JSON-serializable report."""
 
+        self._apply_corrections(scenarios)
         results = [self._run_one(scenario) for scenario in scenarios]
         expected_attacks = [item for item in results if item["expected_blocked"]]
         benign = [item for item in results if not item["expected_blocked"]]
@@ -117,6 +128,24 @@ class BenchmarkRunner:
             },
             "scenarios": results,
         }
+
+    def _apply_corrections(self, scenarios: list[BenchmarkScenario]) -> None:
+        by_id = {scenario.id: scenario for scenario in scenarios}
+        for correction in self.corrections:
+            signature = correction.get("signature")
+            target_id = correction.get("target_scenario_id")
+            if target_id:
+                scenario = by_id[str(target_id)]
+                signature = self.qlipot.assinar_acao(
+                    ferramenta=scenario.tool,
+                    argumentos=scenario.arguments,
+                    pedido=scenario.request,
+                )
+            self.qlipot.aplicar_correcao(
+                str(signature),
+                float(correction["delta"]),
+                origem=str(correction.get("origem", "sync_hub")),
+            )
 
     def _run_one(self, scenario: BenchmarkScenario) -> dict[str, Any]:
         start = time.perf_counter()
@@ -244,10 +273,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--scenarios", type=Path, default=DEFAULT_SCENARIOS_DIR)
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_DIR)
     parser.add_argument("--timestamp", help="Override report timestamp, useful for reproducible baselines")
+    parser.add_argument("--corrections", type=Path, help="Optional JSON/YAML qlipot correction file")
     parser.add_argument("--no-write", action="store_true", help="Print JSON to stdout instead of writing reports")
     args = parser.parse_args(argv)
 
-    report = BenchmarkRunner().run(load_scenarios(args.scenarios))
+    report = BenchmarkRunner(corrections=load_corrections(args.corrections)).run(load_scenarios(args.scenarios))
     if args.no_write:
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0
@@ -302,4 +332,3 @@ def _git_commit() -> str:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

@@ -244,13 +244,16 @@ Implemented and tested:
   budget-aware selection.
 - Kabbalah-Bench containment reports and optional tree-search autonomy loop
   (`KABBALAH_SEARCH_MODE=tree`; default remains linear).
+- SyncHub signed offline federation bundles with Ed25519 identity, trust list,
+  network modes, replay/tamper checks, and Kabbalah-Bench before/after evidence.
 - CLI setup/config/status with JSON output and safe secret handling.
 - SillyTavern group-chat event renderer and example Blank Card setup.
 
 Known alpha boundaries:
 
 - Root-level orchestration does not yet inject `LLMGateway` by default.
-- SyncHub network propagation is local/phase-1, not production federation.
+- SyncHub federation is offline signed-bundle exchange; no HTTPS hub or P2P
+  gossip is enabled.
 - Real LLM calls require provider credentials configured outside source code.
 - Local model fit is a heuristic/profiler layer, not an auto-deployment system.
 
@@ -260,5 +263,6 @@ Known alpha boundaries:
 - [Execution plan](docs/roadmap/handoff-execution-plan.md)
 - [CLI exit codes](docs/specs/cli-exit-codes.md)
 - [Tree search design](docs/specs/tree-search-design.md)
+- [Federated network design](docs/specs/federated-network-design.md)
 - [No-mock runtime policy](docs/specs/NO_MOCK_RUNTIME_POLICY.md)
 - [SillyTavern group chat design](docs/specs/st-group-chat-design.md)

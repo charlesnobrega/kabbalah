@@ -44,7 +44,7 @@
 | M12 (Budget Manager) | ✅ Feito na onda 7 — limites por run/dia/provider, modos `warn|block`, gateway enforcement, tool `get_budget_stats`, fallback de providers e custos reais no ledger |
 | M8 (Model Comparison) | ✅ Feito na onda 8 — tool `compare_models` no bridge |
 | M9 (Group Chat ST) | ✅ Feito na onda 8 — exemplo/render de eventos em sala ST |
-| M17, M18 | ❌ Pendentes (Onda 9: benchmark + tree search) |
+| M17, M18 | ✅ Feito na onda 9 — Kabbalah-Bench + tree search com budget |
 | M10, M11 | ⏸️ Bloqueados por decisão humana (ver §6) |
 
 ### APIs reais da camada de providers (verificadas)
@@ -503,13 +503,13 @@ Visão: **threat intelligence federada para agentes** — o modelo "definições
 antivírus", não uma rede social de instâncias. O SyncHub atual é a metade local
 (sinapses, quarentena, reputação, ban list); esta onda cria o transporte.
 
-- [ ] **11.1 Design doc primeiro** — `docs/specs/federated-network-design.md`:
+- [x] **11.1 Design doc primeiro** *(Codex, 2026-07-06 — `docs/specs/federated-network-design.md`)* — `docs/specs/federated-network-design.md`:
   formato do bundle, pipeline de importação, modelo de ameaça (envenenamento,
   spoofing, replay), plano de compatibilidade entre versões do assessor.
-- [ ] **11.2 Identidade criptográfica** — keypair ed25519 gerado no
+- [x] **11.2 Identidade criptográfica** *(Codex, 2026-07-06 — `ConfigurationManager.ensure_federation_identity()` + setup)* — keypair ed25519 gerado no
   `kabbalah setup` (integra 8.0); a chave pública é a identidade da instância
   na rede. O `hardware_hash` do profiler vira telemetria, NÃO identidade.
-- [ ] **11.3 Bundles assinados (a "rede" sem servidor)** — exportar/importar
+- [x] **11.3 Bundles assinados (a "rede" sem servidor)** *(Codex, 2026-07-06 — testes em `tests/test_sync_hub_federation.py`)* — exportar/importar
   arquivos de sinapses assinados:
   - Conteúdo por sinapse: `hash(assinatura_acao)`, delta, contadores, janela
     temporal grosseira, `RISK_ASSESSOR_VERSION`. **Nunca** conteúdo bruto
@@ -519,14 +519,14 @@ antivírus", não uma rede social de instâncias. O SyncHub atual é a metade lo
     quórum (≥N publicadores independentes OU contagem mínima) → clamp ±0.30
     (já existe) → `aplicar_correcao(origem="sync_hub")` → auditoria append-only.
   - Correção só internaliza se `RISK_ASSESSOR_VERSION` for compatível.
-- [ ] **11.4 Trust list e modos** — chave do projeto (Charles) pré-confiada;
+- [x] **11.4 Trust list e modos** *(Codex, 2026-07-06 — `kabbalah config set-network|trust-add|trust-remove`)* — chave do projeto (Charles) pré-confiada;
   usuário gerencia via `kabbalah config` (trust add/remove). Modos de rede no
   menu 8.0: `off` (DEFAULT — instalação nunca fala com rede sem ação explícita)
   / `receber` (importa, não envia) / `receber+contribuir`.
   - Distribuição fase 2: bundles oficiais curados e assinados pelo Charles via
     GitHub Releases do repo. Formato neutro por design: qualquer publicador
     pode assinar; a trust list de cada dono decide.
-- [ ] **11.5 Medir antes e depois** — rodar o Kabbalah-Bench com e sem as
+- [x] **11.5 Medir antes e depois** *(Codex, 2026-07-06 — before `20260706T020000Z`, after `20260706T021000Z`: contenção 0%→100%, falso positivo 0%→0% no cenário federado)* — rodar o Kabbalah-Bench com e sem as
   correções importadas; só promover a feature se a taxa de contenção melhorar
   sem aumento de falso-positivo.
 

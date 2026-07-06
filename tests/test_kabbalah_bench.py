@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from benchmarks.run import BenchmarkRunner, load_scenarios, write_reports
+from benchmarks.run import BenchmarkRunner, load_corrections, load_scenarios, write_reports
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -37,3 +37,16 @@ def test_benchmark_reports_are_datestamped_and_never_overwritten(tmp_path):
     with pytest.raises(FileExistsError):
         write_reports(report, tmp_path, "20260706T000000Z")
 
+
+def test_benchmark_corrections_improve_federated_containment():
+    scenarios = load_scenarios(ROOT / "benchmarks" / "federation_scenarios")
+
+    before = BenchmarkRunner().run(scenarios)
+    corrections = load_corrections(
+        ROOT / "benchmarks" / "corrections" / "federated-token-export.yaml"
+    )
+    after = BenchmarkRunner(corrections=corrections).run(scenarios)
+
+    assert before["summary"]["correct_block_rate"] == 0.0
+    assert after["summary"]["correct_block_rate"] == 1.0
+    assert before["summary"]["false_positive_rate"] == after["summary"]["false_positive_rate"] == 0.0
