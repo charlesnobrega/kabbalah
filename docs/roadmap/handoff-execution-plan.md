@@ -9,7 +9,8 @@
 
 ## 0. ESTADO REAL DO REPOSITÓRIO (verificado em 2026-07-04)
 
-- **Branch atual**: `main` — ondas 4–8 mergeadas e auditadas por Claude (2026-07-05). Ondas 9–11 pendentes.
+- **Branch atual**: `wave-11-federated` — ondas 9 e 11 implementadas por Codex
+  sobre `wave-9-research`; Onda 10 segue bloqueada por decisão humana.
 - **⚠️ REVISÃO HUMANA PENDENTE nas ondas 5–8**: essas ondas envolvem conteúdo de
   segurança que aciona o fallback automático do Fable 5 para outro modelo
   (mudança de modelo no meio da sessão; ver artigo de suporte da Anthropic e
@@ -18,7 +19,7 @@
   de considerá-las definitivas — a auditoria automatizada (suíte verde, ruff,
   smoke real) passou, mas não substitui a leitura humana neste caso.
 - **Branches históricas de execução**: `wave-4-hygiene`, `wave-5-llm-loop`, `wave-6-security` — já reconciliadas neste handoff.
-- **Suíte de testes**: `1210 passed, 89 skipped, 0 failed` (auditado por Claude em 2026-07-05, `main`, com `.venv\Scripts\python.exe -m pytest tests -q`; ruff limpo; `kabbalah --help` OK). Skips = testes live de providers, desligados por política — **é o estado esperado, não conserte**. O "812/74 failed" da análise externa é de abril/2026 — **obsoleto**.
+- **Suíte de testes**: `1229 passed, 89 skipped, 0 failed` (auditado por Codex em 2026-07-06, `wave-11-federated`, com `.venv\Scripts\python.exe -m pytest tests -q`; ruff limpo; `py_compile` OK). Skips = testes live de providers, desligados por política — **é o estado esperado, não conserte**. O "812/74 failed" da análise externa é de abril/2026 — **obsoleto**.
 - **Ondas de hardening 1–3 completas** (ver `docs/roadmap/hardening-next-waves.md`):
   - Onda 1: bridge MCP + ToolExecutionEngine (contratos obrigatórios, shell opt-in, SSRF, allowlists).
   - Onda 2: contratos persistentes em SQLite (`src/kabbalah/contrato_store.py`), `max_calls` atômico, log de violações append-only, separação ausência×violação (`VerificationOutcome`).

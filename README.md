@@ -233,6 +233,12 @@ Last local full validation for Onda 8.6:
 1206 passed, 89 skipped
 ```
 
+Last local full validation after Onda 11:
+
+```text
+1229 passed, 89 skipped
+```
+
 ## Project status
 
 Implemented and tested:

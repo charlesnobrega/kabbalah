@@ -76,4 +76,8 @@ Recent decisions:
 
 Validation baseline:
 
+- On 2026-07-06, after waves 9 and 11 on `wave-11-federated`:
+  `.venv\Scripts\python.exe -m pytest tests -q` passed with `1229 passed,
+  89 skipped`; `ruff check src tests benchmarks kabbalah_mcp_bridge.py` passed;
+  `py_compile` passed for the touched runtime/benchmark entrypoints.
 - On 2026-06-25, the original base dependency set was not installable because optional Cognee conflicted with pinned core dependencies. Cognee was moved to `requirements-memory.txt`.
