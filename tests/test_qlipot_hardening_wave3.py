@@ -46,7 +46,7 @@ def test_benign_request_stays_low_risk():
 
 def test_intent_evaluation_carries_assessor_version():
     result = Qlipot().avaliar_intencao(pedido="hello", ferramenta="read_file", argumentos={})
-    assert result.assessor_version == RISK_ASSESSOR_VERSION
+    assert RISK_ASSESSOR_VERSION in result.assessor_version
 
 
 def test_correction_from_unauthorized_origin_is_denied_and_audited():

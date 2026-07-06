@@ -6,91 +6,24 @@ legitimate requests technically, and blocks real critical-risk requests. It does
 not override the risk layer or attempt guardrail evasion.
 """
 
-import base64
 import hashlib
 import json
-import re
-import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set
 
 from .memory_subsystem import Knowledge, MemorySubsystem
+from .risk_assessor import HeuristicRiskAssessor, QlipotRiskAssessor, _normalizar_texto
 
 # Version stamp recorded with every evaluation and correction so historical
 # decisions can be traced back to the assessor revision that produced them.
-RISK_ASSESSOR_VERSION = "wave3-2026.07"
+RISK_ASSESSOR_VERSION = "wave10-2026.07"
 
 # Federated corrections are clamped to this range (wave-3 hardening).
 MAX_DELTA_CORRECAO = 0.30
 
-# Common Cyrillic/Greek homoglyphs folded to Latin before keyword matching.
-_HOMOGLIFOS = {
-    "а": "a",
-    "в": "b",
-    "с": "c",
-    "е": "e",
-    "н": "h",
-    "к": "k",
-    "м": "m",
-    "о": "o",
-    "р": "p",
-    "т": "t",
-    "х": "x",
-    "у": "y",
-    "і": "i",
-    "ѕ": "s",
-    "ԁ": "d",
-    "α": "a",
-    "β": "b",
-    "ε": "e",
-    "ι": "i",
-    "κ": "k",
-    "ν": "v",
-    "ο": "o",
-    "ρ": "p",
-    "τ": "t",
-    "υ": "u",
-    "χ": "x",
-}
 
-# Real destructive command shapes, beyond simple keyword presence.
-_PADROES_CRITICOS = [
-    re.compile(pattern)
-    for pattern in (
-        r"\brm\s+-[a-z]*[rf]",
-        r"\bdel\s+/[fsq]",
-        r"\bformat\s+[a-z]:",
-        r"\bmkfs(\.|\s)",
-        r"\bdd\s+if=",
-        r"\bshutdown\b",
-        r"\bdrop\s+(table|database)\b",
-        r"\btruncate\s+table\b",
-        r":\(\)\s*\{.*\}\s*;\s*:",
-        r"(curl|wget)[^|;&]*\|\s*(ba|z|da)?sh",
-        r"powershell[^\n]*-enc",
-        r"base64\s+(-d|--decode)[^|]*\|",
-        r"\bgit\s+push\b.*--force",
-        r"\bchmod\s+777\b",
-    )
-]
-
-_BASE64_RUN = re.compile(r"[A-Za-z0-9+/]{16,}={0,2}")
-
-
-def _normalizar_texto(texto: str) -> str:
-    """Fold encodings that keyword heuristics would otherwise miss.
-
-    NFKC collapses fullwidth/compatibility forms, format characters
-    (zero-width joiners and friends) are dropped so they cannot split
-    keywords, and common homoglyphs are mapped back to Latin.
-    """
-
-    texto = unicodedata.normalize("NFKC", texto)
-    texto = "".join(ch for ch in texto if unicodedata.category(ch) != "Cf")
-    texto = texto.casefold()
-    return "".join(_HOMOGLIFOS.get(ch, ch) for ch in texto)
 
 
 class QlipotStatus(Enum):
@@ -132,11 +65,13 @@ class Qlipot:
         *,
         origens_autorizadas: Optional[Set[str]] = None,
         store: Any = None,
+        risk_assessor: Optional[QlipotRiskAssessor] = None,
     ):
         self._audit_log: List[QlipotResult] = []
         self._memory = memory or MemorySubsystem()
         self._callbacks: Dict[str, List[Callable[[str, Dict[str, Any]], Any]]] = {}
         self._store = store
+        self._risk_assessor = risk_assessor or HeuristicRiskAssessor()
         self._correcoes: Dict[str, float] = {}
         if store:
             try:
@@ -226,7 +161,9 @@ class Qlipot:
         `risco` is the operational risk score consumed by FirewallMCP.
         """
 
-        score_atual = self._avaliar_score_isolado(ferramenta, argumentos, pedido=pedido)
+        score_isolado = self._risk_assessor.assess_risk(ferramenta, argumentos, pedido=pedido)
+        assinatura_acao = self.assinar_acao(ferramenta=ferramenta, argumentos=argumentos, pedido=pedido)
+        score_atual = max(0.0, min(1.0, score_isolado + self._correcoes.get(assinatura_acao, 0.0)))
         historico = self._ultimas_acoes_agente(agente_id, limit=5)
         score_contexto = self.calcular_suspeita(historico)
         risco = min(1.0, score_atual + score_contexto)
@@ -256,6 +193,7 @@ class Qlipot:
             score_atual=score_atual,
             score_contexto=score_contexto,
             score_final=risco,
+            assessor_version=f"{self._risk_assessor.version} ({self._risk_assessor.identity})",
         )
         if self._store:
             import uuid
@@ -459,79 +397,4 @@ class Qlipot:
             reverse=True,
         )[:limit]
 
-    _AUDIT_TERMS = (
-        "token",
-        "secret",
-        "credential",
-        "produção",
-        "production",
-        "senha",
-        "password",
-        "credencial",
-        "api_key",
-        "apikey",
-        "chave privada",
-        "private key",
-    )
-    _HIGH_TERMS = ("execute_command", "shell", "exec", "network_request", "post")
-    _CRITICAL_TERMS = (
-        "delete",
-        "remove",
-        "drop",
-        "reset",
-        "force",
-        "exfiltrate",
-        "apagar",
-        "excluir",
-        "destruir",
-        "destroy",
-        "wipe",
-        "erase",
-        "purge",
-        "exfiltrar",
-    )
 
-    def _avaliar_score_isolado(
-        self,
-        ferramenta: str,
-        argumentos: Dict[str, Any],
-        *,
-        pedido: str = "",
-    ) -> float:
-        bruto = f"{pedido} {ferramenta} {argumentos}"
-        risco = max(0.10, self._score_termos(_normalizar_texto(bruto)))
-        # base64 is case-sensitive: scan the raw text, normalize only the
-        # decoded payload before keyword matching.
-        risco = max(risco, self._score_payloads_codificados(bruto))
-        assinatura_acao = self.assinar_acao(ferramenta=ferramenta, argumentos=argumentos, pedido=pedido)
-        risco = max(0.0, min(1.0, risco + self._correcoes.get(assinatura_acao, 0.0)))
-        return risco
-
-    def _score_termos(self, texto_normalizado: str) -> float:
-        risco = 0.0
-        if any(term in texto_normalizado for term in self._AUDIT_TERMS):
-            risco = max(risco, 0.50)
-        if any(term in texto_normalizado for term in self._HIGH_TERMS):
-            risco = max(risco, 0.70)
-        if any(term in texto_normalizado for term in self._CRITICAL_TERMS):
-            risco = max(risco, 0.96)
-        if any(pattern.search(texto_normalizado) for pattern in _PADROES_CRITICOS):
-            risco = max(risco, 0.96)
-        return risco
-
-    def _score_payloads_codificados(self, texto_bruto: str) -> float:
-        """Re-scan plausible base64 payloads so encoding does not hide intent."""
-
-        risco = 0.0
-        for match in _BASE64_RUN.finditer(texto_bruto):
-            candidato = match.group(0)
-            try:
-                decoded = base64.b64decode(candidato + "=" * (-len(candidato) % 4)).decode("utf-8", errors="strict")
-            except Exception:
-                continue
-            if not decoded.isprintable():
-                continue
-            risco = max(risco, self._score_termos(_normalizar_texto(decoded)))
-            if risco >= 0.96:
-                break
-        return risco
