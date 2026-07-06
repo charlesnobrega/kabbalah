@@ -27,7 +27,9 @@ if (-not (Test-Path -Path ".venv")) {
 Write-Host "[*] Instalando dependencias do requirements.txt..."
 & .venv\Scripts\python.exe -m pip install --upgrade pip
 & .venv\Scripts\python.exe -m pip install -r requirements.txt
-Write-Host "[+] Dependencias instaladas com sucesso."
+Write-Host "[*] Instalando o pacote kabbalah (modo editavel) para expor a CLI..."
+& .venv\Scripts\python.exe -m pip install -e .
+Write-Host "[+] Dependencias e CLI instaladas com sucesso."
 
 # 4. Criar estrutura de diretorios locais do usuario (~/.kabbalah)
 $userHome = [System.Environment]::GetFolderPath("UserProfile")

@@ -26,7 +26,9 @@ fi
 echo "[*] Instalando dependencias do requirements.txt..."
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -r requirements.txt
-echo "[+] Dependencias instaladas com sucesso."
+echo "[*] Instalando o pacote kabbalah (modo editavel) para expor a CLI..."
+.venv/bin/python -m pip install -e .
+echo "[+] Dependencias e CLI instaladas com sucesso."
 
 # 4. Criar estrutura de diretorios locais do usuario (~/.kabbalah)
 KABBALAH_DIR="$HOME/.kabbalah"
