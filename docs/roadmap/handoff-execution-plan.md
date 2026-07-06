@@ -10,6 +10,13 @@
 ## 0. ESTADO REAL DO REPOSITÓRIO (verificado em 2026-07-04)
 
 - **Branch atual**: `main` — ondas 4–8 mergeadas e auditadas por Claude (2026-07-05). Ondas 9–11 pendentes.
+- **⚠️ REVISÃO HUMANA PENDENTE nas ondas 5–8**: essas ondas envolvem conteúdo de
+  segurança que aciona o fallback automático do Fable 5 para outro modelo
+  (mudança de modelo no meio da sessão; ver artigo de suporte da Anthropic e
+  `docs/ops/context-pack.md`). Como o modelo revisor mudou durante parte do
+  trabalho, o Charles quer uma **revisão humana explícita das ondas 5–8** antes
+  de considerá-las definitivas — a auditoria automatizada (suíte verde, ruff,
+  smoke real) passou, mas não substitui a leitura humana neste caso.
 - **Branches históricas de execução**: `wave-4-hygiene`, `wave-5-llm-loop`, `wave-6-security` — já reconciliadas neste handoff.
 - **Suíte de testes**: `1210 passed, 89 skipped, 0 failed` (auditado por Claude em 2026-07-05, `main`, com `.venv\Scripts\python.exe -m pytest tests -q`; ruff limpo; `kabbalah --help` OK). Skips = testes live de providers, desligados por política — **é o estado esperado, não conserte**. O "812/74 failed" da análise externa é de abril/2026 — **obsoleto**.
 - **Ondas de hardening 1–3 completas** (ver `docs/roadmap/hardening-next-waves.md`):
