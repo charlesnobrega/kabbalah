@@ -227,10 +227,10 @@ python -m ruff check src tests kabbalah_mcp_bridge.py
 python -m pytest tests -q
 ```
 
-Last local full validation (after waves 12 and 10.2, on `wave-11-federated`):
+Last local full validation (after wave 13, on `wave-11-federated`):
 
 ```text
-1239 passed, 89 skipped
+1220 passed, 89 skipped
 ```
 
 ## Project status

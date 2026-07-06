@@ -13,7 +13,9 @@
   sobre `wave-9-research`; Onda 10 desbloqueada e implementada (10.1 sandbox via
   Antigravity/onda 12; 10.2 RiskAssessor plugável, commit `8cdcbf5`); Onda 12
   (hardening físico) implementada por Antigravity (commit `6c8c350`). Pendências
-  atuais: Onda 13 (reconciliação/dívida técnica, ver §3).
+  atuais: Onda 13 parcial — 13.1–13.3 feitas (Claude, 2026-07-06; suíte 1220/89);
+  13.4 (bench risk-judge, precisa de chaves), 13.5 (gated fase física) e 13.6
+  (migração SDK Gemini, gated) em aberto.
 - **⚠️ REVISÃO PENDENTE das ondas 5–11 (protocolo ponytail linha-a-linha)**:
   parte das ondas foi revisada enquanto o modelo da sessão oscilava (fallback
   automático Fable 5 → Opus 4.8 disparado por conteúdo de segurança; ver artigo
@@ -628,7 +630,7 @@ real da fase anterior — NÃO especificar agora.
 > Itens independentes entre si; ordem recomendada: 13.1 → 13.2 → 13.3 → 13.4.
 > 13.5 é gated (só após a fase física validar o caminho do sandbox).
 
-- [ ] **13.1 Higiene de docs (fecha PRD §14 itens 3–5)** — três correções pequenas:
+- [x] **13.1 Higiene de docs (fecha PRD §14 itens 3–5)** *(Claude, 2026-07-06)* — três correções pequenas:
   1. Nota de topo em `docs/specs/requirements.md` marcando-o como spec
      histórica/EARS **aspiracional** (2026-04-06), com ponteiro para
      `docs/specs/PRD.md` (produto, reconciliado) e para este plano (execução).
@@ -641,7 +643,7 @@ real da fase anterior — NÃO especificar agora.
   3. Atualizar contagens de teste no README (§ "Development checks" e § "Project
      status") para o baseline vigente na hora do commit (hoje: 1239/89).
   *Aceite*: nenhum doc canônico contradiz o código; links válidos; suíte verde.
-- [ ] **13.2 Remover `ProviderConfigurationManager` (YAGNI)** —
+- [x] **13.2 Remover `ProviderConfigurationManager` (YAGNI)** *(Claude, 2026-07-06 — suíte 1239→1220)* —
   `src/kabbalah/providers/config.py` é um seletor de provider paralelo **órfão**:
   só é referenciado por `providers/__init__.py` (export) e por
   `tests/providers/test_provider_config.py`; nenhum caminho de runtime o consome

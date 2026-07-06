@@ -86,8 +86,11 @@ Validation baseline:
 
 - On 2026-07-06, during PRD validation (`docs/specs/PRD.md`) on `wave-11-federated`
   with clean tree: `1239 passed, 89 skipped, 0 failed` in ~127s. Wave 13
-  (reconciliation/tech-debt, ready for any executor AI) was added to the handoff
-  plan on the same date.
+  (reconciliation/tech-debt) was then partially executed the same day: 13.1–13.3
+  done (docs reconciled; orphaned `ProviderConfigurationManager` removed;
+  `google-generativeai` bumped 0.3.0→0.8.6), leaving the suite at `1220 passed,
+  89 skipped`. Items 13.4 (risk-judge bench, needs keys), 13.5 (sandbox hardening,
+  gated) and 13.6 (migrate Gemini to the `google-genai` SDK, gated) remain open.
 - On 2026-07-06, after wave 12:
   `.venv\Scripts\python.exe -m pytest tests -q` passed with `1234 passed,
   89 skipped`; all tests pass successfully on Windows. Added `test_wave12_hardening.py`.

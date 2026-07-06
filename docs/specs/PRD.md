@@ -25,7 +25,7 @@ Tudo abaixo foi verificado diretamente no repositório em 2026-07-06, branch
 | Item | Valor validado | Como foi verificado |
 |---|---|---|
 | Versão | `0.8.0` (alpha) | `src/kabbalah/__init__.py` + `pyproject.toml` classifiers `3 - Alpha` |
-| Suíte de testes | **1239 passed, 89 skipped, 0 failed** em 126,85s | `.venv\Scripts\python.exe -m pytest tests -q` executado nesta sessão |
+| Suíte de testes | **1220 passed, 89 skipped, 0 failed** (era 1239 na validação inicial; wave 13.2 removeu o módulo órfão) | `.venv\Scripts\python.exe -m pytest tests -q` |
 | Arquivos de teste | 83 | `find tests -name test_*.py` |
 | Funções `def test_` | 1309 | grep no diretório `tests` |
 | Módulos runtime | ~60 arquivos `.py` / ~18.358 LOC | `find src -name *.py \| wc -l` |
@@ -508,7 +508,9 @@ como espelhos.
 
 ## 12. Estado de validação atual
 
-- **Testes**: 1239 passed, 89 skipped, 0 failed (2026-07-06, `wave-11-federated`).
+- **Testes**: 1220 passed, 89 skipped, 0 failed (2026-07-06, `wave-11-federated`,
+  pós wave 13.1–13.3; eram 1239 na validação inicial do PRD, antes da remoção do
+  módulo órfão na 13.2).
 - **Lint**: `ruff` verde (`E/W/F/I/B`) por histórico recente; working tree limpo.
 - **Ondas 1–9, 11, 10.1, 10.2**: implementadas e testadas (ver §0 e handoff plan).
 - **Skips**: testes live de providers, desligados por política — estado esperado.
@@ -569,10 +571,10 @@ Nenhuma é bug de runtime — são dívidas de documentação/reconciliação:
    nunca é chamada fora do gateway". O grep confirma que só é usado por
    `providers/__init__.py` (export) e por testes — **nenhum caminho de runtime o
    consome**. → **Ação**: deprecar/remover (disciplina ponytail/YAGNI); manter
-   `LLMGateway` + `configuration_manager.py` como únicos.
+   `LLMGateway` + `configuration_manager.py` como únicos. → **✅ feito na wave 13.2 (módulo removido).**
 7. **`google-generativeai==0.3.0` pinado numa versão antiga** (`pyproject.toml:50`).
    → **Ação**: atualizar para a linha atual e revalidar `GoogleGeminiProvider`
-   contra a nova API. (Único ponto onde a análise web externa acertou.)
+   contra a nova API. (Único ponto onde a análise web externa acertou.) → **✅ feito na wave 13.3 (bump para 0.8.6; o pacote está EOL → migração de SDK vira wave 13.6).**
 8. **`shell=True` presente porém gated** (`execution_engine.py:532,592`): o path
    existe, mas `execute_command` é opt-in (`ENABLE_SHELL=1`) e há sandbox Docker
    opcional. Não é "aberto", mas o endurecimento (rede off, read-only, non-root,
@@ -604,6 +606,12 @@ Nenhuma é bug de runtime — são dívidas de documentação/reconciliação:
 
 **Ordem recomendada**: DT-4 (reconciliação, destrava clareza) → DT-2 (limpeza
 YAGNI) → DT-1 (dependência) → DT-3 (endurecimento, pós fase física).
+
+**Executado em 2026-07-06 (wave 13, commits `9cd2af5`/`8957089`/`4c1b37a`)**:
+DT-4 ✅ parcial (plano de ondas reconciliado; `requirements.md` anotado; classifier
+3.9 removido; contagens atualizadas) · DT-2 ✅ (`ProviderConfigurationManager`
+removido) · DT-1 ✅ (`google-generativeai` 0.3.0→0.8.6; pacote agora EOL, migração
+para `google-genai` = wave 13.6) · DT-3 ⏸️ gated (wave 13.5, pós fase física).
 
 ---
 
