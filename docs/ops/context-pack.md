@@ -24,6 +24,11 @@ Role: alpha-stage multi-agent orchestration runtime for experimentation and reco
 6. **Single architecture doc**: `docs/ARCHITECTURE.md` — created by cleanup
    Phase D.1 and now maintained as the concise architecture overview. Do not
    create competing architecture documents elsewhere.
+7. **Product requirements**: `docs/specs/PRD.md` — PRD reconciliado com o código
+   em 2026-07-06 (RFs com status validado, user stories, linhagem intelectual,
+   dívida técnica). Guarda-chuva de produto; NÃO substitui o plano de execução.
+   `docs/specs/requirements.md` é spec EARS histórica/aspiracional — não executar
+   a partir dela.
 
 Wave order: cleanup (wave 4) and the LLM loop (wave 5) are independent and may be
 executed in either order; waves 6+ follow the dependencies stated in the handoff plan.
@@ -79,6 +84,10 @@ Recent decisions:
 
 Validation baseline:
 
+- On 2026-07-06, during PRD validation (`docs/specs/PRD.md`) on `wave-11-federated`
+  with clean tree: `1239 passed, 89 skipped, 0 failed` in ~127s. Wave 13
+  (reconciliation/tech-debt, ready for any executor AI) was added to the handoff
+  plan on the same date.
 - On 2026-07-06, after wave 12:
   `.venv\Scripts\python.exe -m pytest tests -q` passed with `1234 passed,
   89 skipped`; all tests pass successfully on Windows. Added `test_wave12_hardening.py`.

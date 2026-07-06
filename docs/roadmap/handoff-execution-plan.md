@@ -10,7 +10,10 @@
 ## 0. ESTADO REAL DO REPOSITÓRIO (verificado em 2026-07-04)
 
 - **Branch atual**: `wave-11-federated` — ondas 9 e 11 implementadas por Codex
-  sobre `wave-9-research`; Onda 10 segue bloqueada por decisão humana.
+  sobre `wave-9-research`; Onda 10 desbloqueada e implementada (10.1 sandbox via
+  Antigravity/onda 12; 10.2 RiskAssessor plugável, commit `8cdcbf5`); Onda 12
+  (hardening físico) implementada por Antigravity (commit `6c8c350`). Pendências
+  atuais: Onda 13 (reconciliação/dívida técnica, ver §3).
 - **⚠️ REVISÃO PENDENTE das ondas 5–11 (protocolo ponytail linha-a-linha)**:
   parte das ondas foi revisada enquanto o modelo da sessão oscilava (fallback
   automático Fable 5 → Opus 4.8 disparado por conteúdo de segurança; ver artigo
@@ -32,7 +35,10 @@
   4. A auditoria automatizada (suíte 1210 verde, ruff, smoke real) passou, mas
      não substitui essa leitura — é complementar.
 - **Branches históricas de execução**: `wave-4-hygiene`, `wave-5-llm-loop`, `wave-6-security` — já reconciliadas neste handoff.
-- **Suíte de testes**: `1229 passed, 89 skipped, 0 failed` (auditado por Codex em 2026-07-06, `wave-11-federated`, com `.venv\Scripts\python.exe -m pytest tests -q`; ruff limpo; `py_compile` OK). Skips = testes live de providers, desligados por política — **é o estado esperado, não conserte**. O "812/74 failed" da análise externa é de abril/2026 — **obsoleto**.
+- **Suíte de testes**: `1239 passed, 89 skipped, 0 failed` (validado por Claude em
+  2026-07-06 durante a redação/validação do `docs/specs/PRD.md`, `wave-11-federated`,
+  working tree limpo, com `.venv\Scripts\python.exe -m pytest tests -q`; baseline
+  anterior de Codex no mesmo dia: 1229/89; ruff limpo; `py_compile` OK). Skips = testes live de providers, desligados por política — **é o estado esperado, não conserte**. O "812/74 failed" da análise externa é de abril/2026 — **obsoleto**.
 - **Ondas de hardening 1–3 completas** (ver `docs/roadmap/hardening-next-waves.md`):
   - Onda 1: bridge MCP + ToolExecutionEngine (contratos obrigatórios, shell opt-in, SSRF, allowlists).
   - Onda 2: contratos persistentes em SQLite (`src/kabbalah/contrato_store.py`), `max_calls` atômico, log de violações append-only, separação ausência×violação (`VerificationOutcome`).
@@ -59,7 +65,7 @@
 | M8 (Model Comparison) | ✅ Feito na onda 8 — tool `compare_models` no bridge |
 | M9 (Group Chat ST) | ✅ Feito na onda 8 — exemplo/render de eventos em sala ST |
 | M17, M18 | ✅ Feito na onda 9 — Kabbalah-Bench + tree search com budget |
-| M10, M11 | ⏸️ Bloqueados por decisão humana (ver §6) |
+| M10, M11 | ✅ Feitos — 10.1 sandbox Docker opt-in (onda 12); 10.2 `RiskAssessor` plugável (`src/kabbalah/risk_assessor.py`, commit `8cdcbf5`). Bench de candidatos risk-judge pendente → Onda 13.4 |
 
 ### APIs reais da camada de providers (verificadas)
 
@@ -505,7 +511,13 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
   barreira MODERADA, adequada para teste controlado, não à prova de agente hostil
   em produção. Endurecer (rede off, read-only, user não-root, limites) é trabalho
   futuro se a fase física validar o caminho.
-- [ ] **10.2 (M11) Classificador do Qlipot — avaliador de risco independente e plugável**
+- [x] **10.2 (M11) Classificador do Qlipot — avaliador de risco independente e plugável**
+  *(Implementado 2026-07-06, commit `8cdcbf5` — `src/kabbalah/risk_assessor.py`:
+  protocolo `QlipotRiskAssessor`, `HeuristicRiskAssessor` como fallback offline e
+  `LLMRiskAssessor` selecionado pelo gateway via capability `risk-judge`; testes
+  em `tests/test_risk_assessor.py`. **Gate remanescente**: o bench comparativo
+  heurística × candidatos LLM ainda não foi rodado — o default permanece a
+  heurística até o item 13.4 provar um candidato melhor com números.)*
   Decisão do Charles (2026-07-05): o avaliador de risco do Qlipot **não deve ser
   do mesmo fornecedor dos modelos que o kernel governa**. Um kernel de governança
   que julga ações de IA precisa de um juiz independente — se o julgador e o
@@ -584,6 +596,85 @@ antivírus", não uma rede social de instâncias. O SyncHub atual é a metade lo
 Fases 3 (hub HTTPS opt-in) e 4 (P2P gossip): futuro, cada uma gated por tração
 real da fase anterior — NÃO especificar agora.
 
+### ONDA 12 — Hardening físico (deployment) — ✅ concluída em 2026-07-06
+
+> Implementada por Antigravity (commit `6c8c350`; instaladores complementados em
+> `f14df14`), auditada. Registrada aqui retroativamente em 2026-07-06 (achado da
+> validação do PRD): a onda existia no código e no context-pack, mas não neste
+> plano — corrigido para o plano seguir sendo a fonte de verdade.
+
+- [x] **12.1 Cofre dinâmico de segredos** — `src/kabbalah/secrets_vault.py`.
+- [x] **12.2 Sandbox Docker (wrapper subprocess)** — mesmo entregável da Onda 10.1
+  (opt-in via `KABBALAH_USE_DOCKER_SANDBOX=1`, default OFF).
+- [x] **12.3 `SQLiteVectorBackend` local lazy** — instanciado sob demanda; ativo só
+  com `KABBALAH_USE_SQLITE_VECTOR=1` (evita locks de arquivo em testes no Windows).
+- [x] **12.4 Persistência SQLite para Qlipot/SyncHub** — correções e assinaturas de
+  bundles sobrevivem a restart (mesmo state DB).
+- [x] **12.5 Time locks em UTC + sanitização de chave de contrato.**
+- [x] **12.6 Instaladores e empacotamento físico** — `scripts/`, `Dockerfile`,
+  `docker-compose.yml`; instalação editable nos installers para a CLI ficar no PATH.
+  *Validação*: `tests/test_wave12_hardening.py` (5 testes: docker sandbox, sqlite
+  vector, persistência qlipot, sanitize key, UTC budget); suíte completa
+  `1239 passed, 89 skipped` em 2026-07-06.
+
+---
+
+### ONDA 13 — Reconciliação e dívida técnica (levantada na validação do PRD) — PRONTA PARA EXECUÇÃO
+
+> **Origem**: validação completa código × docs feita em 2026-07-06 durante a
+> redação de `docs/specs/PRD.md` (§14 e §14.5) — suíte 1239/89 verde como baseline.
+> **Executor**: qualquer IA de codificação, sob as regras da §2 (1 commit por item,
+> testes primeiro, nunca `--no-verify`, nunca push sem pedido).
+> Itens independentes entre si; ordem recomendada: 13.1 → 13.2 → 13.3 → 13.4.
+> 13.5 é gated (só após a fase física validar o caminho do sandbox).
+
+- [ ] **13.1 Higiene de docs (fecha PRD §14 itens 3–5)** — três correções pequenas:
+  1. Nota de topo em `docs/specs/requirements.md` marcando-o como spec
+     histórica/EARS **aspiracional** (2026-04-06), com ponteiro para
+     `docs/specs/PRD.md` (produto, reconciliado) e para este plano (execução).
+     Claims defasados a citar na nota: 12 providers com Anthropic nativo (real:
+     11, Anthropic via OpenRouter), execução paralela (real: raiz sequencial),
+     Cognee-first (real: opcional), single binary (real: pip).
+  2. Remover classifier `Programming Language :: Python :: 3.9` do
+     `pyproject.toml` (`requires-python = ">=3.10"`; CI dropou 3.9 no commit
+     `100e699`).
+  3. Atualizar contagens de teste no README (§ "Development checks" e § "Project
+     status") para o baseline vigente na hora do commit (hoje: 1239/89).
+  *Aceite*: nenhum doc canônico contradiz o código; links válidos; suíte verde.
+- [ ] **13.2 Remover `ProviderConfigurationManager` (YAGNI)** —
+  `src/kabbalah/providers/config.py` é um seletor de provider paralelo **órfão**:
+  só é referenciado por `providers/__init__.py` (export) e por
+  `tests/providers/test_provider_config.py`; nenhum caminho de runtime o consome
+  (verificado por grep em 2026-07-06). Ele chama a `ProviderFactory` direto,
+  ferindo a decisão canônica §1.2.1 ("factory nunca é chamada fora do gateway").
+  Remover módulo + export + teste dedicado. Se houver razão para manter, deprecar
+  com `DeprecationWarning` e justificar no commit — mas o default é remover.
+  *Aceite*: `grep -rn "ProviderConfigurationManager" src/ tests/` vazio (ou só o
+  shim deprecated); `from kabbalah.providers import ProviderFactory` continua
+  funcionando; suíte verde.
+- [ ] **13.3 Atualizar `google-generativeai`** — pinado em `0.3.0`
+  (`pyproject.toml`), linha antiga do SDK. Atualizar para a versão vigente,
+  ajustar `src/kabbalah/providers/google_gemini_provider.py` ao novo SDK se a API
+  mudou, revalidar a allowlist de modelos (`gemini-2.5-flash/2.5-pro/...`), e
+  revisar se os pins de `protobuf`/`grpcio-status`/`google-api-core` podem ser
+  relaxados (foram fixados por causa do SDK antigo).
+  *Aceite*: testes unit do provider verdes; teste live opcional gated com chave
+  do Charles; instalação limpa `pip install -e .` sem conflito de dependências.
+- [ ] **13.4 Bench de candidatos risk-judge (fecha o gate do 10.2)** — a interface
+  plugável existe (`risk_assessor.py`); falta o comparativo com números que o
+  10.2 exige: rodar o Kabbalah-Bench com `HeuristicRiskAssessor` vs candidatos
+  LLM não-Anthropic (via OpenRouter — ex.: DeepSeek, Qwen, GLM — e/ou local via
+  Ollama), usando a capability `risk-judge`. Critério do 10.2: candidato só vira
+  default se **superar a heurística em contenção sem inflar falso-positivo**.
+  *Aceite*: relatório datado em `benchmarks/results/` comparando heurística ×
+  candidatos; decisão (promover ou manter heurística) registrada neste arquivo.
+- [ ] **13.5 Endurecer o sandbox Docker** *(GATED — só após a fase física validar o
+  caminho; decisão do Charles na Onda 10.1)* — rede desligada por padrão,
+  filesystem read-only com workdir dedicado, user não-root, limites de
+  CPU/memória/pids.
+  *Aceite*: teste provando cada restrição; limitações remanescentes documentadas
+  honestamente (kernel compartilhado etc.).
+
 ## 5. DEFINIÇÃO DE PRONTO (por onda)
 
 1. Todos os checkboxes da onda marcados neste arquivo.
@@ -597,6 +688,6 @@ real da fase anterior — NÃO especificar agora.
 | # | Decisão | Bloqueia |
 |---|---|---|
 | 1 | ✅ Resolvido 2026-07-04 — ondas 1–6 mergeadas em `main` (fast-forward, sem push) | — |
-| 2 | E2B (pago/cloud) vs Firecracker (self-hosted/Linux) | Onda 10.1 |
-| 3 | Modelo ML para o Qlipot + orçamento de avaliação | Onda 10.2 |
+| 2 | ✅ Resolvido 2026-07-06 — Charles escolheu Docker local (wrapper opt-in, ver 10.1); endurecimento fica na Onda 13.5 | — |
+| 3 | ✅ Parcialmente resolvido — design plugável implementado (10.2); escolha do modelo default depende do bench da Onda 13.4 | Onda 13.4 |
 | 4 | ✅ Resolvido 2026-07-04 — smoke real executado via Groq (`llama-3.1-8b-instant`): leaf → gateway → provider → artifact + linha no ledger. Achados registrados no item 7.4 | — |
