@@ -5,7 +5,6 @@ This module provides a unified interface for interacting with multiple LLM provi
 """
 
 from .base import BaseProvider, ProviderResponse
-from .config import ProviderConfigurationManager
 from .deepseek_provider import DeepSeekProvider
 from .factory import ConfigurationMode, ProviderFactory
 from .google_gemini_provider import GoogleGeminiProvider
@@ -27,5 +26,4 @@ __all__ = [
     "OpenAICompatibleProvider",
     "ProviderFactory",
     "ConfigurationMode",
-    "ProviderConfigurationManager",
 ]
