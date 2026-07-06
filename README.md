@@ -3,7 +3,7 @@
 [![CI](https://github.com/charlesnobrega/kabbalah/actions/workflows/ci.yml/badge.svg)](https://github.com/charlesnobrega/kabbalah/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/tag/charlesnobrega/kabbalah?label=version)](https://github.com/charlesnobrega/kabbalah/tags)
 [![License](https://img.shields.io/github/license/charlesnobrega/kabbalah)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 
 Kabbalah is a zero-trust governance kernel for AI agents. It sits between an
 agent UI/client and the actions that agent wants to execute, then applies

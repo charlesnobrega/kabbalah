@@ -55,7 +55,7 @@ def test_optional_extras_are_formalized() -> None:
     assert {"mcp", "memory", "observability"}.issubset(extras)
     assert any(dep.startswith("mcp") for dep in extras["mcp"])
     assert any(dep.startswith("cognee") for dep in extras["memory"])
-    assert "opentelemetry-exporter-prometheus==0.64b0" in extras["observability"]
+    assert any(dep.startswith("opentelemetry-exporter-prometheus") for dep in extras["observability"])
 
 
 def test_google_provider_transitives_are_constrained_for_extras() -> None:

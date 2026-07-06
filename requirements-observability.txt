@@ -3,5 +3,5 @@
 # Install only when Prometheus export is being enabled:
 #   python -m pip install -r requirements-observability.txt
 
-opentelemetry-exporter-prometheus==0.64b0
+opentelemetry-exporter-prometheus>=0.41b0,<1.0.0
 prometheus-client==0.25.0
