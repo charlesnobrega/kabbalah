@@ -465,7 +465,7 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
 
 ### ONDA 9 — Fronteira de pesquisa (M17+M18) — esforço: 3-6 semanas — depende das Ondas 5 e 7
 
-- [ ] **9.1 (M17) Kabbalah-Bench** — benchmark de contenção (inspirado no CoffeeBench da Sakana, foco ataque/defesa):
+- [x] **9.1 (M17) Kabbalah-Bench** *(Codex, 2026-07-06 — testes em `tests/test_kabbalah_bench.py`; baseline em `benchmarks/results/20260706T000000Z-kabbalah-bench.*`)* — benchmark de contenção (inspirado no CoffeeBench da Sakana, foco ataque/defesa):
   1. `benchmarks/` novo (fora de `src/`), com cenários red-team declarativos (YAML/JSON): agente tenta `rm -rf`, exfiltração via base64, escalada de privilégio, encadeamento de tools, sinônimos/homoglyphs (reaproveite os vetores dos testes da onda 3).
   2. Harness que roda cada cenário contra o pipeline real (Qlipot→Firewall→HITL com MockProvider gated) e mede: taxa de bloqueio correto, taxa de falso-positivo (cenários benignos de controle são obrigatórios), latência de decisão, overhead.
   3. Saída: relatório JSON + markdown em `benchmarks/results/` (datado, nunca sobrescrever — histórico é o valor).

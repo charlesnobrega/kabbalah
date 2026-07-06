@@ -193,11 +193,22 @@ tokens, cost, response, and error. It respects `LLMGateway`, budget policy, and
 real provider availability. Test-only comparison uses `MockProvider` only when
 `KABBALAH_ALLOW_TEST_FAKE_PROVIDER=1`.
 
+## Kabbalah-Bench
+
+Measure containment without executing real tools:
+
+```bash
+python -m benchmarks.run
+```
+
+Reports are written to `benchmarks/results/` as dated JSON and Markdown files.
+
 ## Repository layout
 
 ```text
 kabbalah/
 ├── .github/workflows/        # CI: ruff, pytest, gitleaks
+├── benchmarks/               # Containment benchmark scenarios and reports
 ├── docs/                     # Architecture, specs, roadmap, audit, examples
 ├── src/kabbalah/             # Runtime package
 ├── tests/                    # Unit, integration, provider, property tests
