@@ -9,9 +9,9 @@
 
 ## 0. ESTADO REAL DO REPOSITÓRIO (verificado em 2026-07-04)
 
-- **Branch atual**: `main` pós-merge das ondas anteriores; Onda 7 continuada nesta branch em 2026-07-04.
-- **Branches históricas de execução**: `wave-4-hygiene` e `wave-5-llm-loop`, criadas em 2026-07-04 e já reconciliadas neste handoff.
-- **Suíte de testes**: `1185 passed, 89 skipped` em 2026-07-04 na branch `main` com `.venv\Scripts\python.exe -m pytest tests -q` (skips = testes live de providers, desligados por política — **é o estado esperado, não conserte**). O número "812/74 failed" citado na análise externa é de um snapshot de abril/2026 — **obsoleto**.
+- **Branch atual**: `main` — ondas 4–8 mergeadas e auditadas por Claude (2026-07-05). Ondas 9–11 pendentes.
+- **Branches históricas de execução**: `wave-4-hygiene`, `wave-5-llm-loop`, `wave-6-security` — já reconciliadas neste handoff.
+- **Suíte de testes**: `1210 passed, 89 skipped, 0 failed` (auditado por Claude em 2026-07-05, `main`, com `.venv\Scripts\python.exe -m pytest tests -q`; ruff limpo; `kabbalah --help` OK). Skips = testes live de providers, desligados por política — **é o estado esperado, não conserte**. O "812/74 failed" da análise externa é de abril/2026 — **obsoleto**.
 - **Ondas de hardening 1–3 completas** (ver `docs/roadmap/hardening-next-waves.md`):
   - Onda 1: bridge MCP + ToolExecutionEngine (contratos obrigatórios, shell opt-in, SSRF, allowlists).
   - Onda 2: contratos persistentes em SQLite (`src/kabbalah/contrato_store.py`), `max_calls` atômico, log de violações append-only, separação ausência×violação (`VerificationOutcome`).
@@ -35,7 +35,9 @@
 | M15 (README/relatórios) | ✅ Feito na onda 4 — README atualizado, links validados, relatórios raiz arquivados/removidos quando duplicados |
 | M2 (fallback memória) | ✅ Verificado na onda 5 — com `cognee_present=False`, memória JSONL + Qlipot passaram testes direcionados |
 | M12 (Budget Manager) | ✅ Feito na onda 7 — limites por run/dia/provider, modos `warn|block`, gateway enforcement, tool `get_budget_stats`, fallback de providers e custos reais no ledger |
-| M8, M9, M17, M18 | ❌ Pendentes (features novas) |
+| M8 (Model Comparison) | ✅ Feito na onda 8 — tool `compare_models` no bridge |
+| M9 (Group Chat ST) | ✅ Feito na onda 8 — exemplo/render de eventos em sala ST |
+| M17, M18 | ❌ Pendentes (Onda 9: benchmark + tree search) |
 | M10, M11 | ⏸️ Bloqueados por decisão humana (ver §6) |
 
 ### APIs reais da camada de providers (verificadas)
@@ -127,7 +129,7 @@ cd E:\projetos\kabbalah
 .venv\Scripts\python.exe -m pytest tests/test_X.py -q # direcionado (rode PRIMEIRO)
 ```
 
-1. **Antes de qualquer onda**: rode a suíte completa. Baseline esperado: 1169+ passed, 89 skipped, 0 failed. Se houver failures ANTES de você mexer, PARE e reporte — não "conserte de passagem".
+1. **Antes de qualquer onda**: rode a suíte completa. Baseline esperado: 1210+ passed, 89 skipped, 0 failed. Se houver failures ANTES de você mexer, PARE e reporte — não "conserte de passagem".
 2. **Cada item concluído = 1 commit** com mensagem convencional em inglês (`feat:`, `fix:`, `security:`, `chore:`, `docs:`) descrevendo o quê e por quê. O hook de pre-commit verifica segredos — se falhar, investigue; **nunca use `--no-verify`**.
 3. **Nunca faça `git push`** sem pedido explícito do Charles.
 4. **Uma branch por onda**: `wave-4-hygiene`, `wave-5-llm-loop`, etc., criada a partir da branch base que o Charles indicar (hoje: `hardening/wave-2`).
@@ -137,6 +139,17 @@ cd E:\projetos\kabbalah
 8. **Não toque**: `.env` (real, do usuário), `.venv/`, `.hypothesis/`, testes skipped de providers live, `openclaude/` exceto para removê-lo na Onda 4.
 9. **Nunca enfraqueça um default de segurança** para fazer um teste passar. Se um teste existente conflitar com um endurecimento pedido aqui, atualize o teste e documente a mudança de comportamento no commit (precedente: onda 3 mudou `read_env_var` de `BW_PASSWORD` para HITL — commit `69c7850`).
 10. Se algo divergir do descrito aqui (arquivo movido, assinatura diferente), **verifique com grep antes de improvisar** e registre a divergência no commit.
+11. **Disciplina "ponytail" (YAGNI / reuso-primeiro) — obrigatória.** O kabbalah já
+    sofreu de excesso (a Onda 4 removeu módulos órfãos e ~30 relatórios). Antes de
+    escrever QUALQUER código novo, suba a escada: (a) isto precisa existir? Se a
+    onda não pede explicitamente, NÃO escreva; (b) já existe algo no repo que
+    resolve? Reuse/estenda em vez de reescrever (ex.: `contrato_store.py` é o
+    molde de qualquer store SQLite; `configuration_manager.py` já existe; o
+    padrão de tool do bridge já existe). Sem bibliotecas novas sem justificar no
+    commit. Sem "abstração para o futuro", sem parametrização especulativa, sem
+    camada extra "por via das dúvidas". Menos código, com testes, é o alvo — não
+    mais funcionalidade. Se um item puder ser cumprido reusando o que existe,
+    esse é o caminho certo. (Inspirado no skill `ponytail`.)
 
 ---
 
