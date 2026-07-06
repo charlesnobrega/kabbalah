@@ -227,16 +227,10 @@ python -m ruff check src tests kabbalah_mcp_bridge.py
 python -m pytest tests -q
 ```
 
-Last local full validation for Onda 8.6:
+Last local full validation (after waves 12 and 10.2, on `wave-11-federated`):
 
 ```text
-1206 passed, 89 skipped
-```
-
-Last local full validation after Onda 11:
-
-```text
-1229 passed, 89 skipped
+1239 passed, 89 skipped
 ```
 
 ## Project status
