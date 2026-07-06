@@ -15,18 +15,36 @@ if os.sys.platform.startswith("win"):
     except Exception:
         pass
 
-VAULT_PATH = Path(r"D:\Users\charl\.secrets\keys.json")
+def get_vault_path() -> Path:
+    """Retorna o caminho dinamico e portavel do cofre de segredos."""
+    env_path = os.environ.get("KABBALAH_VAULT_PATH")
+    if env_path:
+        return Path(env_path)
+    
+    default_local = Path(os.path.expanduser("~")) / ".kabbalah" / "keys.json"
+    if default_local.exists():
+        return default_local
+        
+    charles_fallback = Path(r"D:\Users\charl\.secrets\keys.json")
+    if charles_fallback.exists():
+        return charles_fallback
+        
+    return default_local
+
+
+VAULT_PATH = get_vault_path()
 
 
 def load_vault() -> dict:
     """Carrega o cofre de segredos."""
-    if not VAULT_PATH.exists():
+    path = get_vault_path()
+    if not path.exists():
         raise FileNotFoundError(
-            f"Cofre nao encontrado: {VAULT_PATH}\n" "Execute o script migrate_keys_to_vault.ps1 primeiro."
+            f"Cofre nao encontrado: {path}\n" "Execute o script migrate_keys_to_vault.ps1 primeiro."
         )
 
     # Usar utf-8-sig para lidar com BOM do PowerShell
-    with open(VAULT_PATH, "r", encoding="utf-8-sig") as f:
+    with open(path, "r", encoding="utf-8-sig") as f:
         return json.load(f)
 
 

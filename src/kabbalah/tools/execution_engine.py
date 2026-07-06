@@ -482,6 +482,28 @@ class ToolExecutionEngine:
                 duration_ms=(time.time() - start_time) * 1000,
             )
 
+    def _wrap_command_docker(self, command: str) -> List[str]:
+        """Wrap a command to run inside a local docker container sandbox."""
+        host_dir = os.path.abspath(os.getcwd())
+        container_dir = "/workspace"
+        image = os.environ.get("KABBALAH_DOCKER_SANDBOX_IMAGE", "python:3.11-slim")
+        
+        # Verify docker CLI works
+        try:
+            subprocess.run(["docker", "--version"], capture_output=True, check=True)
+        except Exception as exc:
+            raise ToolExecutionError(
+                "Docker CLI nao encontrado ou daemon nao respondendo, mas KABBALAH_USE_DOCKER_SANDBOX=1 esta ativo."
+            ) from exc
+            
+        return [
+            "docker", "run", "--rm", "-i",
+            "-v", f"{host_dir}:{container_dir}",
+            "-w", container_dir,
+            image,
+            "sh", "-c", command
+        ]
+
     def _execute_bash(self, request: ToolRequest) -> ToolResponse:
         """Execute a bash command with resource monitoring and error handling"""
         if not self.enable_bash:
@@ -495,13 +517,23 @@ class ToolExecutionEngine:
         try:
             logger.debug(f"Executing bash command: {request.command}")
 
-            result = subprocess.run(
-                request.command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=request.timeout,
-            )
+            if os.environ.get("KABBALAH_USE_DOCKER_SANDBOX") == "1":
+                docker_cmd = self._wrap_command_docker(request.command)
+                result = subprocess.run(
+                    docker_cmd,
+                    shell=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=request.timeout,
+                )
+            else:
+                result = subprocess.run(
+                    request.command,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=request.timeout,
+                )
 
             output = result.stdout
             if result.stderr:
@@ -545,13 +577,23 @@ class ToolExecutionEngine:
             )
             return
         try:
-            process = subprocess.Popen(
-                request.command,
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
+            if os.environ.get("KABBALAH_USE_DOCKER_SANDBOX") == "1":
+                docker_cmd = self._wrap_command_docker(request.command)
+                process = subprocess.Popen(
+                    docker_cmd,
+                    shell=False,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+            else:
+                process = subprocess.Popen(
+                    request.command,
+                    shell=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
 
             accumulated_output = ""
 

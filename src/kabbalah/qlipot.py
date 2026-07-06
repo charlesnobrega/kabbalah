@@ -131,16 +131,38 @@ class Qlipot:
         memory: MemorySubsystem | None = None,
         *,
         origens_autorizadas: Optional[Set[str]] = None,
+        store: Any = None,
     ):
         self._audit_log: List[QlipotResult] = []
         self._memory = memory or MemorySubsystem()
         self._callbacks: Dict[str, List[Callable[[str, Dict[str, Any]], Any]]] = {}
+        self._store = store
         self._correcoes: Dict[str, float] = {}
+        if store:
+            try:
+                self._correcoes = store.load_qlipot_correcoes()
+            except Exception:
+                pass
         self._correcoes_log: List[Dict[str, Any]] = []
         self._origens_autorizadas = set(origens_autorizadas) if origens_autorizadas is not None else {"sync_hub"}
 
     @property
     def audit_log(self) -> List[QlipotResult]:
+        if self._store:
+            try:
+                db_audits = self._store.load_qlipot_audit_log()
+                return [
+                    QlipotResult(
+                        status=QlipotStatus(item["status"]),
+                        pedido_recuperado=item["pedido"],
+                        motivo="loaded from store",
+                        risco=item["risco"],
+                        created_at=item["timestamp"]
+                    )
+                    for item in db_audits
+                ]
+            except Exception:
+                pass
         return list(self._audit_log)
 
     def recuperar_intencao(self, *, pedido: str, motivo_recusa: str, risco: float) -> QlipotResult:
@@ -176,6 +198,18 @@ class Qlipot:
 
     def _record(self, result: QlipotResult) -> QlipotResult:
         self._audit_log.append(result)
+        if self._store:
+            import uuid
+            ticket_id = f"audit_{uuid.uuid4().hex[:12]}"
+            try:
+                self._store.save_qlipot_audit(
+                    ticket_id=ticket_id,
+                    status=result.status.value,
+                    pedido=result.pedido_recuperado,
+                    risco=result.risco,
+                )
+            except Exception:
+                pass
         return result
 
     def avaliar_intencao(
@@ -213,7 +247,7 @@ class Qlipot:
         else:
             status = QlipotStatus.RECUPERADO
 
-        return IntentEvaluation(
+        evaluation = IntentEvaluation(
             score_confianca=round(max(0.0, min(1.0, 1.0 - risco)), 4),
             risco=risco,
             bloqueado=risco > 0.95,
@@ -223,6 +257,19 @@ class Qlipot:
             score_contexto=score_contexto,
             score_final=risco,
         )
+        if self._store:
+            import uuid
+            ticket_id = f"eval_{uuid.uuid4().hex[:12]}"
+            try:
+                self._store.save_qlipot_audit(
+                    ticket_id=ticket_id,
+                    status=evaluation.status.value,
+                    pedido=pedido,
+                    risco=evaluation.risco,
+                )
+            except Exception:
+                pass
+        return evaluation
 
     def avaliar(
         self,
@@ -326,7 +373,11 @@ class Qlipot:
     @property
     def correcoes_log(self) -> List[Dict[str, Any]]:
         """Append-only audit trail of correction attempts (copies)."""
-
+        if self._store:
+            try:
+                return self._store.load_qlipot_correcoes_log()
+            except Exception:
+                pass
         return [dict(entry) for entry in self._correcoes_log]
 
     def aplicar_correcao(
@@ -359,6 +410,16 @@ class Qlipot:
         registro.update({"aplicado": True, "delta_aplicado": delta_aplicado})
         self._correcoes_log.append(registro)
         self._correcoes[assinatura_acao] = delta_aplicado
+        if self._store:
+            try:
+                self._store.save_qlipot_correcao(
+                    assinatura_acao=assinatura_acao,
+                    delta=delta_aplicado,
+                    origem=origem,
+                    assessor_version=RISK_ASSESSOR_VERSION
+                )
+            except Exception:
+                pass
         self._emit(
             "correcao",
             {"assinatura_acao": assinatura_acao, "delta": delta_aplicado, "score": abs(delta_aplicado)},

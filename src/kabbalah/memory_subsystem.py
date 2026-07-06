@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import platform
+import sqlite3
 import threading
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
@@ -132,6 +133,154 @@ class CogneeBackend(MemoryBackend):
         return self.available
 
 
+class SQLiteVectorBackend(MemoryBackend):
+    """SQLite-based vector and keyword hybrid semantic memory backend."""
+
+    def __init__(self, storage_path: Optional[str] = None):
+        if storage_path is None:
+            storage_path = os.path.join(os.path.expanduser("~"), ".kabbalah", "memory")
+        self.storage_path = Path(storage_path)
+        self.storage_path.mkdir(parents=True, exist_ok=True)
+        self.db_path = self.storage_path / "vector_memory.sqlite3"
+        self.lock = threading.RLock()
+        self.available = True
+        self._initialize_db()
+
+    def _initialize_db(self) -> None:
+        with self.lock:
+            conn = sqlite3.connect(self.db_path)
+            try:
+                with conn:
+                    conn.execute(
+                        """
+                        CREATE TABLE IF NOT EXISTS semantic_knowledge (
+                            knowledge_id TEXT PRIMARY KEY,
+                            content TEXT NOT NULL,
+                            category TEXT NOT NULL,
+                            metadata TEXT NOT NULL,
+                            embedding TEXT,
+                            created_at REAL NOT NULL,
+                            updated_at REAL NOT NULL,
+                            trace_id TEXT
+                        )
+                        """
+                    )
+            finally:
+                conn.close()
+
+    def _get_embedding(self, text: str) -> Optional[List[float]]:
+        """Try to fetch a vector embedding from local Ollama if running."""
+        try:
+            import requests
+            url = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/embeddings")
+            model = os.environ.get("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+            response = requests.post(
+                url,
+                json={"model": model, "prompt": text},
+                timeout=1.0
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("embedding")
+        except Exception:
+            pass
+        return None
+
+    def store(self, knowledge: Knowledge) -> bool:
+        try:
+            embedding = self._get_embedding(knowledge.content)
+            emb_str = json.dumps(embedding) if embedding else None
+            
+            with self.lock:
+                conn = sqlite3.connect(self.db_path)
+                try:
+                    with conn:
+                        conn.execute(
+                            """
+                            INSERT OR REPLACE INTO semantic_knowledge
+                            (knowledge_id, content, category, metadata, embedding, created_at, updated_at, trace_id)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                knowledge.knowledge_id,
+                                knowledge.content,
+                                knowledge.category,
+                                json.dumps(knowledge.metadata, ensure_ascii=False),
+                                emb_str,
+                                knowledge.created_at,
+                                knowledge.updated_at,
+                                knowledge.trace_id,
+                            ),
+                        )
+                finally:
+                    conn.close()
+            return True
+        except Exception as e:
+            logger.error(f"SQLiteVectorBackend store failed: {e}")
+            return False
+
+    def query(self, query_str: str, limit: int = 10) -> List[Knowledge]:
+        try:
+            query_emb = self._get_embedding(query_str)
+            
+            with self.lock:
+                conn = sqlite3.connect(self.db_path)
+                try:
+                    cursor = conn.execute(
+                        "SELECT knowledge_id, content, category, metadata, embedding, created_at, updated_at, trace_id FROM semantic_knowledge"
+                    )
+                    rows = cursor.fetchall()
+                finally:
+                    conn.close()
+                
+            results: List[Tuple[Knowledge, float]] = []
+            
+            for row in rows:
+                k_id, content, category, meta_str, emb_str, created, updated, trace = row
+                metadata = json.loads(meta_str)
+                knowledge = Knowledge(
+                    knowledge_id=k_id,
+                    content=content,
+                    category=category,
+                    metadata=metadata,
+                    created_at=created,
+                    updated_at=updated,
+                    trace_id=trace
+                )
+                
+                # Calculate score
+                score = 0.0
+                if query_emb and emb_str:
+                    emb = json.loads(emb_str)
+                    if emb and len(emb) == len(query_emb):
+                        dot = sum(a * b for a, b in zip(query_emb, emb))
+                        norm_a = sum(a * a for a in query_emb) ** 0.5
+                        norm_b = sum(b * b for b in emb) ** 0.5
+                        if norm_a > 0 and norm_b > 0:
+                            score = dot / (norm_a * norm_b)
+                
+                # Hybrid keyword matching boost
+                query_words = query_str.lower().split()
+                matches = sum(1 for word in query_words if word in content.lower() or word in category.lower())
+                if matches > 0:
+                    score += 0.2 * (matches / len(query_words))
+                    
+                if score > 0 or query_str.lower() in content.lower():
+                    results.append((knowledge, score))
+                    
+            results.sort(key=lambda x: x[1], reverse=True)
+            return [k for k, _ in results[:limit]]
+        except Exception as e:
+            logger.error(f"SQLiteVectorBackend query failed: {e}")
+            return []
+
+    def ensure_consistency(self) -> bool:
+        return True
+
+    def is_available(self) -> bool:
+        return True
+
+
 class JSONLBackend(MemoryBackend):
     """JSONL-based local storage backend for Windows compatibility."""
 
@@ -251,16 +400,28 @@ class MemorySubsystem:
         Args:
             jsonl_storage_path: Optional path for JSONL storage (defaults to ~/.kabbalah/memory)
         """
+        self._jsonl_storage_path = jsonl_storage_path
         self.cognee_backend = CogneeBackend()
+        self._vector_backend = None
         self.jsonl_backend = JSONLBackend(jsonl_storage_path)
         self.consistency_state = MemoryConsistencyState(last_sync_time=datetime.now().timestamp())
         self.lock = threading.RLock()
         self._select_primary_backend()
         logger.info(f"MemorySubsystem initialized with primary backend: {self.primary_backend.__class__.__name__}")
 
+    @property
+    def vector_backend(self) -> SQLiteVectorBackend:
+        if self._vector_backend is None:
+            self._vector_backend = SQLiteVectorBackend(self._jsonl_storage_path)
+        return self._vector_backend
+
     def _select_primary_backend(self) -> None:
         """Select primary backend based on platform and availability."""
-        # On Windows, prefer JSONL; on other platforms, prefer Cognee if available
+        if os.environ.get("KABBALAH_USE_SQLITE_VECTOR", "0") == "1":
+            self.primary_backend = self.vector_backend
+            self.fallback_backend = self.jsonl_backend
+            return
+
         if platform.system() == "Windows":
             self.primary_backend = self.jsonl_backend
             self.fallback_backend = self.jsonl_backend

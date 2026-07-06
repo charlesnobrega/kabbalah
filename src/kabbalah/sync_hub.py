@@ -83,6 +83,7 @@ class SyncHub:
         self.ban_list: Set[str] = set()
         self.trust_list: Set[str] = set()
         self._imported_bundle_signatures: Set[str] = set()
+        self._store = getattr(contratos, "store", None)
         self._updates: List[SyncUpdate] = []
         self._qlipot = qlipot
 
@@ -168,22 +169,38 @@ class SyncHub:
         serialized = self._canonical_json(bundle)
         if len(serialized.encode("utf-8")) > MAX_BUNDLE_BYTES:
             raise ValueError("Federated bundle exceeds maximum size")
+
+        schema_version = bundle.get("schema_version")
+        if schema_version != FEDERATED_BUNDLE_SCHEMA_VERSION:
+            return {"accepted": False, "reason": "incompatible_schema_version", "imported": 0}
+
         signature = str(bundle.get("signature", ""))
         if signature in self._imported_bundle_signatures:
             return {"accepted": False, "reason": "replay", "imported": 0}
+        if self._store and self._store.has_synchub_signature(signature):
+            return {"accepted": False, "reason": "replay", "imported": 0}
+
+        # Verify signature BEFORE checking trusted publisher list
+        verify_bundle_signature(bundle)
+
         publisher_public_key = str(bundle.get("publisher_public_key", ""))
         if publisher_public_key not in trusted_publishers:
             return {"accepted": False, "reason": "untrusted_publisher", "imported": 0}
         if str(bundle.get("risk_assessor_version", "")) != RISK_ASSESSOR_VERSION:
             return {"accepted": False, "reason": "incompatible_risk_assessor", "imported": 0}
-        verify_bundle_signature(bundle)
 
         imported = 0
         publisher = publisher_id(publisher_public_key)
         for record in bundle.get("records", []):
             if self._receber_registro_federado(record, publisher, signature):
                 imported += 1
+
         self._imported_bundle_signatures.add(signature)
+        if self._store:
+            try:
+                self._store.add_synchub_signature(signature)
+            except Exception:
+                pass
         return {"accepted": True, "reason": "accepted", "imported": imported}
 
     def receber_sinapse(self, sinapse: Sinapse) -> bool:

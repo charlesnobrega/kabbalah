@@ -118,8 +118,9 @@ STATE_DB_PATH = Path(os.environ.get("KABBALAH_BRIDGE_STATE_DB", str(PROJECT_ROOT
 
 hitl = HITL()
 cofre = CofreBitwarden(use_cache=True)
-qlipot = Qlipot()
-contratos = Contratos(qlipot=qlipot, hitl=hitl, store=ContratoStore(STATE_DB_PATH))
+store = ContratoStore(STATE_DB_PATH)
+qlipot = Qlipot(store=store)
+contratos = Contratos(qlipot=qlipot, hitl=hitl, store=store)
 tickets = TicketStore(STATE_DB_PATH)
 budget_ledger = BudgetLedger(STATE_DB_PATH)
 budget_manager = BudgetManager.from_env(budget_ledger)

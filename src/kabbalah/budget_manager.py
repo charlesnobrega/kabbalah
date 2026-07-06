@@ -258,11 +258,11 @@ def _branch_id_from_trace(trace_id: str) -> str:
 
 
 def _entries_today(entries: Iterable[Dict[str, Any]]) -> list[Dict[str, Any]]:
-    today = time.localtime().tm_yday
-    year = time.localtime().tm_year
+    today = time.gmtime().tm_yday
+    year = time.gmtime().tm_year
     return [
         entry
         for entry in entries
-        if time.localtime(float(entry["timestamp"])).tm_yday == today
-        and time.localtime(float(entry["timestamp"])).tm_year == year
+        if time.gmtime(float(entry["timestamp"])).tm_yday == today
+        and time.gmtime(float(entry["timestamp"])).tm_year == year
     ]

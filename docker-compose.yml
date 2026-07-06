@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  kabbalah:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: kabbalah_bridge
+    restart: always
+    environment:
+      - KABBALAH_LOG_LEVEL=INFO
+      - KABBALAH_VAULT_PATH=/root/.kabbalah/keys.json
+      - KABBALAH_BRIDGE_STATE_DB=/root/.kabbalah/kabbalah_state.sqlite3
+      - KABBALAH_USE_DOCKER_SANDBOX=0 # Desabilitado dentro do container para evitar Docker-in-Docker complexo
+      - OLLAMA_URL=http://host.docker.internal:11434/api/embeddings
+    volumes:
+      # Persiste banco SQLite, logs e keys de API no host
+      - ~/.kabbalah:/root/.kabbalah
+      # Permite leitura/escrita do workspace ativo se montado
+      - .:/workspace
+    extra_hosts:
+      # Permite conectar ao Ollama rodando no host local
+      - "host.docker.internal:host-gateway"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

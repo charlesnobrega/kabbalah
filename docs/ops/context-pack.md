@@ -73,11 +73,22 @@ Recent decisions:
 - Onda 11 added offline signed SyncHub bundles: Ed25519 identity, trust list,
   modes `off|receber|receber+contribuir`, replay/tamper/version gates, and
   benchmark before/after evidence for federated corrections.
+- Onda 12 added dynamic secrets vault, subprocess Docker sandbox wrapper, local
+  SQLiteVectorBackend (lazy-initialized), SQLite persistence for Qlipot/SyncHub,
+  UTC timezone time locks, and contract key sanitization.
 
 Validation baseline:
 
+- On 2026-07-06, after wave 12:
+  `.venv\Scripts\python.exe -m pytest tests -q` passed with `1234 passed,
+  89 skipped`; all tests pass successfully on Windows. Added `test_wave12_hardening.py`.
 - On 2026-07-06, after waves 9 and 11 on `wave-11-federated`:
   `.venv\Scripts\python.exe -m pytest tests -q` passed with `1229 passed,
   89 skipped`; `ruff check src tests benchmarks kabbalah_mcp_bridge.py` passed;
   `py_compile` passed for the touched runtime/benchmark entrypoints.
 - On 2026-06-25, the original base dependency set was not installable because optional Cognee conflicted with pinned core dependencies. Cognee was moved to `requirements-memory.txt`.
+
+## Guidelines & Operational Decisions
+
+- **SQLite Connections**: Windows file-locking requires closing connections explicitly. Always use try-finally blocks or contextlib.closing to close connections when done, ensuring they are deleted and garbage collected to prevent PermissionError on temporary directories.
+- **Lazy Vector Memory**: `SQLiteVectorBackend` is instantiated lazily in `MemorySubsystem` to prevent side-effects/file lock collisions during unit tests unless `KABBALAH_USE_SQLITE_VECTOR=1` is active.
