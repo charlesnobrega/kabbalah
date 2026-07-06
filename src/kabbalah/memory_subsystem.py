@@ -10,7 +10,7 @@ from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +190,7 @@ class SQLiteVectorBackend(MemoryBackend):
         try:
             embedding = self._get_embedding(knowledge.content)
             emb_str = json.dumps(embedding) if embedding else None
-            
+
             with self.lock:
                 conn = sqlite3.connect(self.db_path)
                 try:
@@ -222,19 +222,20 @@ class SQLiteVectorBackend(MemoryBackend):
     def query(self, query_str: str, limit: int = 10) -> List[Knowledge]:
         try:
             query_emb = self._get_embedding(query_str)
-            
+
             with self.lock:
                 conn = sqlite3.connect(self.db_path)
                 try:
                     cursor = conn.execute(
-                        "SELECT knowledge_id, content, category, metadata, embedding, created_at, updated_at, trace_id FROM semantic_knowledge"
+                        "SELECT knowledge_id, content, category, metadata, embedding, "
+                        "created_at, updated_at, trace_id FROM semantic_knowledge"
                     )
                     rows = cursor.fetchall()
                 finally:
                     conn.close()
-                
+
             results: List[Tuple[Knowledge, float]] = []
-            
+
             for row in rows:
                 k_id, content, category, meta_str, emb_str, created, updated, trace = row
                 metadata = json.loads(meta_str)
@@ -247,7 +248,7 @@ class SQLiteVectorBackend(MemoryBackend):
                     updated_at=updated,
                     trace_id=trace
                 )
-                
+
                 # Calculate score
                 score = 0.0
                 if query_emb and emb_str:
@@ -258,16 +259,16 @@ class SQLiteVectorBackend(MemoryBackend):
                         norm_b = sum(b * b for b in emb) ** 0.5
                         if norm_a > 0 and norm_b > 0:
                             score = dot / (norm_a * norm_b)
-                
+
                 # Hybrid keyword matching boost
                 query_words = query_str.lower().split()
                 matches = sum(1 for word in query_words if word in content.lower() or word in category.lower())
                 if matches > 0:
                     score += 0.2 * (matches / len(query_words))
-                    
+
                 if score > 0 or query_str.lower() in content.lower():
                     results.append((knowledge, score))
-                    
+
             results.sort(key=lambda x: x[1], reverse=True)
             return [k for k, _ in results[:limit]]
         except Exception as e:

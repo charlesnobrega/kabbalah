@@ -30,8 +30,8 @@ def sanitize_key(value: str) -> str:
     """Sanitize strings against ASCII control characters, zero-width spaces, and log injection."""
     if not isinstance(value, str):
         return value
-    import unicodedata
     import re
+    import unicodedata
     # Replace standard spacing control characters with spaces
     cleaned = value.replace("\r", " ").replace("\n", " ").replace("\t", " ")
     # Collapse multiple spaces
@@ -302,7 +302,8 @@ class ContratoStore:
         """Load all applied corrections logs."""
         with self._lock, self._connect() as conn:
             rows = conn.execute(
-                "SELECT assinatura_acao, delta_aplicado, origem, assessor_version, timestamp FROM qlipot_correcoes ORDER BY timestamp"
+                "SELECT assinatura_acao, delta_aplicado, origem, assessor_version, timestamp "
+                "FROM qlipot_correcoes ORDER BY timestamp"
             ).fetchall()
         return [
             {

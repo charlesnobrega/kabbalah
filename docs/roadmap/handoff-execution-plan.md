@@ -489,9 +489,22 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
 
 ---
 
-### ONDA 10 — Bloqueada por decisão humana (M10+M11) — **NÃO INICIAR sem aprovação do Charles**
+### ONDA 10 — DESBLOQUEADA pelo Charles em 2026-07-06 (fase física de testes)
 
-- [ ] **10.1 (M10) Sandbox real** — requer decisão de infra: E2B (cloud, pago) vs Firecracker/gVisor (self-hosted, Linux — atenção: dev atual é Windows). Até lá, o mitigador é a onda 1 (shell desligado por default no bridge).
+> Charles autorizou a Onda 10 e a entrada na **fase física** (testar o sistema
+> inteiro do zero, localmente, incluindo instalação e resolução de pendências).
+> Nesta fase não há gates de bloqueio — o sistema autônomo deve DETECTAR falhas e
+> INDICAR ao usuário como resolver, não travar.
+
+- [x] **10.1 (M10) Sandbox** *(Antigravity wave 12, 2026-07-06; auditado por Claude)* —
+  implementado como wrapper Docker local em `execution_engine.py`, **opt-in**
+  (`KABBALAH_USE_DOCKER_SANDBOX=1`, default OFF → mantém `shell=True`). Escolha do
+  Charles: Docker local (em vez de E2B/Firecracker). **Nota de segurança honesta**:
+  Docker com volume montado (`-v host_dir:/workspace`) isola namespace de
+  processo/arquivo mas compartilha o kernel do host e dá escrita no dir montado —
+  barreira MODERADA, adequada para teste controlado, não à prova de agente hostil
+  em produção. Endurecer (rede off, read-only, user não-root, limites) é trabalho
+  futuro se a fase física validar o caminho.
 - [ ] **10.2 (M11) Classificador do Qlipot — avaliador de risco independente e plugável**
   Decisão do Charles (2026-07-05): o avaliador de risco do Qlipot **não deve ser
   do mesmo fornecedor dos modelos que o kernel governa**. Um kernel de governança

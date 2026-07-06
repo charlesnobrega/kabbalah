@@ -487,7 +487,7 @@ class ToolExecutionEngine:
         host_dir = os.path.abspath(os.getcwd())
         container_dir = "/workspace"
         image = os.environ.get("KABBALAH_DOCKER_SANDBOX_IMAGE", "python:3.11-slim")
-        
+
         # Verify docker CLI works
         try:
             subprocess.run(["docker", "--version"], capture_output=True, check=True)
@@ -495,7 +495,7 @@ class ToolExecutionEngine:
             raise ToolExecutionError(
                 "Docker CLI nao encontrado ou daemon nao respondendo, mas KABBALAH_USE_DOCKER_SANDBOX=1 esta ativo."
             ) from exc
-            
+
         return [
             "docker", "run", "--rm", "-i",
             "-v", f"{host_dir}:{container_dir}",

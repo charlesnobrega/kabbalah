@@ -20,15 +20,8 @@ def get_vault_path() -> Path:
     env_path = os.environ.get("KABBALAH_VAULT_PATH")
     if env_path:
         return Path(env_path)
-    
+
     default_local = Path(os.path.expanduser("~")) / ".kabbalah" / "keys.json"
-    if default_local.exists():
-        return default_local
-        
-    charles_fallback = Path(r"D:\Users\charl\.secrets\keys.json")
-    if charles_fallback.exists():
-        return charles_fallback
-        
     return default_local
 
 
@@ -153,7 +146,8 @@ if __name__ == "__main__":
         for key in ["OPENAI_API_KEY", "GOOGLE_API_KEY", "GROQ_API_KEY"]:
             value = get_secret(key)
             if value:
-                print(f"[+] {key}: {value[:20]}...")
+                # Never print key material, even partially.
+                print(f"[+] {key}: presente ({len(value)} chars)")
             else:
                 print(f"[!] {key}: NAO ENCONTRADA")
 
