@@ -652,14 +652,29 @@ real da fase anterior — NÃO especificar agora.
   *Aceite*: `grep -rn "ProviderConfigurationManager" src/ tests/` vazio (ou só o
   shim deprecated); `from kabbalah.providers import ProviderFactory` continua
   funcionando; suíte verde.
-- [ ] **13.3 Atualizar `google-generativeai`** — pinado em `0.3.0`
-  (`pyproject.toml`), linha antiga do SDK. Atualizar para a versão vigente,
-  ajustar `src/kabbalah/providers/google_gemini_provider.py` ao novo SDK se a API
-  mudou, revalidar a allowlist de modelos (`gemini-2.5-flash/2.5-pro/...`), e
-  revisar se os pins de `protobuf`/`grpcio-status`/`google-api-core` podem ser
-  relaxados (foram fixados por causa do SDK antigo).
-  *Aceite*: testes unit do provider verdes; teste live opcional gated com chave
-  do Charles; instalação limpa `pip install -e .` sem conflito de dependências.
+- [x] **13.3 Atualizar `google-generativeai`** *(Claude, 2026-07-06)* — pin subiu de
+  `==0.3.0` para `>=0.8.6,<0.9` (última versão da linha do SDK). Dry-run mostrou
+  resolução limpa contra o venv atual **sem** mexer em `protobuf==3.20.3`,
+  `google-api-core==1.34.1` nem `grpcio-status==1.48.2` (`google-ai-generativelanguage
+  0.6.15` os aceita), então os pins transitivos ficaram como estão — OpenTelemetry
+  (que depende do protobuf 3.20.3) não é afetado. Código do provider **não mudou**:
+  a superfície usada (`configure`/`GenerativeModel`/`generate_content`/
+  `types.GenerationConfig`) é estável em 0.8.x. `pip check` limpo; suíte
+  `1220 passed, 89 skipped`.
+  **⚠️ Achado (fase física)**: o Google marcou o pacote `google-generativeai`
+  **inteiro como EOL** (0.8.6 é a última release; emite `FutureWarning` no import
+  pedindo migração para o pacote `google-genai`). O bump remove o risco do pin
+  ancião, mas a migração de SDK é trabalho separado → item 13.6.
+- [ ] **13.6 Migrar Gemini para o SDK `google-genai`** *(gated — decisão do Charles;
+  só se o Gemini nativo continuar no roadmap; senão, DeepSeek/Gemini via OpenRouter
+  já cobrem)* — `google-generativeai` está EOL. Reescrever
+  `src/kabbalah/providers/google_gemini_provider.py` para o cliente novo
+  (`from google import genai; client = genai.Client(...)`), trocar a dependência
+  no `pyproject.toml`, e revisar se os pins antigos de `protobuf`/`google-api-core`/
+  `grpcio-status` (fixados pelo SDK velho) podem enfim ser relaxados. **Design doc
+  curto primeiro** se a superfície de mudança crescer.
+  *Aceite*: provider funcional no SDK novo; teste live gated com chave do Charles;
+  `FutureWarning` de EOL some; suíte verde.
 - [ ] **13.4 Bench de candidatos risk-judge (fecha o gate do 10.2)** — a interface
   plugável existe (`risk_assessor.py`); falta o comparativo com números que o
   10.2 exige: rodar o Kabbalah-Bench com `HeuristicRiskAssessor` vs candidatos
