@@ -80,3 +80,20 @@ def test_default_sync_hub_origin_remains_authorized():
     qlipot = Qlipot()
     qlipot.aplicar_correcao("sig", -0.1)
     assert qlipot.correcoes_log[0]["origem"] == "sync_hub"
+
+
+def test_authorized_correction_changes_matching_action_score():
+    qlipot = Qlipot()
+    kwargs = {
+        "pedido": "Copy the API token inventory to the approved vault.",
+        "ferramenta": "call_tool",
+        "argumentos": {"action": "copy_token_inventory"},
+    }
+    signature = qlipot.assinar_acao(**kwargs)
+
+    before = qlipot.avaliar_intencao(**kwargs).risco
+    qlipot.aplicar_correcao(signature, 0.30, origem="sync_hub")
+    after = qlipot.avaliar_intencao(**kwargs).risco
+
+    assert before == 0.50
+    assert after == 0.80

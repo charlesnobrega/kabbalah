@@ -12,6 +12,7 @@ click>=8.1.7,<9.0.0
 rich==13.7.0
 psutil==5.9.6
 keyring>=25.0.0,<26.0.0
+cryptography>=42.0.0
 
 # Provider SDKs used by src/kabbalah/providers.
 openai>=1.80.1,<3.0.0

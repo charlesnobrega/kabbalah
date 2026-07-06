@@ -7,6 +7,8 @@ not override the risk layer or attempt guardrail evasion.
 """
 
 import base64
+import hashlib
+import json
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -289,6 +291,17 @@ class Qlipot:
         )
         self._memory.store_knowledge(knowledge, trace_id=f"qlipot:{agente_id}")
 
+    def assinar_acao(self, *, ferramenta: str, argumentos: Dict[str, Any], pedido: str = "") -> str:
+        """Return the stable anonymized action hash used by local/federated corrections."""
+
+        payload = {
+            "argumentos": argumentos,
+            "ferramenta": ferramenta,
+            "pedido": _normalizar_texto(pedido),
+        }
+        canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
     def calcular_suspeita(self, historico_recente: List[Knowledge]) -> float:
         """Calculate additional suspicion from recent semantic-memory actions."""
 
@@ -429,6 +442,8 @@ class Qlipot:
         # base64 is case-sensitive: scan the raw text, normalize only the
         # decoded payload before keyword matching.
         risco = max(risco, self._score_payloads_codificados(bruto))
+        assinatura_acao = self.assinar_acao(ferramenta=ferramenta, argumentos=argumentos, pedido=pedido)
+        risco = max(0.0, min(1.0, risco + self._correcoes.get(assinatura_acao, 0.0)))
         return risco
 
     def _score_termos(self, texto_normalizado: str) -> float:
