@@ -11,13 +11,26 @@
 
 - **Branch atual**: `wave-11-federated` — ondas 9 e 11 implementadas por Codex
   sobre `wave-9-research`; Onda 10 segue bloqueada por decisão humana.
-- **⚠️ REVISÃO HUMANA PENDENTE nas ondas 5–8**: essas ondas envolvem conteúdo de
-  segurança que aciona o fallback automático do Fable 5 para outro modelo
-  (mudança de modelo no meio da sessão; ver artigo de suporte da Anthropic e
-  `docs/ops/context-pack.md`). Como o modelo revisor mudou durante parte do
-  trabalho, o Charles quer uma **revisão humana explícita das ondas 5–8** antes
-  de considerá-las definitivas — a auditoria automatizada (suíte verde, ruff,
-  smoke real) passou, mas não substitui a leitura humana neste caso.
+- **⚠️ REVISÃO PENDENTE das ondas 5–11 (protocolo ponytail linha-a-linha)**:
+  parte das ondas foi revisada enquanto o modelo da sessão oscilava (fallback
+  automático Fable 5 → Opus 4.8 disparado por conteúdo de segurança; ver artigo
+  de suporte da Anthropic e `docs/ops/context-pack.md`). O Charles decidiu
+  (2026-07-06) uma re-revisão sob condição controlada:
+  1. **Ferramenta**: skill `ponytail` (YAGNI/código mínimo), instalada pelo
+     Charles via `/plugin marketplace add DietrichGebert/ponytail` +
+     `/plugin install ponytail@ponytail` (comandos interativos; a IA não
+     consegue instalar). Requer reiniciar o Claude Code para ativar. Nota de
+     supply-chain: o plugin roda hooks Node.js a cada prompt — revisar o `hooks/`
+     do repo antes de confiar.
+  2. **Escopo**: ondas 5–11, **linha a linha**, cada achado documentado.
+  3. **Regra de alerta (Charles)**: se uma linha levar a algo que fira a
+     segurança/guardrail do Fable, **alertar o Charles no chat** em vez de
+     seguir — isso transforma cada gatilho em item mapeado do "trigger surface"
+     defensivo, em vez de uma troca silenciosa de modelo. É documentação de
+     segurança legítima: mapear quais linhas do kernel *parecem* ataque para um
+     classificador (justamente porque o kernel combate ataques).
+  4. A auditoria automatizada (suíte 1210 verde, ruff, smoke real) passou, mas
+     não substitui essa leitura — é complementar.
 - **Branches históricas de execução**: `wave-4-hygiene`, `wave-5-llm-loop`, `wave-6-security` — já reconciliadas neste handoff.
 - **Suíte de testes**: `1229 passed, 89 skipped, 0 failed` (auditado por Codex em 2026-07-06, `wave-11-federated`, com `.venv\Scripts\python.exe -m pytest tests -q`; ruff limpo; `py_compile` OK). Skips = testes live de providers, desligados por política — **é o estado esperado, não conserte**. O "812/74 failed" da análise externa é de abril/2026 — **obsoleto**.
 - **Ondas de hardening 1–3 completas** (ver `docs/roadmap/hardening-next-waves.md`):
