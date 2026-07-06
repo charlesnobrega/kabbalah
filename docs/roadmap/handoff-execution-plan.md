@@ -479,7 +479,31 @@ Objetivo: custo passa a ser controlado, não só acumulado. Insumo: `total_cost`
 ### ONDA 10 — Bloqueada por decisão humana (M10+M11) — **NÃO INICIAR sem aprovação do Charles**
 
 - [ ] **10.1 (M10) Sandbox real** — requer decisão de infra: E2B (cloud, pago) vs Firecracker/gVisor (self-hosted, Linux — atenção: dev atual é Windows). Até lá, o mitigador é a onda 1 (shell desligado por default no bridge).
-- [ ] **10.2 (M11) Classificador ML no Qlipot** — requer decisão de modelo (Llama Prompt Guard ou treinado), dataset e infra de avaliação. O M17 (bench) deve existir ANTES, para medir se o ML supera as heurísticas da onda 3.
+- [ ] **10.2 (M11) Classificador do Qlipot — avaliador de risco independente e plugável**
+  Decisão do Charles (2026-07-05): o avaliador de risco do Qlipot **não deve ser
+  do mesmo fornecedor dos modelos que o kernel governa**. Um kernel de governança
+  que julga ações de IA precisa de um juiz independente — se o julgador e o
+  julgado são do mesmo provedor, a independência é ilusória.
+  - **Design**: o avaliador de risco vira uma interface plugável
+    (`RiskAssessor`), com a heurística atual (onda 3) como fallback offline e um
+    avaliador LLM opcional selecionado pelo LLMGateway como uma **capability
+    `risk-judge`** no registro. Nada de hardcode de fornecedor.
+  - **Default recomendado**: um modelo não-Anthropic capaz e barato que o Charles
+    já acessa via OpenRouter (ex.: DeepSeek, Qwen, GLM). Rodável 100% local via
+    Ollama também é opção (independência máxima + custo zero + dados não saem da
+    máquina).
+  - **Precisão sobre "irrestrito"**: para ESTE papel, "menos restrito" deve
+    significar *o modelo analisa conteúdo com cara de ataque para classificá-lo
+    em vez de recusar* (evita falso-refusal ao ler `rm -rf`, base64, etc.). NÃO
+    significa um modelo com o julgamento de perigo removido — o trabalho do
+    avaliador É detectar perigo; um modelo "faz-qualquer-coisa" seria PIOR nisso.
+    Meça no bench (M17): o candidato tem de superar a heurística em taxa de
+    contenção sem inflar falso-positivo, senão não entra.
+  - **Auditoria**: cada decisão do avaliador carrega `RISK_ASSESSOR_VERSION` +
+    identidade do modelo usado (já é o padrão da onda 3). O bench compara
+    heurística vs cada candidato com números.
+  - Alternativas ainda válidas para comparar no bench: Llama Prompt Guard (Meta)
+    ou um classificador treinado. Requer dataset e infra de avaliação → M17 antes.
 
 ---
 
