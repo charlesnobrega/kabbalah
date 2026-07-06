@@ -143,6 +143,27 @@ def test_budget_manager_blocks_when_run_limit_would_be_exceeded(tmp_path):
         )
 
 
+def test_budget_manager_blocks_when_branch_limit_would_be_exceeded(tmp_path):
+    ledger = BudgetLedger(tmp_path / "state.sqlite3")
+    ledger.record_call(
+        provider="openrouter",
+        model="model",
+        input_tokens=1,
+        output_tokens=1,
+        total_tokens=2,
+        cost=0.04,
+        trace_id="run-1:branch-a:leaf-a",
+    )
+    manager = BudgetManager(ledger, branch_limit_usd=0.05, mode="block")
+
+    with pytest.raises(BudgetExceededError, match="branch"):
+        manager.enforce_call(
+            provider="openrouter",
+            projected_cost=0.02,
+            trace_id="run-1:branch-a:leaf-b",
+        )
+
+
 def test_budget_manager_warn_mode_reports_excess_without_raising(tmp_path):
     ledger = BudgetLedger(tmp_path / "state.sqlite3")
     ledger.record_call(
@@ -175,6 +196,7 @@ def test_budget_manager_reads_limits_from_environment(monkeypatch, tmp_path):
     ledger = BudgetLedger(tmp_path / "state.sqlite3")
     monkeypatch.setenv("KABBALAH_BUDGET_MODE", "block")
     monkeypatch.setenv("KABBALAH_BUDGET_RUN_USD", "3.50")
+    monkeypatch.setenv("KABBALAH_BUDGET_BRANCH_USD", "0.75")
     monkeypatch.setenv("KABBALAH_BUDGET_DAILY_USD", "7.00")
     monkeypatch.setenv("KABBALAH_BUDGET_PROVIDER_OPENROUTER_USD", "1.25")
 
@@ -182,6 +204,7 @@ def test_budget_manager_reads_limits_from_environment(monkeypatch, tmp_path):
 
     assert manager.mode == "block"
     assert manager.run_limit_usd == 3.50
+    assert manager.branch_limit_usd == 0.75
     assert manager.daily_limit_usd == 7.00
     assert manager.provider_limits_usd == {"openrouter": 1.25}
 

@@ -242,6 +242,8 @@ Implemented and tested:
   ledger, and hardware profiles.
 - Provider registry, OpenAI-compatible adapter, ordered fallback candidates, and
   budget-aware selection.
+- Kabbalah-Bench containment reports and optional tree-search autonomy loop
+  (`KABBALAH_SEARCH_MODE=tree`; default remains linear).
 - CLI setup/config/status with JSON output and safe secret handling.
 - SillyTavern group-chat event renderer and example Blank Card setup.
 
@@ -257,5 +259,6 @@ Known alpha boundaries:
 - [Architecture](docs/ARCHITECTURE.md)
 - [Execution plan](docs/roadmap/handoff-execution-plan.md)
 - [CLI exit codes](docs/specs/cli-exit-codes.md)
+- [Tree search design](docs/specs/tree-search-design.md)
 - [No-mock runtime policy](docs/specs/NO_MOCK_RUNTIME_POLICY.md)
 - [SillyTavern group chat design](docs/specs/st-group-chat-design.md)

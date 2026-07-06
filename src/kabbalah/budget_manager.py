@@ -131,6 +131,7 @@ class BudgetManager:
         ledger: BudgetLedger,
         *,
         run_limit_usd: Optional[float] = None,
+        branch_limit_usd: Optional[float] = None,
         daily_limit_usd: Optional[float] = None,
         provider_limits_usd: Optional[Dict[str, float]] = None,
         mode: str = "warn",
@@ -141,6 +142,7 @@ class BudgetManager:
 
         self.ledger = ledger
         self.run_limit_usd = run_limit_usd
+        self.branch_limit_usd = branch_limit_usd
         self.daily_limit_usd = daily_limit_usd
         self.provider_limits_usd = {provider: float(limit) for provider, limit in (provider_limits_usd or {}).items()}
         self.mode = normalized_mode
@@ -161,6 +163,7 @@ class BudgetManager:
         return cls(
             ledger,
             run_limit_usd=_optional_float(os.getenv("KABBALAH_BUDGET_RUN_USD")),
+            branch_limit_usd=_optional_float(os.getenv("KABBALAH_BUDGET_BRANCH_USD")),
             daily_limit_usd=_optional_float(os.getenv("KABBALAH_BUDGET_DAILY_USD")),
             provider_limits_usd=provider_limits,
             mode=os.getenv("KABBALAH_BUDGET_MODE", "warn"),
@@ -177,13 +180,17 @@ class BudgetManager:
         entries = self.ledger.list_entries()
         projected = float(projected_cost)
         run_id = _run_id_from_trace(trace_id)
+        branch_id = _branch_id_from_trace(trace_id)
         provider_cost = _sum_cost(entry for entry in entries if entry["provider"] == provider)
         run_cost = _sum_cost(entry for entry in entries if _run_id_from_trace(entry["trace_id"]) == run_id)
+        branch_cost = _sum_cost(entry for entry in entries if _branch_id_from_trace(entry["trace_id"]) == branch_id)
         daily_cost = _sum_cost(_entries_today(entries))
 
         exceeded: List[str] = []
         if self.run_limit_usd is not None and run_cost + projected > self.run_limit_usd:
             exceeded.append("run")
+        if self.branch_limit_usd is not None and branch_cost + projected > self.branch_limit_usd:
+            exceeded.append("branch")
         if self.daily_limit_usd is not None and daily_cost + projected > self.daily_limit_usd:
             exceeded.append("daily")
         provider_limit = self.provider_limits_usd.get(provider)
@@ -198,6 +205,7 @@ class BudgetManager:
             current_costs={
                 "provider": provider_cost,
                 "run": run_cost,
+                "branch": branch_cost,
                 "daily": daily_cost,
             },
         )
@@ -223,6 +231,7 @@ class BudgetManager:
             "run_costs": run_costs,
             "limits": {
                 "run_usd": self.run_limit_usd,
+                "branch_usd": self.branch_limit_usd,
                 "daily_usd": self.daily_limit_usd,
                 "provider_usd": dict(self.provider_limits_usd),
             },
@@ -241,6 +250,11 @@ def _sum_cost(entries: Iterable[Dict[str, Any]]) -> float:
 
 def _run_id_from_trace(trace_id: str) -> str:
     return trace_id.split(":", 1)[0]
+
+
+def _branch_id_from_trace(trace_id: str) -> str:
+    parts = trace_id.split(":")
+    return ":".join(parts[:2]) if len(parts) > 1 else trace_id
 
 
 def _entries_today(entries: Iterable[Dict[str, Any]]) -> list[Dict[str, Any]]:
