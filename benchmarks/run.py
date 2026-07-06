@@ -22,8 +22,11 @@ from typing import Any
 
 from kabbalah.firewall_mcp import FirewallMCP, MCPRequest, permitir_tudo
 from kabbalah.hitl import HITL
+from kabbalah.llm_gateway import CapabilityRegistry, LLMGateway
+from kabbalah.providers.factory import ProviderFactory
 from kabbalah.providers.mock_provider import MockProvider
 from kabbalah.qlipot import RISK_ASSESSOR_VERSION, Qlipot
+from kabbalah.risk_assessor import LLMRiskAssessor
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SCENARIOS_DIR = ROOT / "benchmarks" / "scenarios"
@@ -85,8 +88,16 @@ def load_corrections(path: Path | None) -> list[dict[str, Any]]:
 class BenchmarkRunner:
     """Run scenarios through Kabbalah's security decision path."""
 
-    def __init__(self, *, corrections: list[dict[str, Any]] | None = None) -> None:
-        self.qlipot = Qlipot()
+    def __init__(
+        self,
+        *,
+        corrections: list[dict[str, Any]] | None = None,
+        risk_assessor: Any | None = None,
+    ) -> None:
+        # ``risk_assessor=None`` keeps the default heuristic assessor, so the
+        # baseline behavior is unchanged; an injected assessor (e.g. the
+        # independent LLM risk-judge) lets the bench compare containment.
+        self.qlipot = Qlipot(risk_assessor=risk_assessor)
         self.hitl = HITL()
         self.firewall = FirewallMCP(
             rbac_checker=permitir_tudo,
@@ -266,6 +277,18 @@ def render_markdown(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _build_llm_risk_assessor(role: str) -> LLMRiskAssessor:
+    """Build an independent LLM risk assessor through the canonical gateway.
+
+    Requires a provider profile with the ``risk-judge`` capability to be
+    available for ``role`` (its API key env var must be set); otherwise the
+    assessor falls back to the offline heuristic at call time.
+    """
+
+    gateway = LLMGateway(factory=ProviderFactory(), registry=CapabilityRegistry.default())
+    return LLMRiskAssessor(gateway, role=role)
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entrypoint for ``python -m benchmarks.run``."""
 
@@ -275,9 +298,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timestamp", help="Override report timestamp, useful for reproducible baselines")
     parser.add_argument("--corrections", type=Path, help="Optional JSON/YAML qlipot correction file")
     parser.add_argument("--no-write", action="store_true", help="Print JSON to stdout instead of writing reports")
+    parser.add_argument(
+        "--llm-risk-judge",
+        action="store_true",
+        help="Use an independent LLM risk assessor (capability risk-judge) instead of the heuristic",
+    )
+    parser.add_argument(
+        "--risk-role",
+        default="Root_Orchestrator",
+        help="Role used to select the risk-judge provider from the capability registry",
+    )
     args = parser.parse_args(argv)
 
-    report = BenchmarkRunner(corrections=load_corrections(args.corrections)).run(load_scenarios(args.scenarios))
+    risk_assessor = _build_llm_risk_assessor(args.risk_role) if args.llm_risk_judge else None
+    report = BenchmarkRunner(
+        corrections=load_corrections(args.corrections),
+        risk_assessor=risk_assessor,
+    ).run(load_scenarios(args.scenarios))
     if args.no_write:
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return 0

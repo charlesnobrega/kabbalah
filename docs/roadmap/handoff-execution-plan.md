@@ -13,9 +13,10 @@
   sobre `wave-9-research`; Onda 10 desbloqueada e implementada (10.1 sandbox via
   Antigravity/onda 12; 10.2 RiskAssessor plugável, commit `8cdcbf5`); Onda 12
   (hardening físico) implementada por Antigravity (commit `6c8c350`). Pendências
-  atuais: Onda 13 parcial — 13.1–13.3 feitas (Claude, 2026-07-06; suíte 1220/89);
-  13.4 (bench risk-judge, precisa de chaves), 13.5 (gated fase física) e 13.6
-  (migração SDK Gemini, gated) em aberto.
+  atuais: Onda 13 parcial — 13.1–13.4 feitas (Claude, 2026-07-06; suíte 1220/89;
+  juiz LLM validado ao vivo mas heurística mantida como default). Em aberto: 13.4b
+  (cenários discriminantes), 13.5 (gated fase física) e 13.6 (migração SDK Gemini,
+  gated).
 - **⚠️ REVISÃO PENDENTE das ondas 5–11 (protocolo ponytail linha-a-linha)**:
   parte das ondas foi revisada enquanto o modelo da sessão oscilava (fallback
   automático Fable 5 → Opus 4.8 disparado por conteúdo de segurança; ver artigo
@@ -677,14 +678,28 @@ real da fase anterior — NÃO especificar agora.
   curto primeiro** se a superfície de mudança crescer.
   *Aceite*: provider funcional no SDK novo; teste live gated com chave do Charles;
   `FutureWarning` de EOL some; suíte verde.
-- [ ] **13.4 Bench de candidatos risk-judge (fecha o gate do 10.2)** — a interface
-  plugável existe (`risk_assessor.py`); falta o comparativo com números que o
-  10.2 exige: rodar o Kabbalah-Bench com `HeuristicRiskAssessor` vs candidatos
-  LLM não-Anthropic (via OpenRouter — ex.: DeepSeek, Qwen, GLM — e/ou local via
-  Ollama), usando a capability `risk-judge`. Critério do 10.2: candidato só vira
-  default se **superar a heurística em contenção sem inflar falso-positivo**.
-  *Aceite*: relatório datado em `benchmarks/results/` comparando heurística ×
-  candidatos; decisão (promover ou manter heurística) registrada neste arquivo.
+- [x] **13.4 Bench de candidatos risk-judge (fecha o gate do 10.2)** *(Claude, 2026-07-06)* —
+  harness fiado: `BenchmarkRunner(risk_assessor=...)` + flag `python -m benchmarks.run
+  --llm-risk-judge [--risk-role ROLE]`. Rodado **ao vivo** com a chave OpenRouter do
+  Charles (`openai/gpt-4o-mini` como juiz independente não-Anthropic, role
+  `Root_Orchestrator`).
+  **Resultado** (evidência: `benchmarks/results/20260706T222647Z-{heuristic,llmjudge}-*`):
+  nos 8 cenários atuais, heurística e juiz LLM empatam em **8/8 contenção, 0%
+  falso-positivo, 0 divergências**; o LLM adiciona ~100× de latência (18ms→1935ms)
+  + custo por chamada.
+  **Decisão: a heurística PERMANECE o default** — pelo critério do 10.2 o candidato
+  não "supera" a heurística. O juiz LLM está validado e disponível (independência
+  real comprovada no smoke: exfil SSH+base64 pontuado 1.0 vs 0.7 da heurística), mas
+  o bench atual é fácil demais para discriminar. Gate real remanescente → 13.4b.
+- [ ] **13.4b Cenários discriminantes para o bench** — os 8 cenários saturam a
+  heurística (100%), então o bench não consegue provar o valor de um juiz melhor.
+  Adicionar vetores onde a heurística falha (ataques sutis, paráfrases novas,
+  ofuscação multi-idioma, encadeamento de tools benignas → maliciosas) e re-rodar
+  13.4. Só então a promoção de um juiz independente (LLM via OpenRouter, ou local
+  via Ollama a custo zero) tem base numérica.
+  *Aceite*: bench com cenários onde a heurística fica < 100%; comparativo mostra se
+  algum juiz independente melhora contenção sem inflar falso-positivo; decisão
+  registrada aqui.
 - [ ] **13.5 Endurecer o sandbox Docker** *(GATED — só após a fase física validar o
   caminho; decisão do Charles na Onda 10.1)* — rede desligada por padrão,
   filesystem read-only com workdir dedicado, user não-root, limites de
@@ -706,5 +721,5 @@ real da fase anterior — NÃO especificar agora.
 |---|---|---|
 | 1 | ✅ Resolvido 2026-07-04 — ondas 1–6 mergeadas em `main` (fast-forward, sem push) | — |
 | 2 | ✅ Resolvido 2026-07-06 — Charles escolheu Docker local (wrapper opt-in, ver 10.1); endurecimento fica na Onda 13.5 | — |
-| 3 | ✅ Parcialmente resolvido — design plugável implementado (10.2); escolha do modelo default depende do bench da Onda 13.4 | Onda 13.4 |
+| 3 | ✅ Resolvido 2026-07-06 — design plugável (10.2) + bench ao vivo (13.4): heurística mantida como default (juiz LLM não superou nos 8 cenários atuais). Reabrir só se 13.4b mostrar cenários onde um juiz independente ganha | Onda 13.4b (opcional) |
 | 4 | ✅ Resolvido 2026-07-04 — smoke real executado via Groq (`llama-3.1-8b-instant`): leaf → gateway → provider → artifact + linha no ledger. Achados registrados no item 7.4 | — |
