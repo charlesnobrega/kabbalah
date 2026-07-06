@@ -24,7 +24,7 @@ def test_ci_workflow_covers_supported_matrix() -> None:
     matrix = _workflow()["jobs"]["test"]["strategy"]["matrix"]
 
     assert set(matrix["os"]) == {"ubuntu-latest", "windows-latest"}
-    assert set(matrix["python-version"]) == {"3.9", "3.11"}
+    assert set(matrix["python-version"]) == {"3.10", "3.11"}
 
 
 def test_ci_workflow_runs_lint_tests_and_gitleaks() -> None:
