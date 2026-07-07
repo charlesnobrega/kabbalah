@@ -25,7 +25,7 @@ Tudo abaixo foi verificado diretamente no repositório em 2026-07-06, branch
 | Item | Valor validado | Como foi verificado |
 |---|---|---|
 | Versão | `0.8.0` (alpha) | `src/kabbalah/__init__.py` + `pyproject.toml` classifiers `3 - Alpha` |
-| Suíte de testes | **1220 passed, 89 skipped, 0 failed** (era 1239 na validação inicial; wave 13.2 removeu o módulo órfão) | `.venv\Scripts\python.exe -m pytest tests -q` |
+| Suíte de testes | **1221 passed, 89 skipped, 0 failed** (1239 na validação inicial; wave 13.2 removeu o módulo órfão, 13.4b somou 1 teste) | `.venv\Scripts\python.exe -m pytest tests -q` |
 | Arquivos de teste | 83 | `find tests -name test_*.py` |
 | Funções `def test_` | 1309 | grep no diretório `tests` |
 | Módulos runtime | ~60 arquivos `.py` / ~18.358 LOC | `find src -name *.py \| wc -l` |
@@ -508,9 +508,9 @@ como espelhos.
 
 ## 12. Estado de validação atual
 
-- **Testes**: 1220 passed, 89 skipped, 0 failed (2026-07-06, `wave-11-federated`,
-  pós wave 13.1–13.3; eram 1239 na validação inicial do PRD, antes da remoção do
-  módulo órfão na 13.2).
+- **Testes**: 1221 passed, 89 skipped, 0 failed (2026-07-06, `wave-11-federated`,
+  pós wave 13; eram 1239 na validação inicial do PRD — a 13.2 removeu o módulo
+  órfão e a 13.4b somou 1 teste do bench discriminante).
 - **Lint**: `ruff` verde (`E/W/F/I/B`) por histórico recente; working tree limpo.
 - **Ondas 1–9, 11, 10.1, 10.2**: implementadas e testadas (ver §0 e handoff plan).
 - **Skips**: testes live de providers, desligados por política — estado esperado.

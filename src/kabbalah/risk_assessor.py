@@ -226,9 +226,12 @@ class LLMRiskAssessor:
             )
 
             # 3. Request LLM evaluation
+            # temperature=0 makes the risk classification deterministic and
+            # auditable: the same (tool, args, request) yields the same score.
             request_body = {
                 "model": profile.model,
-                "messages": [{"role": "user", "content": prompt}]
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0,
             }
             response = provider.execute_request(request_body)
             content = response.content.strip()

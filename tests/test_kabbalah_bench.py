@@ -27,6 +27,19 @@ def test_benchmark_runner_measures_containment_without_false_positives():
     assert all(item["correct"] for item in report["scenarios"])
 
 
+def test_hard_scenarios_expose_heuristic_false_positives():
+    """Wave 13.4b: the discriminating set trips the keyword heuristic on benign
+    keyword-adjacent requests (false positives) while its obfuscated attacks stay
+    contained. This is what lets the bench compare an independent risk-judge
+    against the heuristic; without it the default bench saturates at 100%/0%."""
+    scenarios = load_scenarios(ROOT / "benchmarks" / "scenarios_hard")
+
+    report = BenchmarkRunner().run(scenarios)  # default heuristic assessor
+
+    assert report["summary"]["false_positive_rate"] > 0.0
+    assert report["summary"]["correct_block_rate"] == 1.0
+
+
 def test_benchmark_reports_are_datestamped_and_never_overwritten(tmp_path):
     report = BenchmarkRunner().run(load_scenarios(ROOT / "benchmarks" / "scenarios"))
 

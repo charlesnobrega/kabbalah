@@ -230,7 +230,7 @@ python -m pytest tests -q
 Last local full validation (after wave 13, on `wave-11-federated`):
 
 ```text
-1220 passed, 89 skipped
+1221 passed, 89 skipped
 ```
 
 ## Project status

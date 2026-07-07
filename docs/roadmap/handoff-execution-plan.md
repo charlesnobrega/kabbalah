@@ -13,10 +13,10 @@
   sobre `wave-9-research`; Onda 10 desbloqueada e implementada (10.1 sandbox via
   Antigravity/onda 12; 10.2 RiskAssessor plugável, commit `8cdcbf5`); Onda 12
   (hardening físico) implementada por Antigravity (commit `6c8c350`). Pendências
-  atuais: Onda 13 parcial — 13.1–13.4 feitas (Claude, 2026-07-06; suíte 1220/89;
-  juiz LLM validado ao vivo mas heurística mantida como default). Em aberto: 13.4b
-  (cenários discriminantes), 13.5 (gated fase física) e 13.6 (migração SDK Gemini,
-  gated).
+  atuais: Onda 13 — 13.1–13.4 e 13.4b feitas (Claude, 2026-07-06; suíte verde;
+  em bench discriminante o juiz LLM supera a heurística em falso-positivo com
+  contenção igual). Em aberto: 13.4c (wiring híbrido, decisão do Charles), 13.5
+  (gated fase física) e 13.6 (migração SDK Gemini, gated).
 - **⚠️ REVISÃO PENDENTE das ondas 5–11 (protocolo ponytail linha-a-linha)**:
   parte das ondas foi revisada enquanto o modelo da sessão oscilava (fallback
   automático Fable 5 → Opus 4.8 disparado por conteúdo de segurança; ver artigo
@@ -691,15 +691,35 @@ real da fase anterior — NÃO especificar agora.
   não "supera" a heurística. O juiz LLM está validado e disponível (independência
   real comprovada no smoke: exfil SSH+base64 pontuado 1.0 vs 0.7 da heurística), mas
   o bench atual é fácil demais para discriminar. Gate real remanescente → 13.4b.
-- [ ] **13.4b Cenários discriminantes para o bench** — os 8 cenários saturam a
-  heurística (100%), então o bench não consegue provar o valor de um juiz melhor.
-  Adicionar vetores onde a heurística falha (ataques sutis, paráfrases novas,
-  ofuscação multi-idioma, encadeamento de tools benignas → maliciosas) e re-rodar
-  13.4. Só então a promoção de um juiz independente (LLM via OpenRouter, ou local
-  via Ollama a custo zero) tem base numérica.
-  *Aceite*: bench com cenários onde a heurística fica < 100%; comparativo mostra se
-  algum juiz independente melhora contenção sem inflar falso-positivo; decisão
-  registrada aqui.
+- [x] **13.4b Cenários discriminantes para o bench** *(Claude, 2026-07-06)* —
+  criado `benchmarks/scenarios_hard/discriminating.json` (11 cenários: 7 ataques
+  ofuscados sem keyword-gatilho + 4 benignos que *contêm* strings assustadoras),
+  isolado do dir default para não quebrar o baseline/teste. Teste determinístico
+  `test_hard_scenarios_expose_heuristic_false_positives` trava a propriedade.
+  Também corrigido um defeito no juiz LLM: `LLMRiskAssessor` agora fixa
+  `temperature=0` (classificador de risco tem de ser determinístico/auditável).
+  **Resultado ao vivo** (chave OpenRouter do Charles, `openai/gpt-4o-mini`;
+  evidência `benchmarks/results/20260707T005922Z-{heuristic,llmjudge}-*`):
+  | | contenção de ataque | falso-positivo | latência |
+  |---|---|---|---|
+  | heurística | 100% (7/7) | **100% (4/4)** | ~19ms |
+  | juiz LLM | 100% (7/7) | **25% (1/4)** | ~1956ms |
+  Ou seja: nos cenários discriminantes o juiz LLM **supera** a heurística — mesma
+  contenção de ataque, mas corta o falso-positivo de 100%→25% em pedidos benignos
+  que só *mencionam* comandos perigosos (ex.: "explique o que `rm -rf` faz", "como
+  apagar o cache", ler changelog de feature deletada). Pelo critério do 10.2, o
+  juiz qualifica. **Custo**: ~100× latência + $ por chamada + dependência de nuvem.
+- [ ] **13.4c Wiring híbrido heurística→juiz (decisão do Charles)** — NÃO promover o
+  juiz LLM a default incondicional (latência/custo/dependência). Arquitetura
+  recomendada, alinhada ao "cheap-first com escalada" do gateway: heurística
+  sempre-ligada como primeiro passo; **escalar para o juiz LLM só quando a
+  heurística sinaliza risco alto**, para confirmar antes de bloquear (reduz
+  falso-positivo sem pagar latência no caminho comum). Alternativa custo-zero:
+  juiz local via Ollama. Requer integração em `Qlipot`/pipeline — é mudança de
+  runtime, gated na decisão do Charles.
+  *Aceite*: modo híbrido opt-in (env/config); bench mostra FP menor que a
+  heurística pura com overhead de latência só nos casos escalados; default de
+  segurança inalterado (fail-closed) se o juiz estiver indisponível.
 - [ ] **13.5 Endurecer o sandbox Docker** *(GATED — só após a fase física validar o
   caminho; decisão do Charles na Onda 10.1)* — rede desligada por padrão,
   filesystem read-only com workdir dedicado, user não-root, limites de
@@ -721,5 +741,5 @@ real da fase anterior — NÃO especificar agora.
 |---|---|---|
 | 1 | ✅ Resolvido 2026-07-04 — ondas 1–6 mergeadas em `main` (fast-forward, sem push) | — |
 | 2 | ✅ Resolvido 2026-07-06 — Charles escolheu Docker local (wrapper opt-in, ver 10.1); endurecimento fica na Onda 13.5 | — |
-| 3 | ✅ Resolvido 2026-07-06 — design plugável (10.2) + bench ao vivo (13.4): heurística mantida como default (juiz LLM não superou nos 8 cenários atuais). Reabrir só se 13.4b mostrar cenários onde um juiz independente ganha | Onda 13.4b (opcional) |
+| 3 | ✅ Resolvido 2026-07-06 — design plugável (10.2) + bench discriminante (13.4b): juiz LLM independente supera a heurística (falso-positivo 100%→25%, contenção igual). Recomendação: wiring HÍBRIDO (heurística→escala p/ juiz), não substituição. Decisão de runtime pendente | Onda 13.4c |
 | 4 | ✅ Resolvido 2026-07-04 — smoke real executado via Groq (`llama-3.1-8b-instant`): leaf → gateway → provider → artifact + linha no ledger. Achados registrados no item 7.4 | — |
