@@ -313,7 +313,12 @@ class Qlipot:
         """Append-only audit trail of correction attempts (copies)."""
         if self._store:
             try:
-                return self._store.load_qlipot_correcoes_log()
+                persisted = self._store.load_qlipot_correcoes_log()
+                # Denied attempts are not persisted (they apply no delta); surface
+                # the in-memory denied records so the audit trail keeps every
+                # attempt instead of hiding rejected ones.
+                denied = [dict(entry) for entry in self._correcoes_log if not entry.get("aplicado", True)]
+                return list(persisted) + denied
             except Exception:
                 pass
         return [dict(entry) for entry in self._correcoes_log]

@@ -151,7 +151,10 @@ class SyncHub:
     def exportar_bundle(self, *, publisher_public_key: str, private_key: str) -> Dict[str, Any]:
         """Export pending synapses as an Ed25519-signed anonymized bundle."""
 
-        records = [self._record_from_synapse(sinapse) for sinapse in self.propagar()]
+        # Build and sign from a COPY of the queue; only drain after a signature
+        # exists. A bad/missing key must not silently drop pending synapses.
+        pending = list(self.fila_sinapses)
+        records = [self._record_from_synapse(sinapse) for sinapse in pending]
         payload = {
             "schema_version": FEDERATED_BUNDLE_SCHEMA_VERSION,
             "publisher_public_key": publisher_public_key,
@@ -161,6 +164,8 @@ class SyncHub:
             "records": records,
         }
         payload["signature"] = sign_bundle_payload(private_key, payload)
+        # Signature succeeded — safe to drain now.
+        self.fila_sinapses.clear()
         return payload
 
     def importar_bundle(self, bundle: Dict[str, Any], *, trusted_publishers: Set[str]) -> Dict[str, Any]:

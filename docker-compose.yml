@@ -13,6 +13,8 @@ services:
       - KABBALAH_BRIDGE_STATE_DB=/root/.kabbalah/kabbalah_state.sqlite3
       - KABBALAH_USE_DOCKER_SANDBOX=0 # Desabilitado dentro do container para evitar Docker-in-Docker complexo
       - OLLAMA_URL=http://host.docker.internal:11434/api/embeddings
+      # O volume monta o workspace em /workspace; libera-o junto do root do bridge (/app)
+      - KABBALAH_BRIDGE_ALLOWED_DIRS=/app:/workspace
     volumes:
       # Persiste banco SQLite, logs e keys de API no host
       - ~/.kabbalah:/root/.kabbalah

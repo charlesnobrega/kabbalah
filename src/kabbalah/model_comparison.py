@@ -18,12 +18,15 @@ def compare_models(
     temperature: float = 0.2,
     timeout: float = 30.0,
     trace_id: str = "model-comparison",
+    ledger: Optional[Any] = None,
 ) -> dict[str, Any]:
     """Compare multiple provider/model candidates on the same task.
 
     Provider selection and budget enforcement are delegated to ``LLMGateway``.
     Individual provider failures are returned as rows instead of being hidden
-    behind synthetic/mock responses.
+    behind synthetic/mock responses. When a ``ledger`` (BudgetLedger) is given,
+    each real provider call is recorded so this spend-capable tool cannot bypass
+    budget accounting.
     """
     requested = list(dict.fromkeys(providers or []))
     selections = gateway.select_providers(
@@ -37,15 +40,16 @@ def compare_models(
     seen_requested: set[str] = set()
     for selection in selected:
         seen_requested.update({selection.profile.provider_name, selection.profile.name})
-        rows.append(
-            _execute_comparison(
-                selection=selection,
-                task=task,
-                max_tokens=max_tokens,
-                temperature=temperature,
-                timeout=timeout,
-            )
+        row = _execute_comparison(
+            selection=selection,
+            task=task,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            timeout=timeout,
         )
+        if ledger is not None and not row["error"]:
+            _record_comparison_cost(ledger, row, trace_id)
+        rows.append(row)
 
     if requested:
         for provider in requested:
@@ -78,6 +82,22 @@ def compare_models(
             "total_tokens": sum(int(row["tokens"]) for row in rows),
         },
     }
+
+
+def _record_comparison_cost(ledger: Any, row: dict[str, Any], trace_id: str) -> None:
+    """Record one comparison call in the budget ledger (best-effort)."""
+    try:
+        ledger.record_call(
+            provider=str(row["provider"]),
+            model=str(row["model"] or ""),
+            input_tokens=0,
+            output_tokens=0,
+            total_tokens=int(row["tokens"] or 0),
+            cost=float(row["cost"] or 0.0),
+            trace_id=f"{trace_id}:{row['profile'] or row['provider']}",
+        )
+    except Exception:
+        pass
 
 
 def _filter_selections(

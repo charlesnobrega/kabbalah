@@ -148,6 +148,7 @@ class AutonomyLoop:
             last_result = executor(node.plan)
             executed += 1
             node_cost = projected_cost + float(last_result.get("cost", 0.0) or 0.0)
+            self._record_node_spend(node, node_cost)
             history.append(self._history_entry(node, last_result, branch_cost=node.branch_cost + node_cost))
             if last_result.get("success") is True:
                 return LoopResult(
@@ -228,6 +229,26 @@ class AutonomyLoop:
             projected_cost=projected_cost,
             trace_id=f"tree:{node.branch_id}:{node.node_id}",
         )
+
+    def _record_node_spend(self, node: _SearchNode, node_cost: float) -> None:
+        """Record executed node cost so run/daily/provider ledger totals
+        accumulate across branches (otherwise every enforce_call sees an empty
+        ledger and block-mode limits can be exceeded)."""
+        ledger = getattr(self._budget_manager, "ledger", None)
+        if ledger is None or node_cost <= 0:
+            return
+        try:
+            ledger.record_call(
+                provider="tree_search",
+                model="tree_search",
+                input_tokens=0,
+                output_tokens=0,
+                total_tokens=0,
+                cost=float(node_cost),
+                trace_id=f"tree:{node.branch_id}:{node.node_id}",
+            )
+        except Exception:
+            pass
 
     def _would_exceed_branch_budget(self, node: _SearchNode, projected_cost: float) -> bool:
         if self._budget_manager is None:

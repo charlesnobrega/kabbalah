@@ -116,6 +116,47 @@ class TicketStore:
 
 STATE_DB_PATH = Path(os.environ.get("KABBALAH_BRIDGE_STATE_DB", str(PROJECT_ROOT / ".kabbalah_bridge_state.sqlite3")))
 
+def _hydrate_provider_env_from_config(cfg: ConfigurationManager) -> None:
+    """Publish keyring/config-stored provider keys into the process env so the
+    capability registry (which gates cloud profiles on env presence) can select
+    them after `kabbalah setup`, without duplicating keys into env manually."""
+    envs = getattr(cfg, "PROVIDER_KEY_ENVS", {}) or {}
+    for provider, env_names in envs.items():
+        if any(os.environ.get(name) for name in env_names):
+            continue
+        try:
+            key = cfg.get_provider_api_key(provider)
+        except Exception:
+            key = None
+        if key and env_names:
+            os.environ[env_names[0]] = key
+
+
+def _build_budget_manager(ledger: BudgetLedger, cfg: ConfigurationManager) -> BudgetManager:
+    """Build enforcement from the persisted installation config, falling back to
+    KABBALAH_BUDGET_* env vars, so `kabbalah config set-budget` is honored."""
+    try:
+        budget = dict(cfg.installation_settings.get("budget", {}) or {})
+    except Exception:
+        budget = {}
+
+    def _limit(key: str, env: str) -> Optional[float]:
+        value = budget.get(key)
+        if value in (None, ""):
+            value = os.environ.get(env)
+        return float(value) if value not in (None, "") else None
+
+    provider_limits = budget.get("provider_limits_usd") or {}
+    mode = str(budget.get("mode") or os.environ.get("KABBALAH_BUDGET_MODE", "warn"))
+    return BudgetManager(
+        ledger,
+        run_limit_usd=_limit("run_limit_usd", "KABBALAH_BUDGET_RUN_USD"),
+        daily_limit_usd=_limit("daily_limit_usd", "KABBALAH_BUDGET_DAILY_USD"),
+        provider_limits_usd={str(k): float(v) for k, v in provider_limits.items()},
+        mode=mode,
+    )
+
+
 hitl = HITL()
 cofre = CofreBitwarden(use_cache=True)
 store = ContratoStore(STATE_DB_PATH)
@@ -123,20 +164,32 @@ qlipot = Qlipot(store=store)
 contratos = Contratos(qlipot=qlipot, hitl=hitl, store=store)
 tickets = TicketStore(STATE_DB_PATH)
 budget_ledger = BudgetLedger(STATE_DB_PATH)
-budget_manager = BudgetManager.from_env(budget_ledger)
 config_manager = ConfigurationManager()
 config_manager.load_defaults()
 config_manager.load_from_env()
+try:
+    config_manager.load_installation_config()
+except Exception:
+    logger.debug("No installation config to load")
+_hydrate_provider_env_from_config(config_manager)
+budget_manager = _build_budget_manager(budget_ledger, config_manager)
 llm_gateway = LLMGateway(factory=ProviderFactory(), budget_manager=budget_manager)
 
 
-def _contract_checker(request: MCPRequest) -> tuple[bool, Optional[str]]:
+def _contract_gated(ferramenta: str) -> bool:
     if os.environ.get("KABBALAH_BRIDGE_REQUIRE_CONTRACTS", "1") == "0":
-        return True, None
-    if request.ferramenta in CONTRACT_EXEMPT_ACTIONS:
+        return False
+    return ferramenta not in CONTRACT_EXEMPT_ACTIONS
+
+
+def _contract_checker(request: MCPRequest) -> tuple[bool, Optional[str]]:
+    if not _contract_gated(request.ferramenta):
         return True, None
     try:
-        outcome = contratos.verificar_detalhado(request.agente_id, request.ferramenta)
+        # PEEK only: do not consume the call here. Consumption happens after the
+        # full pipeline (incl. HITL) authorizes execution, so a pending/denied
+        # approval cannot exhaust a max_calls contract.
+        outcome = contratos.verificar_detalhado(request.agente_id, request.ferramenta, consume=False)
     except Exception:
         logger.exception("Contract verification failed")
         return False, "Falha interna na verificação de contrato (negado por padrão)"
@@ -154,10 +207,27 @@ def _contract_checker(request: MCPRequest) -> tuple[bool, Optional[str]]:
 
 
 def _contract_verifier(agente_id: str, acao: str) -> bool:
-    outcome = contratos.verificar_detalhado(agente_id, acao)
+    # PEEK only (see _contract_checker); consumption is deferred to post-auth.
+    outcome = contratos.verificar_detalhado(agente_id, acao, consume=False)
     if outcome == VerificationOutcome.NO_CONTRACT:
         contratos.registrar_ausencia(agente_id, acao, "Ação entre agentes sem contrato ativo")
     return outcome == VerificationOutcome.ALLOWED
+
+
+def _consume_contract_slot(request: MCPRequest) -> Optional[str]:
+    """Consume one contract call slot after authorization succeeds.
+
+    Returns an error message if the contract was exhausted/expired between the
+    pre-HITL peek and now (race), otherwise None.
+    """
+    if not _contract_gated(request.ferramenta):
+        return None
+    if not request.metadata.get("contract_checked"):
+        return None
+    outcome = contratos.verificar_detalhado(request.agente_id, request.ferramenta, consume=True)
+    if outcome == VerificationOutcome.ALLOWED:
+        return None
+    return f"Contrato esgotado durante a autorização ({outcome})."
 
 
 # RBAC allow-all is a deliberate, visible choice here: bridge authorization is
@@ -395,14 +465,20 @@ def _env_allowlist() -> set[str]:
     return {item.strip() for item in raw.split(",") if item.strip()}
 
 
-def _assert_url_allowed(url: str) -> None:
+def _assert_url_allowed(url: str) -> Optional[str]:
+    """Validate a URL against the anti-SSRF policy.
+
+    Returns the single validated IP to pin the subsequent connection to (so a
+    DNS-rebinding response cannot swap in a private IP between this check and
+    the actual request), or None when private networks are explicitly allowed.
+    """
     parsed = urlparse(url)
     if parsed.scheme not in {"http", "https"}:
         raise BridgePolicyError(f"Esquema de URL não permitido: {parsed.scheme}")
     if not parsed.hostname:
         raise BridgePolicyError("URL sem hostname válido")
     if os.environ.get("KABBALAH_BRIDGE_ALLOW_PRIVATE_NETWORKS") == "1":
-        return
+        return None
     try:
         infos = socket.getaddrinfo(
             parsed.hostname,
@@ -411,6 +487,7 @@ def _assert_url_allowed(url: str) -> None:
         )
     except socket.gaierror as exc:
         raise BridgePolicyError(f"Falha ao resolver hostname: {parsed.hostname}") from exc
+    validated_ip: Optional[str] = None
     for info in infos:
         ip = ipaddress.ip_address(info[4][0])
         if (
@@ -422,6 +499,64 @@ def _assert_url_allowed(url: str) -> None:
             or ip.is_unspecified
         ):
             raise BridgePolicyError(f"Destino de rede bloqueado por política anti-SSRF: {ip}")
+        if validated_ip is None:
+            validated_ip = str(ip)
+    if validated_ip is None:
+        raise BridgePolicyError(f"Falha ao resolver hostname: {parsed.hostname}")
+    return validated_ip
+
+
+def _pinned_network_request(
+    params: "NetworkRequestInput", validated_ip: str, headers: Dict[str, Any]
+) -> Dict[str, Any]:
+    """Perform the HTTP request pinned to the pre-validated IP (anti DNS-rebind).
+
+    Connects to ``validated_ip`` while preserving the Host header and, for
+    HTTPS, TLS SNI/cert verification against the original hostname. Fails closed
+    (raises) if pinned transport cannot be established.
+    """
+    import urllib3
+
+    parsed = urlparse(params.url)
+    host = parsed.hostname
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    target = parsed.path or "/"
+    if parsed.query:
+        target = f"{target}?{parsed.query}"
+    headers = dict(headers)
+    headers.setdefault("Host", host)
+    try:
+        if parsed.scheme == "https":
+            pool = urllib3.HTTPSConnectionPool(
+                validated_ip,
+                port=port,
+                server_hostname=host,
+                assert_hostname=host,
+                cert_reqs="CERT_REQUIRED",
+                retries=False,
+            )
+        else:
+            pool = urllib3.HTTPConnectionPool(validated_ip, port=port, retries=False)
+    except Exception as exc:  # pragma: no cover - depends on urllib3 version
+        raise BridgePolicyError(f"Falha ao fixar conexão validada: {exc}") from exc
+    try:
+        response = pool.urlopen(
+            params.method.upper(),
+            target,
+            headers=headers,
+            body=params.body.encode("utf-8") if isinstance(params.body, str) else params.body,
+            redirect=False,
+            timeout=params.timeout_seconds,
+        )
+        return {
+            "url": params.url,
+            "method": params.method.upper(),
+            "status_code": response.status,
+            "headers": dict(response.headers),
+            "body": response.data.decode("utf-8", errors="replace"),
+        }
+    finally:
+        pool.close()
 
 
 def _check_retry_limit(agente_id: str, ferramenta: str, argumentos: Mapping[str, Any]) -> Optional[str]:
@@ -563,6 +698,10 @@ async def _authorize_and_execute(
                     "hitl_required": decision.hitl_required,
                 },
             )
+
+        consume_error = _consume_contract_slot(request)
+        if consume_error is not None:
+            return _error(consume_error, trace_id=trace_id, code="CONTRACT_EXHAUSTED")
 
         result = await _maybe_await(executor())
         qlipot.registrar_acao_agente(
@@ -808,12 +947,17 @@ async def network_request(params: NetworkRequestInput) -> str:
     """Perform an HTTP request after Kabbalah authorization and optional vault lookup."""
 
     def _execute() -> Dict[str, Any]:
-        _assert_url_allowed(params.url)
+        validated_ip = _assert_url_allowed(params.url)
         headers = dict(params.headers)
         if params.secret_item:
             secret = cofre.get_chave(params.secret_item, field_name=params.secret_field)
             headers[params.secret_header] = f"{params.secret_prefix}{secret}"
 
+        if validated_ip is not None:
+            # Pin the connection to the IP validated above (defeats DNS rebinding).
+            return _pinned_network_request(params, validated_ip, headers)
+
+        # Only reached when KABBALAH_BRIDGE_ALLOW_PRIVATE_NETWORKS=1 (opt-in).
         response = requests.request(
             method=params.method.upper(),
             url=params.url,
@@ -1060,6 +1204,7 @@ async def compare_models(params: CompareModelsInput) -> str:
             temperature=params.temperature,
             timeout=float(params.timeout_seconds),
             trace_id=f"{params.agente_id}:compare_models",
+            ledger=budget_ledger,
         ),
     )
 

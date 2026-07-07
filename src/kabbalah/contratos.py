@@ -214,8 +214,14 @@ class Contratos:
 
         return self.verificar_detalhado(agente_id, acao) == VerificationOutcome.ALLOWED
 
-    def verificar_detalhado(self, agente_id: str, acao: str) -> str:
-        """Verify and consume one call, reporting a `VerificationOutcome`.
+    def verificar_detalhado(self, agente_id: str, acao: str, *, consume: bool = True) -> str:
+        """Verify a call, reporting a `VerificationOutcome`.
+
+        With ``consume=True`` (default) a call slot is consumed. With
+        ``consume=False`` this is a side-effect-free *peek*: it validates that
+        an active contract exists and still has budget, but does not consume or
+        register violations — used to gate before HITL so a pending/denied
+        approval does not exhaust a `max_calls` contract.
 
         `NO_CONTRACT` is not a violation: nothing is escalated and no
         contract changes status. Limit and expiry failures are real
@@ -231,10 +237,18 @@ class Contratos:
             if timeout_min is not None:
                 age_seconds = datetime.utcnow().timestamp() - contrato.criado_em
                 if age_seconds > float(timeout_min) * 60:
+                    # Breach detection registers a violation even on peek; only
+                    # the call-slot consumption (chamadas increment) is deferred.
                     self._registrar_violacao_contrato(contrato, agente_id, acao, "Contrato expirado por timeout_min")
                     return VerificationOutcome.EXPIRED
 
             max_calls = contrato.limites.get("max_calls")
+            if not consume:
+                if max_calls is not None and contrato.chamadas >= int(max_calls):
+                    self._registrar_violacao_contrato(contrato, agente_id, acao, "Limite max_calls excedido")
+                    return VerificationOutcome.LIMIT_EXCEEDED
+                return VerificationOutcome.ALLOWED
+
             if self.store is not None:
                 granted = self.store.consume_call(contrato.id, int(max_calls) if max_calls is not None else None)
                 if not granted:

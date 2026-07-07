@@ -78,12 +78,39 @@ def test_exhausted_contract_reports_violation_reason(monkeypatch, tmp_path):
     )
     assert bridge.contratos.assinar(contrato.id, "limited-agent") is True
 
-    allowed, _ = bridge._contract_checker(_mcp_request("limited-agent", AcaoMCP.READ_FILE.value))
+    # Wave-13: the checker only PEEKS (no consume); the single slot is consumed
+    # post-authorization via _consume_contract_slot. The next peek then detects
+    # exhaustion and registers a violation without itself consuming.
+    req1 = _mcp_request("limited-agent", AcaoMCP.READ_FILE.value)
+    allowed, _ = bridge._contract_checker(req1)
     assert allowed is True
-    allowed, reason = bridge._contract_checker(_mcp_request("limited-agent", AcaoMCP.READ_FILE.value))
+    assert bridge._consume_contract_slot(req1) is None
 
+    allowed, reason = bridge._contract_checker(_mcp_request("limited-agent", AcaoMCP.READ_FILE.value))
     assert allowed is False
     assert "LIMIT_EXCEEDED" in reason
     violations = bridge.contratos.store.list_events(tipo=EVENTO_VIOLACAO)
     assert len(violations) == 1
     assert violations[0]["contrato_id"] == contrato.id
+
+
+def test_contract_checker_peek_does_not_consume_calls(monkeypatch, tmp_path):
+    """Regression for the pre-HITL consumption bug: repeated checks must not
+    exhaust a max_calls=1 contract before execution is authorized."""
+    bridge = reload_bridge(monkeypatch, tmp_path)
+    contrato = bridge.contratos.propor(
+        requisitante="coordinator",
+        provedor="limited-agent",
+        acao=AcaoMCP.READ_FILE.value,
+        limites={"max_calls": 1},
+        papeis=["coordinator"],
+    )
+    assert bridge.contratos.assinar(contrato.id, "limited-agent") is True
+
+    # Many peeks (e.g. a pending HITL prompt retried) never consume the slot.
+    for _ in range(5):
+        allowed, _ = bridge._contract_checker(_mcp_request("limited-agent", AcaoMCP.READ_FILE.value))
+        assert allowed is True
+
+    assert bridge.contratos.store.get(contrato.id).chamadas == 0
+    assert bridge.contratos.store.list_events(tipo=EVENTO_VIOLACAO) == []
