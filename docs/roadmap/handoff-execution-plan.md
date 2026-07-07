@@ -717,6 +717,8 @@ real da fase anterior — NÃO especificar agora.
   falso-positivo sem pagar latência no caminho comum). Alternativa custo-zero:
   juiz local via Ollama. Requer integração em `Qlipot`/pipeline — é mudança de
   runtime, gated na decisão do Charles.
+  **Design pronto para aprovação**: `docs/specs/hybrid-risk-judge-design.md`
+  (2026-07-06).
   *Aceite*: modo híbrido opt-in (env/config); bench mostra FP menor que a
   heurística pura com overhead de latência só nos casos escalados; default de
   segurança inalterado (fail-closed) se o juiz estiver indisponível.
