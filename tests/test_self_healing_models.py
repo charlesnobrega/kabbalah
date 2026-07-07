@@ -1,3 +1,4 @@
+# ruff: noqa: E721
 """
 Unit tests for self-healing deployment system data models.
 
@@ -8,16 +9,16 @@ are present and clear.
 Requirements: 1.3, 1.4, 1.5, 3.1, 4.1, 6.1, 6.2
 """
 
-import pytest
 from datetime import datetime, timedelta
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
+
 from src.kabbalah.self_healing_models import (
-    ErrorSeverity,
-    FixStatus,
-    ErrorReport,
-    CodeChange,
-    FixProposal,
     Checkpoint,
+    CodeChange,
+    ErrorReport,
+    ErrorSeverity,
+    FixProposal,
+    FixStatus,
     LearningEntry,
 )
 

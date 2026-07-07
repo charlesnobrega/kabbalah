@@ -12,9 +12,8 @@ Tests cover:
 Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 11.1, 11.2, 11.3, 11.4
 """
 
-import pytest
 from datetime import datetime, timedelta
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from kabbalah.error_detection_module import ErrorDetectionModule
 from kabbalah.self_healing_models import ErrorSeverity
@@ -301,6 +300,7 @@ class TestErrorDeduplication:
 
         # Wait for window to expire
         import time
+
         time.sleep(1.1)
 
         report2 = module.capture_exception(exception, "Leaf_Node")
@@ -320,9 +320,7 @@ class TestErrorDeduplication:
         # Mock time to be within custom window
         with patch("kabbalah.error_detection_module.datetime") as mock_datetime:
             # Set current time to 60 seconds later
-            mock_datetime.now.return_value = (
-                report1.timestamp + timedelta(seconds=60)
-            )
+            mock_datetime.now.return_value = report1.timestamp + timedelta(seconds=60)
             report2 = module.capture_exception(exception, "Leaf_Node")
 
         # Should still be deduplicated (within 120s window)
@@ -381,12 +379,12 @@ class TestErrorHistoryQuerying:
         module = ErrorDetectionModule()
 
         now = datetime.now()
-        report1 = module.capture_exception(ValueError("Error 1"), "Leaf_Node")
+        module.capture_exception(ValueError("Error 1"), "Leaf_Node")
 
         # Mock time to be 2 seconds later
         with patch("kabbalah.error_detection_module.datetime") as mock_datetime:
             mock_datetime.now.return_value = now + timedelta(seconds=2)
-            report2 = module.capture_exception(ValueError("Error 2"), "Leaf_Node")
+            module.capture_exception(ValueError("Error 2"), "Leaf_Node")
 
         # Query only first error
         results = module.query_error_history(

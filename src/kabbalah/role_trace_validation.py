@@ -5,13 +5,14 @@ attaches trace metadata to artifacts, and propagates trace_id through operations
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Set
 from datetime import datetime
 from enum import Enum
+from typing import Any, Dict, List, Optional, Set
 
 
 class CanonicalRole(Enum):
     """Canonical roles in the Kabbalah system."""
+
     INTAKE_CLARIFIER = "Intake_Clarifier"
     ROOT_PLANNER = "Root_Planner"
     DOMAIN_COORDINATOR = "Domain_Coordinator"
@@ -23,6 +24,7 @@ class CanonicalRole(Enum):
 
 class OperationCategory(Enum):
     """Categories of operations that can be performed."""
+
     PARSE_REQUEST = "parse_request"
     DECOMPOSE_SPECIFICATION = "decompose_specification"
     SPAWN_LEAF_NODES = "spawn_leaf_nodes"
@@ -38,6 +40,7 @@ class OperationCategory(Enum):
 @dataclass
 class TraceMetadata:
     """Trace metadata attached to artifacts."""
+
     trace_id: str  # Format: run_id:branch_id:leaf_id
     canonical_group: str  # The canonical role group
     role_name: str  # The specific role name
@@ -49,6 +52,7 @@ class TraceMetadata:
 @dataclass
 class RoleViolation:
     """Record of a role-based operation violation."""
+
     role: CanonicalRole
     operation: OperationCategory
     trace_id: str
@@ -59,7 +63,7 @@ class RoleViolation:
 
 class RoleTraceValidationModule:
     """Validates role-based operations and manages trace metadata.
-    
+
     This module ensures that:
     - Each agent operates within its assigned role
     - Operations are validated against role permissions
@@ -132,28 +136,23 @@ class RoleTraceValidationModule:
         """Get immutable copy of trace metadata log."""
         return list(self._trace_metadata_log)
 
-    def validate_operation_for_role(
-        self,
-        role: CanonicalRole,
-        operation: OperationCategory,
-        trace_id: str
-    ) -> bool:
+    def validate_operation_for_role(self, role: CanonicalRole, operation: OperationCategory, trace_id: str) -> bool:
         """Validate that an operation is permitted for a role.
-        
+
         Args:
             role: The canonical role attempting the operation
             operation: The operation category being attempted
             trace_id: The trace_id for this operation
-            
+
         Returns:
             True if operation is allowed, False otherwise
         """
         if role not in self.ROLE_PERMISSIONS:
             return False
-        
+
         allowed_operations = self.ROLE_PERMISSIONS[role]
         is_allowed = operation in allowed_operations
-        
+
         if not is_allowed:
             violation = RoleViolation(
                 role=role,
@@ -161,39 +160,33 @@ class RoleTraceValidationModule:
                 trace_id=trace_id,
                 timestamp=datetime.now().timestamp(),
                 violation_type="UNAUTHORIZED_OPERATION_FOR_ROLE",
-                message=f"Role {role.value} is not permitted to perform {operation.value}"
+                message=f"Role {role.value} is not permitted to perform {operation.value}",
             )
             self._violation_log.append(violation)
-        
+
         return is_allowed
 
     def validate_operation_for_role_with_logging(
-        self,
-        role: CanonicalRole,
-        operation: OperationCategory,
-        trace_id: str
+        self, role: CanonicalRole, operation: OperationCategory, trace_id: str
     ) -> tuple[bool, Optional[str]]:
         """Validate operation and return result with error message.
-        
+
         Args:
             role: The canonical role attempting the operation
             operation: The operation category being attempted
             trace_id: The trace_id for this operation
-            
+
         Returns:
             Tuple of (is_allowed, error_message)
             If allowed, error_message is None
             If not allowed, error_message contains violation details
         """
         is_allowed = self.validate_operation_for_role(role, operation, trace_id)
-        
+
         if not is_allowed:
-            error_msg = (
-                f"Operation {operation.value} is not allowed for role {role.value}. "
-                f"Trace ID: {trace_id}"
-            )
+            error_msg = f"Operation {operation.value} is not allowed for role {role.value}. " f"Trace ID: {trace_id}"
             return False, error_msg
-        
+
         return True, None
 
     def attach_trace_metadata(
@@ -203,10 +196,10 @@ class RoleTraceValidationModule:
         canonical_group: str,
         role_name: str,
         operation_name: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Attach trace metadata to an artifact.
-        
+
         Args:
             artifact: The artifact to attach metadata to
             trace_id: The hierarchical trace identifier (run_id:branch_id:leaf_id)
@@ -214,7 +207,7 @@ class RoleTraceValidationModule:
             role_name: The specific role name
             operation_name: Optional name of the operation that created the artifact
             metadata: Optional additional metadata
-            
+
         Returns:
             The artifact with attached trace metadata
         """
@@ -223,9 +216,9 @@ class RoleTraceValidationModule:
             canonical_group=canonical_group,
             role_name=role_name,
             operation_name=operation_name,
-            metadata=metadata or {}
+            metadata=metadata or {},
         )
-        
+
         # Attach metadata to artifact
         artifact_with_metadata = dict(artifact)
         artifact_with_metadata["_trace_metadata"] = {
@@ -236,47 +229,38 @@ class RoleTraceValidationModule:
             "operation_name": trace_metadata.operation_name,
             "metadata": trace_metadata.metadata,
         }
-        
+
         # Log the metadata attachment
         self._trace_metadata_log.append(trace_metadata)
-        
+
         return artifact_with_metadata
 
     def propagate_trace_id(
-        self,
-        source_trace_id: str,
-        target_artifact: Dict[str, Any],
-        role: CanonicalRole
+        self, source_trace_id: str, target_artifact: Dict[str, Any], role: CanonicalRole
     ) -> Dict[str, Any]:
         """Propagate trace_id through operations.
-        
+
         Args:
             source_trace_id: The trace_id to propagate
             target_artifact: The artifact to propagate trace_id to
             role: The role performing the propagation
-            
+
         Returns:
             The artifact with propagated trace_id
         """
         # Validate that propagation is allowed for this role
-        is_allowed = self.validate_operation_for_role(
-            role,
-            OperationCategory.PROPAGATE_TRACE,
-            source_trace_id
-        )
-        
+        is_allowed = self.validate_operation_for_role(role, OperationCategory.PROPAGATE_TRACE, source_trace_id)
+
         if not is_allowed:
-            raise ValueError(
-                f"Role {role.value} is not permitted to propagate trace_id"
-            )
-        
+            raise ValueError(f"Role {role.value} is not permitted to propagate trace_id")
+
         # Propagate the trace_id
         artifact_with_trace = dict(target_artifact)
         if "_trace_metadata" not in artifact_with_trace:
             artifact_with_trace["_trace_metadata"] = {}
-        
+
         artifact_with_trace["_trace_metadata"]["trace_id"] = source_trace_id
-        
+
         return artifact_with_trace
 
     def get_violation_history(self) -> List[RoleViolation]:
@@ -287,10 +271,7 @@ class RoleTraceValidationModule:
         """Get violations for a specific role."""
         return [v for v in self._violation_log if v.role == role]
 
-    def get_violations_for_operation(
-        self,
-        operation: OperationCategory
-    ) -> List[RoleViolation]:
+    def get_violations_for_operation(self, operation: OperationCategory) -> List[RoleViolation]:
         """Get violations for a specific operation."""
         return [v for v in self._violation_log if v.operation == operation]
 
@@ -308,16 +289,16 @@ class RoleTraceValidationModule:
 
     def extract_trace_metadata(self, artifact: Dict[str, Any]) -> Optional[TraceMetadata]:
         """Extract trace metadata from an artifact.
-        
+
         Args:
             artifact: The artifact to extract metadata from
-            
+
         Returns:
             TraceMetadata if present, None otherwise
         """
         if "_trace_metadata" not in artifact:
             return None
-        
+
         metadata_dict = artifact["_trace_metadata"]
         return TraceMetadata(
             trace_id=metadata_dict.get("trace_id", ""),
@@ -325,25 +306,21 @@ class RoleTraceValidationModule:
             role_name=metadata_dict.get("role_name", ""),
             timestamp=metadata_dict.get("timestamp", datetime.now().timestamp()),
             operation_name=metadata_dict.get("operation_name"),
-            metadata=metadata_dict.get("metadata", {})
+            metadata=metadata_dict.get("metadata", {}),
         )
 
-    def validate_trace_metadata_consistency(
-        self,
-        artifact: Dict[str, Any],
-        expected_trace_id: str
-    ) -> bool:
+    def validate_trace_metadata_consistency(self, artifact: Dict[str, Any], expected_trace_id: str) -> bool:
         """Validate that artifact's trace metadata is consistent.
-        
+
         Args:
             artifact: The artifact to validate
             expected_trace_id: The expected trace_id
-            
+
         Returns:
             True if metadata is consistent, False otherwise
         """
         metadata = self.extract_trace_metadata(artifact)
         if metadata is None:
             return False
-        
+
         return metadata.trace_id == expected_trace_id

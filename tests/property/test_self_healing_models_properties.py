@@ -9,17 +9,19 @@ Requirements: 1.3, 3.4
 """
 
 from datetime import datetime, timedelta
-from hypothesis import given, strategies as st, settings, HealthCheck
+
+from hypothesis import given
+from hypothesis import strategies as st
+
 from src.kabbalah.self_healing_models import (
-    ErrorSeverity,
-    FixStatus,
-    ErrorReport,
-    CodeChange,
-    FixProposal,
     Checkpoint,
+    CodeChange,
+    ErrorReport,
+    ErrorSeverity,
+    FixProposal,
+    FixStatus,
     LearningEntry,
 )
-
 
 # Custom strategies for generating valid data
 error_severity_strategy = st.sampled_from(list(ErrorSeverity))
@@ -32,34 +34,38 @@ confidence_score_strategy = st.floats(min_value=0.0, max_value=1.0)
 file_path_strategy = st.just("src/module.py") | st.just("src/test.py") | st.just("src/utils/helper.py")
 
 # Strategy for generating valid component names
-component_strategy = st.sampled_from([
-    "Intake_Node",
-    "Root_Orchestrator",
-    "Domain_Orchestrator",
-    "Leaf_Node",
-    "Synthesizer",
-    "FSM_Enforcement",
-])
+component_strategy = st.sampled_from(
+    [
+        "Intake_Node",
+        "Root_Orchestrator",
+        "Domain_Orchestrator",
+        "Leaf_Node",
+        "Synthesizer",
+        "FSM_Enforcement",
+    ]
+)
 
 # Strategy for generating valid error types
-error_type_strategy = st.sampled_from([
-    "ValueError",
-    "TypeError",
-    "RuntimeError",
-    "KeyError",
-    "AttributeError",
-    "DecompositionError",
-    "CoordinationError",
-    "ExecutionError",
-])
+error_type_strategy = st.sampled_from(
+    [
+        "ValueError",
+        "TypeError",
+        "RuntimeError",
+        "KeyError",
+        "AttributeError",
+        "DecompositionError",
+        "CoordinationError",
+        "ExecutionError",
+    ]
+)
 
 
 class TestProperty3UniqueErrorIdentification:
     """
     Property 3: Unique Error Identification
-    
+
     Each error has unique error_id.
-    
+
     **Validates: Requirements 1.3**
     """
 
@@ -97,9 +103,9 @@ class TestProperty3UniqueErrorIdentification:
 class TestProperty9ConfidenceScoreBounds:
     """
     Property 9: Confidence Score Bounds
-    
+
     Confidence scores are 0.0-1.0.
-    
+
     **Validates: Requirements 3.4**
     """
 
@@ -157,9 +163,9 @@ class TestProperty9ConfidenceScoreBounds:
 class TestProperty10ManualReviewRequirement:
     """
     Property 10: Manual Review Requirement
-    
+
     Low confidence fixes marked for review.
-    
+
     **Validates: Requirements 3.8, 13.3**
     """
 
@@ -218,9 +224,9 @@ class TestProperty10ManualReviewRequirement:
 class TestProperty11FixRankingByConfidence:
     """
     Property 11: Fix Ranking by Confidence
-    
+
     Fixes ranked by confidence descending.
-    
+
     **Validates: Requirements 3.9**
     """
 
@@ -275,9 +281,7 @@ class TestPropertyErrorReportConsistency:
         component=component_strategy,
         severity=error_severity_strategy,
     )
-    def test_error_report_preserves_all_fields(
-        self, error_type, message, component, severity
-    ):
+    def test_error_report_preserves_all_fields(self, error_type, message, component, severity):
         """Verify that ErrorReport preserves all input fields."""
         error = ErrorReport(
             error_id="err-001",
@@ -310,9 +314,7 @@ class TestPropertyCodeChangeConsistency:
         line_start=st.integers(min_value=1, max_value=1000),
         line_end=st.integers(min_value=1, max_value=1000),
     )
-    def test_code_change_preserves_all_fields(
-        self, file_path, original_content, new_content, line_start, line_end
-    ):
+    def test_code_change_preserves_all_fields(self, file_path, original_content, new_content, line_start, line_end):
         """Verify that CodeChange preserves all input fields."""
         # Ensure line_end >= line_start
         if line_end < line_start:
@@ -346,9 +348,7 @@ class TestPropertyFixProposalConsistency:
         confidence_score=confidence_score_strategy,
         reasoning=st.text(min_size=1, max_size=500),
     )
-    def test_fix_proposal_preserves_all_fields(
-        self, fix_id, error_id, description, confidence_score, reasoning
-    ):
+    def test_fix_proposal_preserves_all_fields(self, fix_id, error_id, description, confidence_score, reasoning):
         """Verify that FixProposal preserves all input fields."""
         change = CodeChange(
             file_path="src/module.py",

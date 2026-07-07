@@ -1,0 +1,229 @@
+"""Tests for Kabbalah CLI commands."""
+
+import json
+import sqlite3
+import sys
+import time
+
+from kabbalah import cli
+from kabbalah.configuration_manager import ConfigurationManager
+from kabbalah.contrato_store import ContratoStore
+from kabbalah.contratos import ContractStatus, ContratoAgente
+from kabbalah.onboarding import ProviderValidationResult
+
+PROVIDER_ENV_KEYS = [
+    "OPENAI_API_KEY",
+    "KABBALAH_OPENAI_API_KEY",
+    "GROQ_API_KEY",
+    "KABBALAH_GROQ_API_KEY",
+    "KABBALAH_GROQ_COMPATIBLE_API_KEY",
+]
+
+
+class FakeKeyring:
+    def __init__(self):
+        self.values = {}
+
+    def get_password(self, service_name, username):
+        return self.values.get((service_name, username))
+
+    def set_password(self, service_name, username, value):
+        self.values[(service_name, username)] = value
+
+    def delete_password(self, service_name, username):
+        self.values.pop((service_name, username), None)
+
+
+class FakeValidator:
+    def __init__(self):
+        self.calls = []
+
+    def validate(self, provider, api_key):
+        self.calls.append((provider, api_key))
+        return ProviderValidationResult(provider=provider, valid=True, message="ok")
+
+
+def clear_provider_env(monkeypatch):
+    for key in PROVIDER_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+
+
+def test_status_json_outputs_safe_config_and_budget(monkeypatch, capsys, tmp_path):
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-secret-7890")
+    monkeypatch.setenv("KABBALAH_BRIDGE_STATE_DB", str(tmp_path / "state.sqlite3"))
+    monkeypatch.setattr(sys, "argv", ["kabbalah", "status", "--json"])
+
+    exit_code = cli.main()
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["ok"] is True
+    assert "config" in payload["result"]
+    assert "budget" in payload["result"]
+    assert payload["result"]["hardware"]["active"] is False
+    assert "sk-test-secret-7890" not in captured.out
+    openai = next(provider for provider in payload["result"]["config"]["providers"] if provider["provider"] == "openai")
+    assert openai["last4"] == "7890"
+
+
+def test_parse_json_command_matches_quickstart(monkeypatch, capsys):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "kabbalah",
+            "parse",
+            "--name",
+            "Demo governada",
+            "--description",
+            "Gerar uma especificação com backend, frontend e testes",
+            "--output",
+            "json",
+        ],
+    )
+
+    assert cli.main() == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["project_name"] == "Demo governada"
+    assert payload["run_id"].startswith("run_")
+
+
+def test_setup_command_validates_and_stores_key_without_printing_secret(monkeypatch, capsys, tmp_path):
+    clear_provider_env(monkeypatch)
+    manager = ConfigurationManager(
+        keyring_backend=FakeKeyring(),
+        installation_config_path=tmp_path / "config.json",
+    )
+    validator = FakeValidator()
+    monkeypatch.setattr(cli, "ConfigurationManager", lambda: manager)
+    monkeypatch.setattr(cli, "ProviderKeyValidator", lambda: validator)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt: "sk-test-secret-1111")
+    monkeypatch.setattr(sys, "argv", ["kabbalah", "setup", "--providers", "openai", "--json"])
+
+    exit_code = cli.main()
+    captured = capsys.readouterr()
+    payload = json.loads(captured.out)
+
+    assert exit_code == 0
+    assert payload["ok"] is True
+    assert validator.calls == [("openai", "sk-test-secret-1111")]
+    assert manager.get_provider_key_status("openai")["last4"] == "1111"
+    assert "sk-test-secret-1111" not in captured.out
+
+
+def test_config_key_budget_and_routing_commands(monkeypatch, capsys, tmp_path):
+    clear_provider_env(monkeypatch)
+    manager = ConfigurationManager(
+        keyring_backend=FakeKeyring(),
+        installation_config_path=tmp_path / "config.json",
+    )
+    validator = FakeValidator()
+    monkeypatch.setattr(cli, "ConfigurationManager", lambda: manager)
+    monkeypatch.setattr(cli, "ProviderKeyValidator", lambda: validator)
+    monkeypatch.setattr(cli.getpass, "getpass", lambda prompt: "gsk-test-secret-2222")
+
+    monkeypatch.setattr(sys, "argv", ["kabbalah", "config", "add-key", "groq_compatible", "--json"])
+    assert cli.main() == 0
+    assert "gsk-test-secret-2222" not in capsys.readouterr().out
+
+    monkeypatch.setattr(sys, "argv", ["kabbalah", "config", "test-key", "groq_compatible", "--json"])
+    assert cli.main() == 0
+    test_payload = json.loads(capsys.readouterr().out)
+    assert test_payload["result"]["valid"] is True
+    assert "gsk-test-secret-2222" not in json.dumps(test_payload)
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["kabbalah", "config", "set-budget", "--mode", "block", "--run-usd", "1.25", "--daily-usd", "5", "--json"],
+    )
+    assert cli.main() == 0
+    budget_payload = json.loads(capsys.readouterr().out)
+    assert budget_payload["result"]["budget"]["mode"] == "block"
+    assert budget_payload["result"]["budget"]["run_limit_usd"] == 1.25
+
+    monkeypatch.setattr(sys, "argv", ["kabbalah", "config", "set-routing", "budget_first", "--json"])
+    assert cli.main() == 0
+    routing_payload = json.loads(capsys.readouterr().out)
+    assert routing_payload["result"]["routing"]["policy"] == "budget_first"
+
+    monkeypatch.setattr(sys, "argv", ["kabbalah", "config", "set-network", "receber", "--json"])
+    assert cli.main() == 0
+    network_payload = json.loads(capsys.readouterr().out)
+    assert network_payload["result"]["network"]["mode"] == "receber"
+    assert network_payload["result"]["network"]["public_key"]
+    assert "private_key" not in json.dumps(network_payload)
+
+    publisher = "trusted-publisher-public-key"
+    monkeypatch.setattr(sys, "argv", ["kabbalah", "config", "trust-add", publisher, "--json"])
+    assert cli.main() == 0
+    trust_payload = json.loads(capsys.readouterr().out)
+    assert trust_payload["result"]["network"]["trusted_publishers"] == 1
+
+    monkeypatch.setattr(sys, "argv", ["kabbalah", "config", "remove-key", "groq_compatible", "--json"])
+    assert cli.main() == 0
+    assert manager.get_provider_key_status("groq_compatible")["status"] == "absent"
+
+
+def test_config_list_json_includes_hardware_status(monkeypatch, capsys, tmp_path):
+    manager = ConfigurationManager(
+        keyring_backend=FakeKeyring(),
+        installation_config_path=tmp_path / "config.json",
+    )
+    monkeypatch.setenv("KABBALAH_BRIDGE_STATE_DB", str(tmp_path / "state.sqlite3"))
+    monkeypatch.setattr(cli, "ConfigurationManager", lambda: manager)
+    monkeypatch.setattr(sys, "argv", ["kabbalah", "config", "list", "--json"])
+
+    assert cli.main() == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["ok"] is True
+    assert payload["result"]["hardware"] == {
+        "active": False,
+        "message": "No hardware profile recorded yet.",
+    }
+
+
+def test_status_json_includes_contracts_and_pending_hitl(monkeypatch, capsys, tmp_path):
+    state_db = tmp_path / "state.sqlite3"
+    ContratoStore(state_db).save(
+        ContratoAgente(
+            id="contract-1",
+            task_id="task-1",
+            requisitante="coord",
+            provedor="worker",
+            acao="read_file",
+            limites={"max_calls": 3},
+            status=ContractStatus.ATIVO,
+            score_risco=0.2,
+            criado_em=time.time(),
+        )
+    )
+    with sqlite3.connect(state_db) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS hitl_tickets (
+                ticket_id TEXT PRIMARY KEY,
+                payload TEXT NOT NULL,
+                created_at REAL NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO hitl_tickets(ticket_id, payload, created_at) VALUES (?, ?, ?)",
+            (
+                "hitl_1",
+                json.dumps({"ticket_id": "hitl_1", "status": "pending", "acao": "execute_command"}),
+                time.time(),
+            ),
+        )
+
+    monkeypatch.setenv("KABBALAH_BRIDGE_STATE_DB", str(state_db))
+    monkeypatch.setattr(sys, "argv", ["kabbalah", "status", "--json"])
+
+    assert cli.main() == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    assert payload["result"]["governance"]["active_contracts"] == 1
+    assert payload["result"]["governance"]["pending_hitl_tickets"] == 1

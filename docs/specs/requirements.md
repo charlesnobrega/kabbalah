@@ -1,5 +1,18 @@
 # Kabbalah Requirements Document
 
+> **⚠️ Documento histórico / EARS aspiracional (2026-04-06).** Este spec foi
+> escrito antes das ondas de hardening 4–13 e **não** reflete o estado atual do
+> código. Claims defasados conhecidos: "12 providers incluindo Anthropic nativo"
+> (real: 11 providers, Anthropic via OpenRouter), "execução paralela"
+> (real: orquestração raiz sequencial por padrão), "Cognee-first"
+> (real: memória Cognee opcional, fallback JSONL), "single binary"
+> (real: distribuição via pip).
+>
+> **Para o estado reconciliado, use**: `docs/specs/PRD.md` (produto, RFs com status
+> validado) e `docs/roadmap/handoff-execution-plan.md` (execução, fonte de verdade
+> de progresso). **Não execute a partir deste arquivo.** Ele é mantido como
+> registro dos critérios de aceite originais em formato EARS.
+
 ## Introduction
 
 Kabbalah is a multi-agent orchestration system that fuses KIRO V5 (tree-based orchestration with runtime hardening) and OpenClaude (provider abstraction and tool execution). The system enables autonomous, compliant, and observable multi-agent workflows with complete governance, memory sharing, and hierarchical tracing.

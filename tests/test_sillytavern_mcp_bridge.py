@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from kabbalah.firewall_mcp import AcaoMCP, FirewallMCP, MCPDecision, MCPRequest, MCPRiskLevel, RegraMCP
+from kabbalah.firewall_mcp import AcaoMCP, FirewallMCP, MCPDecision, MCPRequest, MCPRiskLevel, RegraMCP, permitir_tudo
 from kabbalah.hitl import HITL, NivelUrgencia, SolicitacaoHITL, StatusAprovacao
 from kabbalah.qlipot import Qlipot
 
@@ -13,6 +13,10 @@ def test_acao_mcp_maps_bridge_tools():
     assert AcaoMCP.READ_FILE.value == "read_file"
     assert AcaoMCP.EXECUTE_COMMAND.value == "execute_command"
     assert AcaoMCP.NETWORK_REQUEST.value == "network_request"
+    assert AcaoMCP.GET_BUDGET_STATS.value == "get_budget_stats"
+    assert AcaoMCP.GET_CONFIG_STATUS.value == "get_config_status"
+    assert AcaoMCP.COMPARE_MODELS.value == "compare_models"
+    assert AcaoMCP.RENDER_GROUP_EVENT.value == "render_group_event"
 
 
 def test_hitl_solicitar_sync_wrapper_denies_without_provider():
@@ -104,7 +108,11 @@ def test_qlipot_aplicar_correcao_emits_callback():
 
 
 def test_firewall_uses_bridge_risk_metadata():
-    firewall = FirewallMCP(hitl=HITL(approval_provider=lambda request: True))
+    firewall = FirewallMCP(
+        rbac_checker=permitir_tudo,
+        contract_checker=permitir_tudo,
+        hitl=HITL(approval_provider=lambda request: True),
+    )
     request = MCPRequest(
         agente_id="agent",
         ferramenta=AcaoMCP.EXECUTE_COMMAND.value,
@@ -123,7 +131,7 @@ def test_firewall_uses_bridge_risk_metadata():
 
 def test_firewall_contract_required_for_cross_agent_action():
     events = []
-    firewall = FirewallMCP(contract_checker=lambda _: (False, "CONTRACT_REQUIRED"))
+    firewall = FirewallMCP(rbac_checker=permitir_tudo, contract_checker=lambda _: (False, "CONTRACT_REQUIRED"))
     firewall.registrar_callback("bloqueio", lambda event, data: events.append((event, data)))
 
     request = MCPRequest(
@@ -211,9 +219,11 @@ async def test_bridge_hitl_pending_returns_ticket_contract(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_bridge_read_file_happy_path(tmp_path):
+async def test_bridge_read_file_happy_path(monkeypatch, tmp_path):
     import kabbalah_mcp_bridge as bridge
 
+    monkeypatch.setenv("KABBALAH_BRIDGE_REQUIRE_CONTRACTS", "0")
+    monkeypatch.setenv("KABBALAH_BRIDGE_ALLOWED_DIRS", str(tmp_path))
     file_path = tmp_path / "sample.txt"
     file_path.write_text("hello", encoding="utf-8")
 
@@ -357,13 +367,133 @@ async def test_bridge_network_stats_tool_returns_sync_stats():
 
 
 @pytest.mark.asyncio
-async def test_bridge_read_env_var_blocks_sensitive_value():
+async def test_bridge_budget_stats_tool_returns_budget_manager_stats(monkeypatch):
     import kabbalah_mcp_bridge as bridge
 
+    class FakeBudgetManager:
+        def get_budget_stats(self):
+            return {
+                "mode": "warn",
+                "total_cost": 0.42,
+                "provider_costs": {"openrouter": 0.42},
+                "limits": {"daily_usd": 1.0},
+            }
+
+    monkeypatch.setattr(bridge, "budget_manager", FakeBudgetManager())
+
+    response = await bridge.get_budget_stats(bridge.BridgeBaseInput(agente_id="agent", papel_agente="viewer"))
+    payload = json.loads(response)
+
+    assert payload["ok"] is True
+    assert payload["result"]["total_cost"] == 0.42
+    assert payload["result"]["provider_costs"] == {"openrouter": 0.42}
+
+
+@pytest.mark.asyncio
+async def test_bridge_config_status_tool_returns_safe_provider_status(monkeypatch):
+    import kabbalah_mcp_bridge as bridge
+
+    class FakeConfigurationManager:
+        def get_config_status(self):
+            return {
+                "providers": [
+                    {
+                        "provider": "openai",
+                        "status": "present",
+                        "source": "environment",
+                        "last4": "1234",
+                    }
+                ],
+                "storage": {"keyring_available": True},
+            }
+
+    monkeypatch.setattr(bridge, "config_manager", FakeConfigurationManager())
+
+    response = await bridge.get_config_status(bridge.BridgeBaseInput(agente_id="agent", papel_agente="viewer"))
+    payload = json.loads(response)
+
+    assert payload["ok"] is True
+    assert payload["result"]["providers"][0]["last4"] == "1234"
+    assert "sk-" not in json.dumps(payload)
+
+
+@pytest.mark.asyncio
+async def test_bridge_compare_models_tool_uses_authorized_pipeline(monkeypatch):
+    import kabbalah_mcp_bridge as bridge
+
+    monkeypatch.setenv("KABBALAH_BRIDGE_REQUIRE_CONTRACTS", "0")
+
+    def fake_compare_models(**kwargs):
+        assert kwargs["task"] == "Compare this"
+        assert kwargs["providers"] == ["mock_a", "mock_b"]
+        assert kwargs["gateway"] is bridge.llm_gateway
+        return {
+            "comparisons": [
+                {
+                    "provider": "mock_a",
+                    "model": "mock-model-1",
+                    "latency_ms": 1.0,
+                    "tokens": 10,
+                    "cost": 0.0001,
+                    "response": "ok",
+                    "error": None,
+                }
+            ],
+            "summary": {"provider_count": 1, "error_count": 0},
+        }
+
+    monkeypatch.setattr(bridge, "compare_model_outputs", fake_compare_models)
+
+    response = await bridge.compare_models(
+        bridge.CompareModelsInput(
+            agente_id="agent",
+            papel_agente="viewer",
+            task="Compare this",
+            providers=["mock_a", "mock_b"],
+        )
+    )
+    payload = json.loads(response)
+
+    assert payload["ok"] is True
+    assert payload["result"]["summary"]["provider_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_bridge_render_group_event_tool_returns_display_text(monkeypatch):
+    import kabbalah_mcp_bridge as bridge
+
+    monkeypatch.setenv("KABBALAH_BRIDGE_REQUIRE_CONTRACTS", "0")
+
+    response = await bridge.render_group_event(
+        bridge.RenderGroupEventInput(
+            agente_id="agent",
+            papel_agente="viewer",
+            event_type="deny",
+            agent="Security",
+            summary="Ação bloqueada.",
+            details={"motivo": "contrato ausente"},
+            next_step="Use propose_contract.",
+        )
+    )
+    payload = json.loads(response)
+
+    assert payload["ok"] is True
+    assert payload["result"]["display_text"].startswith("[KABBALAH:DENY] Security")
+    assert "Use propose_contract." in payload["result"]["display_text"]
+
+
+@pytest.mark.asyncio
+async def test_bridge_read_env_var_blocks_sensitive_value(monkeypatch):
+    import kabbalah_mcp_bridge as bridge
+
+    monkeypatch.setenv("KABBALAH_BRIDGE_REQUIRE_CONTRACTS", "0")
     response = await bridge.read_env_var(
         bridge.ReadEnvVarInput(agente_id="agent", papel_agente="viewer", name="BW_PASSWORD")
     )
     payload = json.loads(response)
 
-    assert payload["ok"] is True
-    assert payload["result"]["blocked"] is True
+    # Wave-3: password-named variables raise audit-tier risk, so the firewall
+    # escalates to HITL before the env allowlist is even consulted.
+    assert payload["error"] == "HITL_REQUIRED"
+    assert "ticket_id" in payload
+    assert "BW_PASSWORD" not in json.dumps(payload)

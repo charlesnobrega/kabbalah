@@ -9,7 +9,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from .hitl import ApprovalRequest, HITL
+from .hitl import HITL, ApprovalRequest
 
 
 class MCPRiskLevel(Enum):
@@ -37,6 +37,10 @@ class AcaoMCP(Enum):
     REJECT_CONTRACT = "reject_contract"
     COMPLETE_TASK = "complete_task"
     GET_NETWORK_STATS = "get_network_stats"
+    GET_BUDGET_STATS = "get_budget_stats"
+    GET_CONFIG_STATUS = "get_config_status"
+    COMPARE_MODELS = "compare_models"
+    RENDER_GROUP_EVENT = "render_group_event"
 
 
 @dataclass(frozen=True)
@@ -82,7 +86,19 @@ RiskAssessor = Callable[[MCPRequest], Tuple[MCPRiskLevel, float, str]]
 ContractVerifier = Callable[[str, str], bool]
 
 
-def _allow_all(_: MCPRequest) -> CheckResult:
+def _deny_all(_: MCPRequest) -> CheckResult:
+    return False, "Nenhum checker configurado — negado por padrão (fail-closed)"
+
+
+def permitir_tudo(_: MCPRequest) -> CheckResult:
+    """Explicit opt-in allow-all checker.
+
+    Wave-6 hardening: the firewall denies by default when no checker is
+    injected. Callers that intentionally delegate authorization elsewhere
+    (e.g. the MCP bridge, which relies on contracts + risk + HITL) must make
+    that permissiveness visible by passing this function explicitly.
+    """
+
     return True, None
 
 
@@ -124,8 +140,8 @@ class FirewallMCP:
         risk_assessor: Optional[RiskAssessor] = None,
         hitl: Optional[HITL] = None,
     ):
-        self._rbac_checker = rbac_checker or _allow_all
-        self._contract_checker = contract_checker or _allow_all
+        self._rbac_checker = rbac_checker or _deny_all
+        self._contract_checker = contract_checker or _deny_all
         self._contract_verifier = contract_verifier
         self._risk_assessor = risk_assessor or _default_risk_assessor
         self._hitl = hitl or HITL()
@@ -153,7 +169,11 @@ class FirewallMCP:
             )
 
         contract_ok, contract_reason = self._contract_checker(request)
-        if contract_ok and request.metadata.get("envolve_outro_agente"):
+        if (
+            contract_ok
+            and request.metadata.get("envolve_outro_agente")
+            and not request.metadata.get("contract_checked")
+        ):
             contract_ok = self.verificar_contrato(request.agente_id, request.ferramenta)
             contract_reason = None if contract_ok else "CONTRACT_REQUIRED"
         if not contract_ok:
@@ -250,6 +270,8 @@ class FirewallMCP:
         return ok
 
     def registrar_callback(self, evento: str, fn: Callable[[str, Dict[str, Any]], Any]) -> None:
+        """Register a callback invoked for firewall authorization decisions."""
+
         self._callbacks.setdefault(evento, []).append(fn)
 
     def _emit(self, evento: str, dados: Dict[str, Any]) -> None:

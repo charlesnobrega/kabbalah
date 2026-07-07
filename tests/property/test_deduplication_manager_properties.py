@@ -10,9 +10,11 @@ Tests verify universal properties that should hold across all valid inputs:
 Requirements: 1.6, 11.6
 """
 
-from datetime import datetime, timedelta
-from hypothesis import given, strategies as st, settings, HealthCheck
+from datetime import datetime
+
 import pytest
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 from src.kabbalah.deduplication_manager import (
     DeduplicationManager,
@@ -187,20 +189,14 @@ class TestDeduplicationProperties:
         stats = manager.get_deduplication_stats()
 
         # Total occurrences should equal sum of all occurrence counts
-        total_occurrences = sum(
-            group.occurrence_count
-            for group in manager.error_groups.values()
-        )
+        total_occurrences = sum(group.occurrence_count for group in manager.error_groups.values())
         assert stats.total_occurrences == total_occurrences
 
         # Total errors detected should equal number of groups
         assert stats.total_errors_detected == len(manager.error_groups)
 
         # Total duplicates should equal sum of duplicate counts
-        total_duplicates = sum(
-            group.duplicate_count
-            for group in manager.error_groups.values()
-        )
+        total_duplicates = sum(group.duplicate_count for group in manager.error_groups.values())
         assert stats.total_duplicates_found == total_duplicates
 
     @given(st.lists(error_reports(), min_size=1, max_size=100))

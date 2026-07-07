@@ -1,115 +1,126 @@
 # Kabbalah
 
-[![Status](https://img.shields.io/badge/status-alpha-yellow)](https://github.com/charlesnobrega/kabbalah)
-[![Python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![CI](https://github.com/charlesnobrega/kabbalah/actions/workflows/ci.yml/badge.svg)](https://github.com/charlesnobrega/kabbalah/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/github/v/tag/charlesnobrega/kabbalah?label=version)](https://github.com/charlesnobrega/kabbalah/tags)
+[![License](https://img.shields.io/github/license/charlesnobrega/kabbalah)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 
-Kabbalah is an alpha-stage Python project for multi-agent orchestration. The repository contains a tree-based orchestration skeleton, provider abstractions, runtime hardening primitives, memory modules, tool execution primitives, observability primitives, and tests.
+Kabbalah is a zero-trust governance kernel for AI agents. It sits between an
+agent UI/client and the actions that agent wants to execute, then applies
+intent scoring, contracts, RBAC-style authorization, human approval, vault
+access, budget controls, and audit persistence before anything runs.
 
-This repository is not yet a production autonomous runtime. Current gaps include real leaf execution, centralized policy orchestration, MCP execution, Cognee-backed semantic retrieval, skill registry wiring, graph runtime wiring, and true parallel execution in the main orchestration path.
+The current frontend target is SillyTavern through its MCP client. Kabbalah
+runs as a stdio MCP server (`kabbalah_mcp_bridge.py`) and exposes guarded tools
+instead of letting a chat agent call filesystem, shell, network, database, or
+provider actions directly.
 
-## Current runtime reality
+This is alpha software. The security kernel, bridge, CLI, provider registry,
+budget ledger, hardware profiler, and tests are implemented. The root
+orchestration path is still sequential by default, SyncHub federation is local
+phase-1, and real provider execution requires user-provided keys configured per
+installation.
 
-- Main package: `src/kabbalah`.
-- Packaging: `setup.py`, `requirements.txt`.
-- Runtime provider factory currently supports OpenAI, Google Gemini, Groq, Mistral, Together, and DeepSeek.
-- `MockProvider` is test-only and must stay gated by `KABBALAH_ALLOW_TEST_FAKE_PROVIDER=1`.
-- `LocalLLMProvider` exists for Ollama-style local calls, but it is not wired into the main provider factory yet.
-- Root/domain orchestration is sequential in the current implementation, despite config/docs describing intended parallelism.
-- Leaf execution currently returns placeholder success artifacts; it does not yet run a real provider/tool loop.
-- SillyTavern MCP bridge exists at `kabbalah_mcp_bridge.py` and exposes guarded tools through qlipot, FirewallMCP, HITL tickets, Bitwarden cache, agent contracts, retry limits, and SyncHub stats.
-- Agent contracts and SyncHub are implemented as local in-memory primitives. Network propagation is phase-1/local only; P2P/central federation is not production-wired yet.
+## What it gives a dev team
 
-## Repository layout
+- A fail-closed MCP bridge for agent tools.
+- Contract-first agent-to-agent calls with persisted counters and append-only
+  audit events.
+- Qlipot intent scoring with temporal context and encoding/unicode hardening.
+- HITL tickets for actions that require human approval.
+- Bitwarden-backed secret access with cache controls.
+- LLM provider routing through `LLMGateway`, budget enforcement, fallback
+  candidates, and optional local-model fit checks from `HardwareProfiler`.
+- A CLI for setup, safe config status, budget/routing changes, and runtime
+  status.
 
-```text
-kabbalah/
-├── src/kabbalah/              # Runtime package
-├── tests/                     # Unit, integration, provider, property tests
-├── config/                    # Example configuration
-├── docs/
-│   ├── architecture/          # Current architecture and structure docs
-│   ├── specs/                 # Requirements, design, policies, roadmap specs
-│   ├── adr/                   # Architecture decision records
-│   ├── audit/                 # Audit evidence and findings
-│   ├── development/           # Contributor workflow
-│   ├── governance/            # Operating rules
-│   ├── ops/                   # Short operational context for future agents
-│   └── archive/reports/       # Historical phase/session reports
-├── archive/legacy/            # Legacy code snapshots kept out of import paths
-├── scripts/                   # Utility scripts
-├── requirements.txt
-├── setup.py
-├── pytest.ini
-└── README.md
+## Architecture in one picture
+
+```mermaid
+flowchart LR
+    ST["SillyTavern or MCP client"] --> Bridge["Kabbalah MCP Bridge<br/>stdio JSON-RPC"]
+    Bridge --> Qlipot["Qlipot<br/>intent and temporal risk"]
+    Qlipot --> Firewall["FirewallMCP<br/>RBAC, contracts, HITL gate"]
+    Firewall --> Contracts["ContratoStore<br/>SQLite counters and events"]
+    Firewall --> HITL["HITL tickets<br/>pending is not approval"]
+    Firewall --> Tools["Guarded tools<br/>file, shell, network, db, env"]
+    Tools --> Vault["Cofre Bitwarden<br/>cached secret lookup"]
+    Tools --> Gateway["LLMGateway<br/>providers, budget, fallback"]
+    Gateway --> Ledger["BudgetLedger<br/>append-only cost/tokens"]
 ```
 
-## Quick start
+Full architecture: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-```bash
-python -m venv .venv
-source .venv/bin/activate  # Windows PowerShell: .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-pip install -e .
-```
+## Five-minute quickstart
 
-For Windows/PowerShell:
+The quickstart below is intentionally useful without API keys. It validates the
+package, CLI entrypoint, safe status output, and a governed parse flow. Provider
+keys are configured only when you decide to run real LLM calls.
+
+### Windows PowerShell
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python -m pip install -e .
+git clone https://github.com/charlesnobrega/kabbalah.git
+cd kabbalah
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -e ".[mcp,observability]"
+$env:KABBALAH_BRIDGE_STATE_DB = "$PWD\.kabbalah_quickstart.sqlite3"
+.\.venv\Scripts\kabbalah.exe --version
+.\.venv\Scripts\kabbalah.exe status --json
+.\.venv\Scripts\kabbalah.exe parse --name "Demo governada" --description "Gerar uma especificação com backend, frontend e testes" --output json
 ```
 
-Development/test dependencies are separate:
+### Linux/macOS
 
 ```bash
-python -m pip install -r requirements-dev.txt
+git clone https://github.com/charlesnobrega/kabbalah.git
+cd kabbalah
+python3 -m venv .venv
+./.venv/bin/python -m pip install --upgrade pip
+./.venv/bin/python -m pip install -e ".[mcp,observability]"
+export KABBALAH_BRIDGE_STATE_DB="$PWD/.kabbalah_quickstart.sqlite3"
+./.venv/bin/kabbalah --version
+./.venv/bin/kabbalah status --json
+./.venv/bin/kabbalah parse --name "Demo governada" --description "Gerar uma especificação com backend, frontend e testes" --output json
 ```
 
-Cognee-backed semantic memory is optional and intentionally kept out of the base install:
+Expected behavior:
+
+- `status --json` returns config, budget, hardware, contracts, and HITL status
+  without printing secret values.
+- `parse` returns a specification and run ID. It does not fake provider output.
+- Missing provider keys are reported as setup/config issues, not silently
+  mocked.
+
+Demo transcript/asciinema source:
+[`docs/assets/kabbalah-setup-demo.cast`](docs/assets/kabbalah-setup-demo.cast).
+
+## Configure real providers
+
+Run the interactive setup wizard when you want real LLM calls:
 
 ```bash
-python -m pip install -r requirements-memory.txt
+kabbalah setup
 ```
 
-External telemetry exporters are also optional:
+The wizard lists supported providers, asks for keys with hidden input, validates
+each key, and stores valid keys in the OS keyring. It does not write provider
+keys to tracked files, the SQLite state DB, logs, or stdout.
+
+Useful non-secret commands:
 
 ```bash
-python -m pip install -r requirements-observability.txt
+kabbalah config list --json
+kabbalah config add-key openai --json
+kabbalah config test-key openai --json
+kabbalah config remove-key openai --json
+kabbalah config set-budget --mode block --run-usd 1.25 --daily-usd 5 --json
+kabbalah config set-routing budget_first --json
+kabbalah status --json
 ```
 
-Optional MCP bridge dependencies are isolated because the official MCP SDK may
-require newer transitive dependency versions than the legacy provider stack:
-
-```bash
-python -m pip install -r requirements-mcp.txt
-```
-
-## SillyTavern MCP bridge
-
-The example config for SillyTavern is available in:
-
-- `sillytavern_config.json`
-- `sillytavern_mcp_config.json`
-
-Current bridge tools include:
-
-- `read_file`, `write_file`, `execute_command`, `network_request`
-- `read_env_var`, `call_tool`, `database_query`
-- `check_hitl_status`
-- `propose_contract`, `sign_contract`, `reject_contract`, `complete_task`
-- `get_network_stats`
-
-All bridge logging is configured for `stderr`; `stdout` remains reserved for
-MCP/JSON-RPC stdio traffic.
-
-## Configuration
-
-Use `.env.example` as a template only. Do not commit real credentials.
-
-Supported provider names in the current factory:
+Supported provider names in the current registry:
 
 - `openai`
 - `google_gemini`
@@ -117,51 +128,141 @@ Supported provider names in the current factory:
 - `mistral`
 - `together`
 - `deepseek`
+- `ollama_local`
+- `openrouter`
+- `groq_compatible`
+- `cerebras`
+- `sambanova`
 
-Example:
+## SillyTavern MCP bridge
 
-```bash
-KABBALAH_PROVIDER_MODE=unified
-KABBALAH_PROVIDER=openai
-KABBALAH_MODEL=gpt-4
-OPENAI_API_KEY=your_key_here
+Install the MCP extra and point SillyTavern to the stdio bridge:
+
+```json
+{
+  "mcpServers": {
+    "kabbalah-firewall": {
+      "command": "python",
+      "args": ["/absolute/path/to/kabbalah_mcp_bridge.py"],
+      "env": {
+        "BW_SESSION": "",
+        "BW_EMAIL": "",
+        "BW_PASSWORD": ""
+      }
+    }
+  }
+}
 ```
 
-## Tests
+Example files:
+
+- [`sillytavern_mcp_config.json`](sillytavern_mcp_config.json)
+- [`sillytavern_config.json`](sillytavern_config.json)
+- [`docs/examples/sillytavern/kabbalah-group-chat/`](docs/examples/sillytavern/kabbalah-group-chat/)
+
+Current bridge tools:
+
+- `read_file`, `write_file`, `execute_command`, `network_request`
+- `read_env_var`, `call_tool`, `database_query`
+- `check_hitl_status`
+- `propose_contract`, `sign_contract`, `reject_contract`, `complete_task`
+- `get_network_stats`, `get_budget_stats`, `get_config_status`
+- `compare_models`
+- `render_group_event`
+
+Important defaults:
+
+- Contracts are required by default for non-bootstrap tools. Typical flow:
+  `propose_contract` with `papeis=["coordinator"]` → `sign_contract` → target
+  tool.
+- `execute_command` is disabled unless
+  `KABBALAH_BRIDGE_ENABLE_SHELL=1`.
+- Files and SQLite databases are constrained by
+  `KABBALAH_BRIDGE_ALLOWED_DIRS`.
+- `read_env_var` only returns variables in
+  `KABBALAH_BRIDGE_ENV_ALLOWLIST`.
+- Private, loopback, link-local, reserved, and unspecified network destinations
+  are blocked unless `KABBALAH_BRIDGE_ALLOW_PRIVATE_NETWORKS=1`.
+- Bridge logs go to `stderr`; stdout remains reserved for MCP JSON-RPC.
+
+## Model comparison
+
+`compare_models` sends the same task to selected providers through the normal
+Kabbalah authorization pipeline and returns rows with provider, model, latency,
+tokens, cost, response, and error. It respects `LLMGateway`, budget policy, and
+real provider availability. Test-only comparison uses `MockProvider` only when
+`KABBALAH_ALLOW_TEST_FAKE_PROVIDER=1`.
+
+## Kabbalah-Bench
+
+Measure containment without executing real tools:
 
 ```bash
+python -m benchmarks.run
+```
+
+Reports are written to `benchmarks/results/` as dated JSON and Markdown files.
+
+## Repository layout
+
+```text
+kabbalah/
+├── .github/workflows/        # CI: ruff, pytest, gitleaks
+├── benchmarks/               # Containment benchmark scenarios and reports
+├── docs/                     # Architecture, specs, roadmap, audit, examples
+├── src/kabbalah/             # Runtime package
+├── tests/                    # Unit, integration, provider, property tests
+├── kabbalah_mcp_bridge.py    # stdio MCP bridge entrypoint
+├── pyproject.toml            # canonical package metadata and extras
+├── setup.py                  # compatibility shim
+├── ruff.toml                 # lint/format policy
+└── README.md
+```
+
+## Development checks
+
+```bash
+python -m pip install -e ".[dev,mcp,observability]"
+python -m ruff check src tests kabbalah_mcp_bridge.py
 python -m pytest tests -q
 ```
 
-If collection fails with missing dependencies, install the project dependencies in an isolated virtual environment first:
+Last local full validation (after wave 13, on `wave-11-federated`):
 
-```bash
-python -m pip install -r requirements.txt
-python -m pip install -r requirements-dev.txt
-python -m pip install -e .
+```text
+1221 passed, 89 skipped
 ```
 
-Live provider tests must not run implicitly. Use the policy in `docs/specs/NO_MOCK_RUNTIME_POLICY.md` before enabling any live external call.
+## Project status
 
-## Important docs
+Implemented and tested:
 
-- [Current Architecture](docs/architecture/CURRENT_ARCHITECTURE.md)
-- [Repository Structure](docs/architecture/REPOSITORY_STRUCTURE.md)
-- [Repository Audit](docs/specs/REPOSITORY_AUDIT.md)
-- [No Mock Runtime Policy](docs/specs/NO_MOCK_RUNTIME_POLICY.md)
-- [Governance](docs/governance/GOVERNANCE.md)
-- [Git Workflow](docs/development/GIT_WORKFLOW.md)
-- [Roadmap](docs/roadmap/ROADMAP.md)
+- MCP bridge pipeline: Qlipot → FirewallMCP → contracts → HITL → execution.
+- SQLite persistence for HITL tickets, contracts, contract events, budget
+  ledger, and hardware profiles.
+- Provider registry, OpenAI-compatible adapter, ordered fallback candidates, and
+  budget-aware selection.
+- Kabbalah-Bench containment reports and optional tree-search autonomy loop
+  (`KABBALAH_SEARCH_MODE=tree`; default remains linear).
+- SyncHub signed offline federation bundles with Ed25519 identity, trust list,
+  network modes, replay/tamper checks, and Kabbalah-Bench before/after evidence.
+- CLI setup/config/status with JSON output and safe secret handling.
+- SillyTavern group-chat event renderer and example Blank Card setup.
 
-## Development standards
+Known alpha boundaries:
 
-- Keep code under `src/kabbalah`; do not add importable runtime modules at repository root.
-- Keep historical reports under `docs/archive/reports`.
-- Keep legacy snapshots under `archive/legacy` unless they are being actively migrated.
-- Do not hardcode or print secrets.
-- Prefer small changes with tests and documentation updates.
-- Do not claim production readiness until runtime provider/tool execution is wired and verified.
+- Root-level orchestration does not yet inject `LLMGateway` by default.
+- SyncHub federation is offline signed-bundle exchange; no HTTPS hub or P2P
+  gossip is enabled.
+- Real LLM calls require provider credentials configured outside source code.
+- Local model fit is a heuristic/profiler layer, not an auto-deployment system.
 
-## License
+## References
 
-MIT. See [LICENSE](LICENSE).
+- [Architecture](docs/ARCHITECTURE.md)
+- [Execution plan](docs/roadmap/handoff-execution-plan.md)
+- [CLI exit codes](docs/specs/cli-exit-codes.md)
+- [Tree search design](docs/specs/tree-search-design.md)
+- [Federated network design](docs/specs/federated-network-design.md)
+- [No-mock runtime policy](docs/specs/NO_MOCK_RUNTIME_POLICY.md)
+- [SillyTavern group chat design](docs/specs/st-group-chat-design.md)

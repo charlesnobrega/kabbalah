@@ -86,7 +86,4 @@ class TradutorLocal:
     def _reescrever_pedido(self, pedido: str, zona: RiskZone) -> str:
         if zona == RiskZone.BLOQUEAR:
             return "Solicitação bloqueada por risco crítico; requer revisão humana."
-        return (
-            "Converter a solicitação do usuário em uma tarefa técnica verificável: "
-            f"{pedido.strip()}"
-        )
+        return "Converter a solicitação do usuário em uma tarefa técnica verificável: " f"{pedido.strip()}"

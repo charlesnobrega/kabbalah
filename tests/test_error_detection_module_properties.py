@@ -10,32 +10,35 @@ Tests verify universal properties that should hold across all valid inputs:
 Requirements: 1.6, 1.7, 1.8, 11.2, 11.3, 11.4
 """
 
-import pytest
-from hypothesis import given, strategies as st, settings, HealthCheck
-from datetime import datetime, timedelta
-from unittest.mock import patch
+from datetime import datetime
+
+from hypothesis import HealthCheck, given, settings
+from hypothesis import strategies as st
 
 from kabbalah.error_detection_module import ErrorDetectionModule
 from kabbalah.self_healing_models import ErrorSeverity
 
-
 # Strategies for generating test data
-error_types = st.sampled_from([
-    "ValueError",
-    "RuntimeError",
-    "TypeError",
-    "KeyError",
-    "AttributeError",
-])
+error_types = st.sampled_from(
+    [
+        "ValueError",
+        "RuntimeError",
+        "TypeError",
+        "KeyError",
+        "AttributeError",
+    ]
+)
 
-components = st.sampled_from([
-    "Intake_Node",
-    "Root_Orchestrator",
-    "Domain_Orchestrator",
-    "Leaf_Node",
-    "Synthesizer",
-    "FSM_Enforcement",
-])
+components = st.sampled_from(
+    [
+        "Intake_Node",
+        "Root_Orchestrator",
+        "Domain_Orchestrator",
+        "Leaf_Node",
+        "Synthesizer",
+        "FSM_Enforcement",
+    ]
+)
 
 error_messages = st.text(
     alphabet=st.characters(blacklist_categories=("Cc", "Cs")),
@@ -91,9 +94,7 @@ class TestProperty1ErrorDeduplicationWithinTimeWindow:
         assert report1 is not None, "First error should be captured"
         assert report2 is None, "Second identical error should be deduplicated"
         assert len(module.error_history) == 1, "Only one report in history"
-        assert (
-            module.error_history[0].occurrence_count == 2
-        ), "Occurrence count should be 2"
+        assert module.error_history[0].occurrence_count == 2, "Occurrence count should be 2"
 
     @given(
         error_type=error_types,
@@ -168,9 +169,7 @@ class TestProperty2SeverityClassificationByComponent:
                 context={"trace_id": trace_id},
             )
 
-            assert (
-                report.severity == ErrorSeverity.CRITICAL
-            ), f"{component} should be CRITICAL"
+            assert report.severity == ErrorSeverity.CRITICAL, f"{component} should be CRITICAL"
 
     @given(
         message=error_messages,
@@ -197,9 +196,7 @@ class TestProperty2SeverityClassificationByComponent:
                 context={"trace_id": trace_id},
             )
 
-            assert (
-                report.severity == ErrorSeverity.HIGH
-            ), f"{component} should be HIGH"
+            assert report.severity == ErrorSeverity.HIGH, f"{component} should be HIGH"
 
     @given(
         message=error_messages,
@@ -403,7 +400,7 @@ class TestProperty4ErrorReportPersistence:
         module = ErrorDetectionModule()
 
         exception = RuntimeError(message)
-        report = module.capture_exception(
+        module.capture_exception(
             exception,
             component,
             context={"trace_id": "trace-123", "request_id": "req-456"},

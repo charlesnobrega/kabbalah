@@ -13,15 +13,14 @@ from datetime import datetime
 from unittest.mock import Mock
 
 import pytest
-from hypothesis import given, strategies as st, assume
+from hypothesis import given
+from hypothesis import strategies as st
 
-from kabbalah.error_analysis_module import ErrorAnalysisModule, ErrorAnalysis
+from kabbalah.error_analysis_module import ErrorAnalysis, ErrorAnalysisModule
 from kabbalah.llm_local_provider import LocalLLMConfig, LocalLLMProvider
 from kabbalah.self_healing_models import (
     ErrorReport,
     ErrorSeverity,
-    CodeChange,
-    LearningEntry,
 )
 
 
@@ -58,13 +57,9 @@ def valid_llm_responses(draw):
     """Generate valid LLM response JSON."""
     root_cause = draw(st.text(min_size=1, max_size=200))
     num_fixes = draw(st.integers(min_value=1, max_value=3))
-    suggested_fixes = [
-        draw(st.text(min_size=1, max_size=100)) for _ in range(num_fixes)
-    ]
+    suggested_fixes = [draw(st.text(min_size=1, max_size=100)) for _ in range(num_fixes)]
     num_files = draw(st.integers(min_value=1, max_value=5))
-    affected_files = [
-        draw(st.text(min_size=1, max_size=50)) for _ in range(num_files)
-    ]
+    affected_files = [draw(st.text(min_size=1, max_size=50)) for _ in range(num_files)]
     confidence = draw(st.floats(min_value=0.0, max_value=1.0))
     reasoning = draw(st.text(min_size=1, max_size=200))
 
@@ -115,7 +110,7 @@ class TestErrorAnalysisProperties:
     def test_property_5_llm_response_parsing(self, llm_response):
         """
         Property 5: LLM Response Parsing
-        
+
         For any valid LLM response containing root cause analysis, suggested fixes,
         affected files, and confidence score, the Error_Analysis_Module SHALL
         correctly parse and extract all fields.
@@ -150,7 +145,7 @@ class TestErrorAnalysisProperties:
     def test_property_7_malformed_response_handling(self, malformed_response):
         """
         Property 7: Malformed LLM Response Handling
-        
+
         For any malformed LLM response, the Error_Analysis_Module SHALL return
         a default analysis with low confidence (< 0.5) rather than crashing.
 
@@ -189,7 +184,7 @@ class TestErrorAnalysisProperties:
     def test_property_5_parsing_preserves_data_integrity(self, error_report):
         """
         Property 5 Extended: Parsing preserves data integrity
-        
+
         For any valid LLM response, parsing SHALL preserve all data without
         corruption or loss.
 
@@ -224,7 +219,7 @@ class TestErrorAnalysisProperties:
     def test_property_9_confidence_score_bounds(self, confidence_value):
         """
         Property 9: Confidence Score Bounds
-        
+
         For any generated fix proposal, the confidence_score SHALL be between
         0.0 and 1.0 (inclusive).
 
@@ -256,7 +251,7 @@ class TestErrorAnalysisProperties:
     def test_property_5_parsing_idempotent(self, llm_response):
         """
         Property 5 Extended: Parsing is idempotent
-        
+
         For any valid LLM response, parsing the same response multiple times
         SHALL produce identical results.
 
@@ -281,7 +276,7 @@ class TestErrorAnalysisProperties:
     def test_property_5_parsing_handles_empty_lists(self, empty_list):
         """
         Property 5 Extended: Parsing handles empty lists
-        
+
         For any LLM response with empty lists, parsing SHALL handle gracefully.
 
         **Validates: Requirements 2.3**
@@ -313,7 +308,7 @@ class TestErrorAnalysisProperties:
     def test_property_5_analysis_with_valid_response(self, error_report, llm_response):
         """
         Property 5 Extended: Analysis with valid response
-        
+
         For any error report and valid LLM response, analysis SHALL complete
         successfully and return valid ErrorAnalysis.
 
@@ -337,7 +332,7 @@ class TestErrorAnalysisProperties:
     def test_property_7_malformed_response_returns_low_confidence(self, error_report):
         """
         Property 7 Extended: Malformed response returns low confidence
-        
+
         For any error report with malformed LLM response, analysis SHALL
         return with confidence < 0.3.
 
@@ -358,7 +353,7 @@ class TestErrorAnalysisProperties:
     def test_property_7_malformed_response_no_crash(self, error_report):
         """
         Property 7 Extended: Malformed response doesn't crash
-        
+
         For any error report with malformed LLM response, analysis SHALL
         complete without raising exception.
 
@@ -382,7 +377,7 @@ class TestErrorAnalysisProperties:
     def test_property_5_parsing_with_extra_fields(self, extra_field_value):
         """
         Property 5 Extended: Parsing ignores extra fields
-        
+
         For any LLM response with extra fields, parsing SHALL ignore them
         and extract only required fields.
 

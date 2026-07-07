@@ -4,17 +4,18 @@ import json
 import logging
 import os
 import threading
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
-from enum import Enum
 
 logger = logging.getLogger(__name__)
 
 
 class MemoryCategory(Enum):
     """Memory categories for access control."""
+
     SHARED = "shared"  # Accessible to all agents
     DOMAIN_SPECIFIC = "domain-specific"  # Accessible to agents in domain
     ROLE_SPECIFIC = "role-specific"  # Accessible to agents with role
@@ -22,6 +23,7 @@ class MemoryCategory(Enum):
 
 class MemoryOperation(Enum):
     """Memory operations for access control."""
+
     READ = "read"
     WRITE = "write"
 
@@ -41,6 +43,7 @@ CANONICAL_ROLES = {
 @dataclass
 class AccessControlPolicy:
     """Access control policy for memory operations."""
+
     memory_category: str
     operation: str
     allowed_roles: Set[str] = field(default_factory=set)
@@ -50,6 +53,7 @@ class AccessControlPolicy:
 @dataclass
 class MemoryAccessLog:
     """Log entry for memory access."""
+
     access_id: str
     agent_role: str
     memory_category: str
@@ -78,11 +82,7 @@ class MemoryGovernanceModule:
         Args:
             audit_log_path: Optional path for audit log storage
         """
-        self.audit_log_path = Path(
-            audit_log_path or os.path.join(
-                os.path.expanduser("~"), ".kabbalah", "audit"
-            )
-        )
+        self.audit_log_path = Path(audit_log_path or os.path.join(os.path.expanduser("~"), ".kabbalah", "audit"))
         self.audit_log_path.mkdir(parents=True, exist_ok=True)
         self.audit_log_file = self.audit_log_path / "memory_access.jsonl"
         self.lock = threading.RLock()
@@ -168,13 +168,13 @@ class MemoryGovernanceModule:
 
         try:
             category = MemoryCategory(memory_category)
-        except ValueError:
-            raise ValueError(f"Invalid memory category: {memory_category}")
+        except ValueError as exc:
+            raise ValueError(f"Invalid memory category: {memory_category}") from exc
 
         try:
-            op = MemoryOperation(operation)
-        except ValueError:
-            raise ValueError(f"Invalid operation: {operation}")
+            MemoryOperation(operation)
+        except ValueError as exc:
+            raise ValueError(f"Invalid operation: {operation}") from exc
 
         # Check access based on category
         if category == MemoryCategory.SHARED:
@@ -225,14 +225,14 @@ class MemoryGovernanceModule:
             raise ValueError(f"Invalid agent role: {agent_role}")
 
         try:
-            category = MemoryCategory(memory_category)
-        except ValueError:
-            raise ValueError(f"Invalid memory category: {memory_category}")
+            MemoryCategory(memory_category)
+        except ValueError as exc:
+            raise ValueError(f"Invalid memory category: {memory_category}") from exc
 
         try:
-            op = MemoryOperation(operation)
-        except ValueError:
-            raise ValueError(f"Invalid operation: {operation}")
+            MemoryOperation(operation)
+        except ValueError as exc:
+            raise ValueError(f"Invalid operation: {operation}") from exc
 
         try:
             with self.lock:

@@ -6,19 +6,38 @@ This module contains two compatible contract layers:
 * `Contratos`: agent-to-agent operational contracts used by MCP authorization.
 """
 
+import threading
+import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-import uuid
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+
+if TYPE_CHECKING:
+    from kabbalah.contrato_store import ContratoStore
 
 
 class ContractStatus:
+    """Lifecycle states for agent-to-agent operational contracts."""
+
     PROPOSTO = "PROPOSTO"
     ATIVO = "ATIVO"
     CONCLUIDO = "CONCLUIDO"
     VIOLADO = "VIOLADO"
     REVOGADO = "REVOGADO"
     REJEITADO = "REJEITADO"
+
+
+class VerificationOutcome:
+    """Detailed result of a contract verification.
+
+    Distinguishes the absence of a contract (a normal bootstrap condition)
+    from real violations of an existing contract (limit or expiry).
+    """
+
+    ALLOWED = "ALLOWED"
+    NO_CONTRACT = "NO_CONTRACT"
+    LIMIT_EXCEEDED = "LIMIT_EXCEEDED"
+    EXPIRED = "EXPIRED"
 
 
 @dataclass(frozen=True)
@@ -77,21 +96,43 @@ ContractCallback = Callable[[str, Dict[str, Any]], Any]
 
 
 class Contratos:
-    """Manage explicit contracts between agents before cross-agent actions."""
+    """Manage explicit contracts between agents before cross-agent actions.
 
-    def __init__(self, firewall: Any = None, qlipot: Any = None, hitl: Any = None, memoria: Any = None):
+    When ``store`` is provided, every contract mutation is written through to
+    SQLite, persisted contracts are reloaded on construction (an active
+    contract survives a process restart), and ``max_calls`` consumption is
+    delegated to an atomic SQL update.
+    """
+
+    def __init__(
+        self,
+        firewall: Any = None,
+        qlipot: Any = None,
+        hitl: Any = None,
+        memoria: Any = None,
+        store: Optional["ContratoStore"] = None,
+    ):
         self.firewall = firewall
         self.qlipot = qlipot
         self.hitl = hitl
         self.memoria = memoria
+        self.store = store
+        self._lock = threading.RLock()
         self._contratos: Dict[str, ContratoAgente] = {}
         self._callbacks: Dict[str, List[ContractCallback]] = {}
+        if store is not None:
+            for contrato in store.load_all():
+                self._contratos[contrato.id] = contrato
 
     @property
     def contratos(self) -> Dict[str, ContratoAgente]:
+        """Return a shallow copy of the in-memory contract index."""
+
         return dict(self._contratos)
 
     def registrar_callback(self, evento: str, fn: ContractCallback) -> None:
+        """Register a callback invoked when a contract lifecycle event occurs."""
+
         self._callbacks.setdefault(evento, []).append(fn)
 
     def propor(
@@ -121,7 +162,9 @@ class Contratos:
             score_risco=score_risco,
             criado_em=datetime.utcnow().timestamp(),
         )
-        self._contratos[contrato.id] = contrato
+        with self._lock:
+            self._contratos[contrato.id] = contrato
+            self._persist(contrato)
 
         if score_risco > 0.60 and self.hitl is not None:
             solicitar = getattr(self.hitl, "solicitar", None)
@@ -138,53 +181,139 @@ class Contratos:
         return contrato
 
     def assinar(self, contrato_id: str, provedor: str) -> bool:
-        contrato = self._get(contrato_id)
-        if contrato.provedor != provedor:
-            return False
-        if contrato.status != ContractStatus.PROPOSTO:
-            return False
-        contrato.status = ContractStatus.ATIVO
+        """Activate a proposed contract when the expected provider signs it."""
+
+        with self._lock:
+            contrato = self._get(contrato_id)
+            if contrato.provedor != provedor:
+                return False
+            if contrato.status != ContractStatus.PROPOSTO:
+                return False
+            contrato.status = ContractStatus.ATIVO
+            self._persist(contrato)
         self._emit("assinado", {"contrato_id": contrato.id, "provedor": provedor})
         return True
 
     def rejeitar(self, contrato_id: str, provedor: str, motivo: str = "") -> bool:
-        contrato = self._get(contrato_id)
-        if contrato.provedor != provedor:
-            return False
-        if contrato.status != ContractStatus.PROPOSTO:
-            return False
-        contrato.status = ContractStatus.REJEITADO
-        contrato.motivo = motivo
+        """Reject a proposed contract when the expected provider declines it."""
+
+        with self._lock:
+            contrato = self._get(contrato_id)
+            if contrato.provedor != provedor:
+                return False
+            if contrato.status != ContractStatus.PROPOSTO:
+                return False
+            contrato.status = ContractStatus.REJEITADO
+            contrato.motivo = motivo
+            self._persist(contrato)
         self._emit("rejeitado", {"contrato_id": contrato.id, "motivo": motivo})
         return True
 
     def verificar(self, agente_id: str, acao: str) -> bool:
         """Check whether an active contract allows this agent/action pair."""
 
-        contrato = self._find_active(agente_id, acao)
-        if contrato is None:
-            return False
+        return self.verificar_detalhado(agente_id, acao) == VerificationOutcome.ALLOWED
 
-        max_calls = contrato.limites.get("max_calls")
-        if max_calls is not None and contrato.chamadas >= int(max_calls):
-            self.registrar_violacao(agente_id, acao, "Limite max_calls excedido")
-            return False
+    def verificar_detalhado(self, agente_id: str, acao: str, *, consume: bool = True) -> str:
+        """Verify a call, reporting a `VerificationOutcome`.
 
-        timeout_min = contrato.limites.get("timeout_min")
-        if timeout_min is not None:
-            age_seconds = datetime.utcnow().timestamp() - contrato.criado_em
-            if age_seconds > float(timeout_min) * 60:
-                self.registrar_violacao(agente_id, acao, "Contrato expirado por timeout_min")
-                return False
+        With ``consume=True`` (default) a call slot is consumed. With
+        ``consume=False`` this is a side-effect-free *peek*: it validates that
+        an active contract exists and still has budget, but does not consume or
+        register violations — used to gate before HITL so a pending/denied
+        approval does not exhaust a `max_calls` contract.
 
-        contrato.chamadas += 1
-        return True
+        `NO_CONTRACT` is not a violation: nothing is escalated and no
+        contract changes status. Limit and expiry failures are real
+        violations of an existing active contract.
+        """
+
+        with self._lock:
+            contrato = self._find_active(agente_id, acao)
+            if contrato is None:
+                return VerificationOutcome.NO_CONTRACT
+
+            timeout_min = contrato.limites.get("timeout_min")
+            if timeout_min is not None:
+                age_seconds = datetime.utcnow().timestamp() - contrato.criado_em
+                if age_seconds > float(timeout_min) * 60:
+                    # Breach detection registers a violation even on peek; only
+                    # the call-slot consumption (chamadas increment) is deferred.
+                    self._registrar_violacao_contrato(contrato, agente_id, acao, "Contrato expirado por timeout_min")
+                    return VerificationOutcome.EXPIRED
+
+            max_calls = contrato.limites.get("max_calls")
+            if not consume:
+                if max_calls is not None and contrato.chamadas >= int(max_calls):
+                    self._registrar_violacao_contrato(contrato, agente_id, acao, "Limite max_calls excedido")
+                    return VerificationOutcome.LIMIT_EXCEEDED
+                return VerificationOutcome.ALLOWED
+
+            if self.store is not None:
+                granted = self.store.consume_call(contrato.id, int(max_calls) if max_calls is not None else None)
+                if not granted:
+                    self._registrar_violacao_contrato(contrato, agente_id, acao, "Limite max_calls excedido")
+                    return VerificationOutcome.LIMIT_EXCEEDED
+                contrato.chamadas += 1
+                return VerificationOutcome.ALLOWED
+
+            if max_calls is not None and contrato.chamadas >= int(max_calls):
+                self._registrar_violacao_contrato(contrato, agente_id, acao, "Limite max_calls excedido")
+                return VerificationOutcome.LIMIT_EXCEEDED
+
+            contrato.chamadas += 1
+            return VerificationOutcome.ALLOWED
 
     def registrar_violacao(self, agente_id: str, acao: str, motivo: str) -> None:
-        contrato = self._find_active(agente_id, acao)
-        if contrato is not None:
+        """Record a violation of the active contract for this agent/action.
+
+        When no active contract exists, the occurrence is recorded as
+        contract absence instead of a violation (wave-2 hardening: absence
+        is a bootstrap condition, not a breach of an existing agreement).
+        """
+
+        with self._lock:
+            contrato = self._find_active(agente_id, acao)
+            if contrato is None:
+                self.registrar_ausencia(agente_id, acao, motivo)
+                return
+            self._registrar_violacao_contrato(contrato, agente_id, acao, motivo)
+
+    def registrar_ausencia(self, agente_id: str, acao: str, motivo: str) -> None:
+        """Record an action attempted without any active contract."""
+
+        if self.store is not None:
+            from kabbalah.contrato_store import EVENTO_AUSENCIA_CONTRATO
+
+            self.store.append_event(
+                tipo=EVENTO_AUSENCIA_CONTRATO,
+                agente_id=agente_id,
+                acao=acao,
+                motivo=motivo,
+                contrato_id=None,
+            )
+        self._emit(
+            "ausencia_contrato",
+            {"agente_id": agente_id, "acao": acao, "motivo": motivo, "contrato_id": None},
+        )
+
+    def _registrar_violacao_contrato(self, contrato: ContratoAgente, agente_id: str, acao: str, motivo: str) -> None:
+        with self._lock:
             contrato.status = ContractStatus.VIOLADO
             contrato.motivo = motivo
+            if self.store is not None:
+                from kabbalah.contrato_store import EVENTO_VIOLACAO
+
+                # update_status (not save) so the atomic `chamadas` counter in
+                # the database is never overwritten by an in-memory value.
+                self.store.update_status(contrato.id, ContractStatus.VIOLADO, motivo)
+                self.store.append_event(
+                    tipo=EVENTO_VIOLACAO,
+                    agente_id=agente_id,
+                    acao=acao,
+                    motivo=motivo,
+                    contrato_id=contrato.id,
+                )
 
         if self.hitl is not None:
             solicitar = getattr(self.hitl, "solicitar", None)
@@ -193,7 +322,7 @@ class Contratos:
                     agente_id=agente_id,
                     acao=f"violacao_contrato:{acao}",
                     risco=0.95,
-                    contexto={"motivo": motivo, "contrato_id": contrato.id if contrato else None},
+                    contexto={"motivo": motivo, "contrato_id": contrato.id},
                     trace_id=f"contract_violation_{uuid.uuid4().hex[:12]}",
                 )
 
@@ -203,7 +332,7 @@ class Contratos:
                 "agente_id": agente_id,
                 "acao": acao,
                 "motivo": motivo,
-                "contrato_id": contrato.id if contrato else None,
+                "contrato_id": contrato.id,
                 "score": 0.95,
             },
         )
@@ -212,23 +341,31 @@ class Contratos:
         """Mark all active/proposed contracts for a task as completed."""
 
         affected = []
-        for contrato in self._contratos.values():
-            if contrato.task_id == task_id and contrato.status in {ContractStatus.PROPOSTO, ContractStatus.ATIVO}:
-                contrato.status = ContractStatus.CONCLUIDO
-                affected.append(contrato)
+        with self._lock:
+            for contrato in self._contratos.values():
+                if contrato.task_id == task_id and contrato.status in {ContractStatus.PROPOSTO, ContractStatus.ATIVO}:
+                    contrato.status = ContractStatus.CONCLUIDO
+                    self._persist(contrato)
+                    affected.append(contrato)
         self._emit("task_concluida", {"task_id": task_id, "agente_id": agente_id, "count": len(affected)})
         return affected
 
     def revogar(self, contrato_id: str, aprovado_por: str, motivo: str = "") -> bool:
-        contrato = self._get(contrato_id)
-        if contrato.status not in {ContractStatus.PROPOSTO, ContractStatus.ATIVO}:
-            return False
-        contrato.status = ContractStatus.REVOGADO
-        contrato.motivo = motivo or f"Revogado por {aprovado_por}"
+        """Revoke a proposed or active contract after external approval."""
+
+        with self._lock:
+            contrato = self._get(contrato_id)
+            if contrato.status not in {ContractStatus.PROPOSTO, ContractStatus.ATIVO}:
+                return False
+            contrato.status = ContractStatus.REVOGADO
+            contrato.motivo = motivo or f"Revogado por {aprovado_por}"
+            self._persist(contrato)
         self._emit("revogado", {"contrato_id": contrato.id, "aprovado_por": aprovado_por, "motivo": contrato.motivo})
         return True
 
     def contratos_por_task(self, task_id: str) -> List[ContratoAgente]:
+        """List all contracts associated with a task identifier."""
+
         return [contrato for contrato in self._contratos.values() if contrato.task_id == task_id]
 
     def _avaliar_risco(self, requisitante: str, acao: str, limites: Dict[str, Any]) -> float:
@@ -250,6 +387,10 @@ class Contratos:
         if contrato_id not in self._contratos:
             raise KeyError(f"Contrato não encontrado: {contrato_id}")
         return self._contratos[contrato_id]
+
+    def _persist(self, contrato: ContratoAgente) -> None:
+        if self.store is not None:
+            self.store.save(contrato)
 
     def _emit(self, evento: str, dados: Dict[str, Any]) -> None:
         for callback in self._callbacks.get(evento, []):

@@ -1,0 +1,10 @@
+target-version = "py39"
+line-length = 120
+
+[lint]
+select = ["E", "W", "F", "I", "B"]
+
+[lint.per-file-ignores]
+# Bridge stdio mode inserts ./src in sys.path before importing kabbalah when run
+# directly from the repository root.
+"kabbalah_mcp_bridge.py" = ["E402"]

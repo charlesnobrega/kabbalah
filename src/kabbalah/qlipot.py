@@ -6,12 +6,24 @@ legitimate requests technically, and blocks real critical-risk requests. It does
 not override the risk layer or attempt guardrail evasion.
 """
 
+import hashlib
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional, Set
 
 from .memory_subsystem import Knowledge, MemorySubsystem
+from .risk_assessor import HeuristicRiskAssessor, QlipotRiskAssessor, _normalizar_texto
+
+# Version stamp recorded with every evaluation and correction so historical
+# decisions can be traced back to the assessor revision that produced them.
+RISK_ASSESSOR_VERSION = "wave10-2026.07"
+
+# Federated corrections are clamped to this range (wave-3 hardening).
+MAX_DELTA_CORRECAO = 0.30
+
+
 
 
 class QlipotStatus(Enum):
@@ -41,19 +53,51 @@ class IntentEvaluation:
     score_atual: float = 0.0
     score_contexto: float = 0.0
     score_final: float = 0.0
+    assessor_version: str = RISK_ASSESSOR_VERSION
 
 
 class Qlipot:
     """Recover legitimate LLM false positives without bypassing risk controls."""
 
-    def __init__(self, memory: MemorySubsystem | None = None):
+    def __init__(
+        self,
+        memory: MemorySubsystem | None = None,
+        *,
+        origens_autorizadas: Optional[Set[str]] = None,
+        store: Any = None,
+        risk_assessor: Optional[QlipotRiskAssessor] = None,
+    ):
         self._audit_log: List[QlipotResult] = []
         self._memory = memory or MemorySubsystem()
         self._callbacks: Dict[str, List[Callable[[str, Dict[str, Any]], Any]]] = {}
+        self._store = store
+        self._risk_assessor = risk_assessor or HeuristicRiskAssessor()
         self._correcoes: Dict[str, float] = {}
+        if store:
+            try:
+                self._correcoes = store.load_qlipot_correcoes()
+            except Exception:
+                pass
+        self._correcoes_log: List[Dict[str, Any]] = []
+        self._origens_autorizadas = set(origens_autorizadas) if origens_autorizadas is not None else {"sync_hub"}
 
     @property
     def audit_log(self) -> List[QlipotResult]:
+        if self._store:
+            try:
+                db_audits = self._store.load_qlipot_audit_log()
+                return [
+                    QlipotResult(
+                        status=QlipotStatus(item["status"]),
+                        pedido_recuperado=item["pedido"],
+                        motivo="loaded from store",
+                        risco=item["risco"],
+                        created_at=item["timestamp"]
+                    )
+                    for item in db_audits
+                ]
+            except Exception:
+                pass
         return list(self._audit_log)
 
     def recuperar_intencao(self, *, pedido: str, motivo_recusa: str, risco: float) -> QlipotResult:
@@ -89,6 +133,18 @@ class Qlipot:
 
     def _record(self, result: QlipotResult) -> QlipotResult:
         self._audit_log.append(result)
+        if self._store:
+            import uuid
+            ticket_id = f"audit_{uuid.uuid4().hex[:12]}"
+            try:
+                self._store.save_qlipot_audit(
+                    ticket_id=ticket_id,
+                    status=result.status.value,
+                    pedido=result.pedido_recuperado,
+                    risco=result.risco,
+                )
+            except Exception:
+                pass
         return result
 
     def avaliar_intencao(
@@ -105,7 +161,9 @@ class Qlipot:
         `risco` is the operational risk score consumed by FirewallMCP.
         """
 
-        score_atual = self._avaliar_score_isolado(ferramenta, argumentos, pedido=pedido)
+        score_isolado = self._risk_assessor.assess_risk(ferramenta, argumentos, pedido=pedido)
+        assinatura_acao = self.assinar_acao(ferramenta=ferramenta, argumentos=argumentos, pedido=pedido)
+        score_atual = max(0.0, min(1.0, score_isolado + self._correcoes.get(assinatura_acao, 0.0)))
         historico = self._ultimas_acoes_agente(agente_id, limit=5)
         score_contexto = self.calcular_suspeita(historico)
         risco = min(1.0, score_atual + score_contexto)
@@ -126,7 +184,7 @@ class Qlipot:
         else:
             status = QlipotStatus.RECUPERADO
 
-        return IntentEvaluation(
+        evaluation = IntentEvaluation(
             score_confianca=round(max(0.0, min(1.0, 1.0 - risco)), 4),
             risco=risco,
             bloqueado=risco > 0.95,
@@ -135,7 +193,21 @@ class Qlipot:
             score_atual=score_atual,
             score_contexto=score_contexto,
             score_final=risco,
+            assessor_version=f"{self._risk_assessor.version} ({self._risk_assessor.identity})",
         )
+        if self._store:
+            import uuid
+            ticket_id = f"eval_{uuid.uuid4().hex[:12]}"
+            try:
+                self._store.save_qlipot_audit(
+                    ticket_id=ticket_id,
+                    status=evaluation.status.value,
+                    pedido=pedido,
+                    risco=evaluation.risco,
+                )
+            except Exception:
+                pass
+        return evaluation
 
     def avaliar(
         self,
@@ -160,12 +232,19 @@ class Qlipot:
         if extra_score <= 0:
             return result
         risco = min(1.0, result.risco + extra_score)
+        status = (
+            QlipotStatus.BLOQUEADO
+            if risco > 0.95
+            else QlipotStatus.DIALOGO
+            if risco > 0.60
+            else QlipotStatus.RECUPERADO
+        )
         return IntentEvaluation(
             score_confianca=round(max(0.0, min(1.0, 1.0 - risco)), 4),
             risco=risco,
             bloqueado=risco > 0.95,
             motivo="supplied recent history increased suspicion",
-            status=QlipotStatus.BLOQUEADO if risco > 0.95 else QlipotStatus.DIALOGO if risco > 0.60 else QlipotStatus.RECUPERADO,
+            status=status,
             score_atual=result.score_atual,
             score_contexto=round(min(0.30, result.score_contexto + extra_score), 4),
             score_final=risco,
@@ -197,6 +276,17 @@ class Qlipot:
         )
         self._memory.store_knowledge(knowledge, trace_id=f"qlipot:{agente_id}")
 
+    def assinar_acao(self, *, ferramenta: str, argumentos: Dict[str, Any], pedido: str = "") -> str:
+        """Return the stable anonymized action hash used by local/federated corrections."""
+
+        payload = {
+            "argumentos": argumentos,
+            "ferramenta": ferramenta,
+            "pedido": _normalizar_texto(pedido),
+        }
+        canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
     def calcular_suspeita(self, historico_recente: List[Knowledge]) -> float:
         """Calculate additional suspicion from recent semantic-memory actions."""
 
@@ -207,7 +297,10 @@ class Qlipot:
         for entry in historico_recente:
             action = str(entry.metadata.get("acao", "")).lower()
             params = str(entry.metadata.get("parametros", {})).lower()
-            if any(term in f"{action} {params}" for term in ("execute_command", "network_request", "secret", "token", "delete", "force")):
+            if any(
+                term in f"{action} {params}"
+                for term in ("execute_command", "network_request", "secret", "token", "delete", "force")
+            ):
                 high_impact_count += 1
 
         repeat_pressure = min(0.15, len(historico_recente) * 0.03)
@@ -215,11 +308,65 @@ class Qlipot:
         sequential_pressure = self._score_from_supplied_history(historico_recente)
         return round(min(0.30, repeat_pressure + high_impact_pressure + sequential_pressure), 4)
 
-    def aplicar_correcao(self, assinatura_acao: str, delta: float) -> None:
-        """Apply a federated correction delta for a learned action signature."""
+    @property
+    def correcoes_log(self) -> List[Dict[str, Any]]:
+        """Append-only audit trail of correction attempts (copies)."""
+        if self._store:
+            try:
+                persisted = self._store.load_qlipot_correcoes_log()
+                # Denied attempts are not persisted (they apply no delta); surface
+                # the in-memory denied records so the audit trail keeps every
+                # attempt instead of hiding rejected ones.
+                denied = [dict(entry) for entry in self._correcoes_log if not entry.get("aplicado", True)]
+                return list(persisted) + denied
+            except Exception:
+                pass
+        return [dict(entry) for entry in self._correcoes_log]
 
-        self._correcoes[assinatura_acao] = float(delta)
-        self._emit("correcao", {"assinatura_acao": assinatura_acao, "delta": float(delta), "score": abs(float(delta))})
+    def aplicar_correcao(
+        self,
+        assinatura_acao: str,
+        delta: float,
+        *,
+        origem: str = "sync_hub",
+    ) -> None:
+        """Apply a federated correction delta for a learned action signature.
+
+        Wave-3 hardening: only authorized origins may apply corrections, the
+        delta is clamped to ±MAX_DELTA_CORRECAO, and every attempt (applied or
+        denied) is recorded in the audit trail with the assessor version.
+        """
+
+        registro = {
+            "assinatura_acao": assinatura_acao,
+            "delta_solicitado": float(delta),
+            "origem": origem,
+            "assessor_version": RISK_ASSESSOR_VERSION,
+            "timestamp": datetime.utcnow().timestamp(),
+        }
+        if origem not in self._origens_autorizadas:
+            registro.update({"aplicado": False, "motivo": "origem não autorizada"})
+            self._correcoes_log.append(registro)
+            raise PermissionError(f"Origem não autorizada para correção qlipot: {origem}")
+
+        delta_aplicado = max(-MAX_DELTA_CORRECAO, min(MAX_DELTA_CORRECAO, float(delta)))
+        registro.update({"aplicado": True, "delta_aplicado": delta_aplicado})
+        self._correcoes_log.append(registro)
+        self._correcoes[assinatura_acao] = delta_aplicado
+        if self._store:
+            try:
+                self._store.save_qlipot_correcao(
+                    assinatura_acao=assinatura_acao,
+                    delta=delta_aplicado,
+                    origem=origem,
+                    assessor_version=RISK_ASSESSOR_VERSION
+                )
+            except Exception:
+                pass
+        self._emit(
+            "correcao",
+            {"assinatura_acao": assinatura_acao, "delta": delta_aplicado, "score": abs(delta_aplicado)},
+        )
 
     def registrar_callback(self, evento: str, fn: Callable[[str, Dict[str, Any]], Any]) -> None:
         self._callbacks.setdefault(evento, []).append(fn)
@@ -247,8 +394,7 @@ class Qlipot:
         entries = [
             entry
             for entry in self._memory.query_knowledge(f"agent:{agente_id}", limit=100)
-            if entry.category == "qlipot-agent-action"
-            and entry.metadata.get("agente_id") == agente_id
+            if entry.category == "qlipot-agent-action" and entry.metadata.get("agente_id") == agente_id
         ]
         return sorted(
             entries,
@@ -256,24 +402,4 @@ class Qlipot:
             reverse=True,
         )[:limit]
 
-    def _avaliar_score_isolado(
-        self,
-        ferramenta: str,
-        argumentos: Dict[str, Any],
-        *,
-        pedido: str = "",
-    ) -> float:
-        combined = f"{pedido} {ferramenta} {argumentos}".lower()
-        risco = 0.10
 
-        audit_terms = ("token", "secret", "credential", "produção", "production")
-        high_terms = ("execute_command", "shell", "exec", "network_request", "post")
-        critical_terms = ("delete", "remove", "drop", "reset", "force", "exfiltrate")
-
-        if any(term in combined for term in audit_terms):
-            risco = max(risco, 0.50)
-        if any(term in combined for term in high_terms):
-            risco = max(risco, 0.70)
-        if any(term in combined for term in critical_terms):
-            risco = max(risco, 0.96)
-        return risco

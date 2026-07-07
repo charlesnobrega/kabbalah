@@ -1,0 +1,69 @@
+{
+    "mcpServers": {
+        "power-postman-postman": {
+            "url": "https://mcp.postman.com/minimal",
+            "headers": {
+                "Authorization": "Bearer ${POSTMAN_API_KEY}"
+            },
+            "disabled": true
+        },
+        "power-figma-figma": {
+            "type": "http",
+            "url": "https://mcp.figma.com/mcp",
+            "disabled": true
+        },
+        "power-miro-codegen-miro-mcp": {
+            "url": "https://mcp.miro.com/",
+            "disabled": true,
+            "headers": {
+                "X-AI-Source": "kiro-code-gen-extension"
+            }
+        },
+        "power-saas-builder-fetch": {
+            "command": "uvx",
+            "args": [
+                "mcp-server-fetch"
+            ],
+            "env": {},
+            "disabled": false
+        },
+        "power-saas-builder-stripe": {
+            "url": "https://mcp.stripe.com",
+            "disabled": true
+        },
+        "power-saas-builder-aws-knowledge-mcp-server": {
+            "url": "https://knowledge-mcp.global.api.aws",
+            "disabled": true
+        },
+        "power-saas-builder-awslabs.dynamodb-mcp-server": {
+            "command": "uvx",
+            "args": [
+                "awslabs.dynamodb-mcp-server@latest"
+            ],
+            "env": {
+                "FASTMCP_LOG_LEVEL": "ERROR"
+            },
+            "disabled": true
+        },
+        "power-saas-builder-awslabs.aws-serverless-mcp": {
+            "command": "uvx",
+            "args": [
+                "awslabs.aws-serverless-mcp-server@latest"
+            ],
+            "env": {
+                "AWS_PROFILE": "<PROFILE>",
+                "AWS_REGION": "<REGION>",
+                "FASTMCP_LOG_LEVEL": "ERROR"
+            },
+            "disabled": true
+        },
+        "power-saas-builder-playwright": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@executeautomation/playwright-mcp-server"
+            ],
+            "disabled": true
+        }
+    }
+}

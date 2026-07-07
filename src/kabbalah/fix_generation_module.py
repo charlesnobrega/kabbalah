@@ -14,7 +14,7 @@ import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from kabbalah.error_analysis_module import ErrorAnalysis
 from kabbalah.self_healing_models import CodeChange, FixProposal, FixStatus
@@ -111,9 +111,7 @@ class FixGenerationModule:
             code_changes = self.extract_code_changes(error_analysis.suggested_fixes)
 
             if not code_changes:
-                logger.warning(
-                    f"No code changes extracted for error {error_analysis.error_id}"
-                )
+                logger.warning(f"No code changes extracted for error {error_analysis.error_id}")
                 errors.append("No code changes extracted from analysis")
                 generation_time_ms = (time.time() - start_time) * 1000
                 return FixGenerationResult(
@@ -127,21 +125,14 @@ class FixGenerationModule:
             validation_errors = []
             for change in code_changes:
                 if not self.validate_syntax(change.file_path, change.new_content):
-                    validation_errors.append(
-                        f"Syntax error in {change.file_path}: {change.new_content[:100]}"
-                    )
+                    validation_errors.append(f"Syntax error in {change.file_path}: {change.new_content[:100]}")
 
             if validation_errors:
-                logger.warning(
-                    f"Syntax validation failed for error {error_analysis.error_id}: "
-                    f"{validation_errors}"
-                )
+                logger.warning(f"Syntax validation failed for error {error_analysis.error_id}: " f"{validation_errors}")
                 errors.extend(validation_errors)
 
             # Calculate confidence score
-            confidence_score = self._calculate_confidence_score(
-                error_analysis, code_changes, learning_context
-            )
+            confidence_score = self._calculate_confidence_score(error_analysis, code_changes, learning_context)
 
             # Determine if manual review is required
             requires_manual_review = confidence_score < 0.5 or len(code_changes) > 5
@@ -150,9 +141,7 @@ class FixGenerationModule:
             fix_proposal = FixProposal(
                 fix_id=str(uuid.uuid4()),
                 error_id=error_analysis.error_id,
-                description=self._generate_fix_description(
-                    error_analysis.root_cause, code_changes
-                ),
+                description=self._generate_fix_description(error_analysis.root_cause, code_changes),
                 code_changes=code_changes,
                 confidence_score=confidence_score,
                 reasoning=error_analysis.reasoning,
@@ -182,9 +171,7 @@ class FixGenerationModule:
             return result
 
         except Exception as e:
-            logger.error(
-                f"Error generating fix for {error_analysis.error_id}: {str(e)}"
-            )
+            logger.error(f"Error generating fix for {error_analysis.error_id}: {str(e)}")
             errors.append(f"Fix generation failed: {str(e)}")
             generation_time_ms = (time.time() - start_time) * 1000
             return FixGenerationResult(
@@ -215,29 +202,21 @@ class FixGenerationModule:
             try:
                 # Try to extract file path and content from fix description
                 # Look for patterns like "file: path/to/file.py" or "File: path/to/file.py"
-                file_match = re.search(
-                    r"(?:file|File|FILE):\s*([^\n]+)", fix_description
-                )
+                file_match = re.search(r"(?:file|File|FILE):\s*([^\n]+)", fix_description)
 
                 if not file_match:
                     # Try to extract from code block markers
-                    file_match = re.search(
-                        r"```(?:python|py)?\s*([^\n]+)\n", fix_description
-                    )
+                    file_match = re.search(r"```(?:python|py)?\s*([^\n]+)\n", fix_description)
 
                 if not file_match:
-                    logger.debug(
-                        f"Could not extract file path from fix: {fix_description[:100]}"
-                    )
+                    logger.debug(f"Could not extract file path from fix: {fix_description[:100]}")
                     continue
 
                 file_path = file_match.group(1).strip()
 
                 # Extract code content
                 # Look for code blocks
-                code_match = re.search(
-                    r"```(?:python|py)?\n(.*?)\n```", fix_description, re.DOTALL
-                )
+                code_match = re.search(r"```(?:python|py)?\n(.*?)\n```", fix_description, re.DOTALL)
 
                 if not code_match:
                     # Try to extract from "new content:" or similar markers
@@ -248,9 +227,7 @@ class FixGenerationModule:
                     )
 
                 if not code_match:
-                    logger.debug(
-                        f"Could not extract code content from fix: {fix_description[:100]}"
-                    )
+                    logger.debug(f"Could not extract code content from fix: {fix_description[:100]}")
                     continue
 
                 new_content = code_match.group(1).strip()
@@ -274,9 +251,7 @@ class FixGenerationModule:
                 logger.debug(f"Extracted code change for {file_path}")
 
             except Exception as e:
-                logger.warning(
-                    f"Error extracting code change from fix: {str(e)}"
-                )
+                logger.warning(f"Error extracting code change from fix: {str(e)}")
                 continue
 
         return code_changes
@@ -309,9 +284,7 @@ class FixGenerationModule:
             return True
 
         except SyntaxError as e:
-            logger.warning(
-                f"Syntax error in {file_path} at line {e.lineno}: {e.msg}"
-            )
+            logger.warning(f"Syntax error in {file_path} at line {e.lineno}: {e.msg}")
             return False
 
         except Exception as e:
@@ -332,9 +305,7 @@ class FixGenerationModule:
 
         Requirements: 3.9
         """
-        ranked_fixes = sorted(
-            fixes, key=lambda f: f.confidence_score, reverse=True
-        )
+        ranked_fixes = sorted(fixes, key=lambda f: f.confidence_score, reverse=True)
 
         logger.debug(
             f"Ranked {len(ranked_fixes)} fixes: "
@@ -376,10 +347,7 @@ class FixGenerationModule:
         if len(code_changes) > 3:
             penalty = 0.1 * (len(code_changes) - 3)
             confidence -= penalty
-            logger.debug(
-                f"Applied file count penalty: {penalty:.2f} "
-                f"(files: {len(code_changes)})"
-            )
+            logger.debug(f"Applied file count penalty: {penalty:.2f} " f"(files: {len(code_changes)})")
 
         # Boost from learning database context
         if learning_context:
@@ -389,8 +357,7 @@ class FixGenerationModule:
                 boost = best_match.success_rate * 0.1
                 confidence += boost
                 logger.debug(
-                    f"Applied learning database boost: {boost:.2f} "
-                    f"(success_rate: {best_match.success_rate:.1%})"
+                    f"Applied learning database boost: {boost:.2f} " f"(success_rate: {best_match.success_rate:.1%})"
                 )
 
         # Ensure confidence stays within bounds
@@ -400,9 +367,7 @@ class FixGenerationModule:
 
         return confidence
 
-    def _generate_fix_description(
-        self, root_cause: str, code_changes: List[CodeChange]
-    ) -> str:
+    def _generate_fix_description(self, root_cause: str, code_changes: List[CodeChange]) -> str:
         """
         Generate human-readable fix description.
 

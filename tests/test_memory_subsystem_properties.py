@@ -1,15 +1,14 @@
 """Property-based tests for MemorySubsystem."""
 
 import tempfile
-from typing import List
 
-import pytest
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 
 from kabbalah.memory_subsystem import Knowledge, MemorySubsystem
 
-
 # Strategies for property-based testing
+
 
 def knowledge_strategy():
     """Strategy for generating Knowledge objects."""
@@ -30,15 +29,9 @@ def trace_id_strategy():
     """Strategy for generating valid trace_ids."""
     return st.builds(
         lambda run, branch, leaf: f"{run}:{branch}:{leaf}",
-        run=st.text(
-            alphabet="abcdefghijklmnopqrstuvwxyz0123456789_", min_size=5, max_size=20
-        ),
-        branch=st.text(
-            alphabet="abcdefghijklmnopqrstuvwxyz0123456789_", min_size=5, max_size=20
-        ),
-        leaf=st.text(
-            alphabet="abcdefghijklmnopqrstuvwxyz0123456789_", min_size=5, max_size=20
-        ),
+        run=st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789_", min_size=5, max_size=20),
+        branch=st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789_", min_size=5, max_size=20),
+        leaf=st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789_", min_size=5, max_size=20),
     )
 
 
@@ -190,7 +183,9 @@ class TestProperty21MemoryConsistencyParallel:
                 query_term = knowledge.content.split()[0]
                 results = subsystem.query_knowledge(query_term, limit=100)
                 found_ids = {k.knowledge_id for k in results}
-                assert knowledge.knowledge_id in found_ids, f"Knowledge {knowledge.knowledge_id} not found after consistency check"
+                assert (
+                    knowledge.knowledge_id in found_ids
+                ), f"Knowledge {knowledge.knowledge_id} not found after consistency check"
 
     @given(
         knowledge_list=st.lists(knowledge_strategy(), min_size=2, max_size=10),

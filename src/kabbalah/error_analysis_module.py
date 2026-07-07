@@ -11,11 +11,10 @@ Requirements: 2.1, 2.2, 2.3, 2.6, 2.7
 import json
 import logging
 import re
-import signal
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from kabbalah.llm_local_provider import LocalLLMConfig, LocalLLMProvider
 from kabbalah.self_healing_models import ErrorReport, LearningEntry
@@ -116,8 +115,7 @@ class ErrorAnalysisModule:
         self.analysis_history: Dict[str, ErrorAnalysis] = {}
 
         logger.info(
-            f"ErrorAnalysisModule initialized with LLM: {self.llm_config.model} "
-            f"at {self.llm_config.base_url}"
+            f"ErrorAnalysisModule initialized with LLM: {self.llm_config.model} " f"at {self.llm_config.base_url}"
         )
 
     def analyze_error(
@@ -146,16 +144,13 @@ class ErrorAnalysisModule:
         learning_context = learning_context or []
 
         logger.info(
-            f"Analyzing error {error_report.error_id}: {error_report.error_type} "
-            f"in {error_report.component}"
+            f"Analyzing error {error_report.error_id}: {error_report.error_type} " f"in {error_report.component}"
         )
 
         # Try LLM analysis first
         if self.llm_provider.available:
             try:
-                analysis = self._analyze_with_llm(
-                    error_report, learning_context, timeout_seconds
-                )
+                analysis = self._analyze_with_llm(error_report, learning_context, timeout_seconds)
                 # Note: analysis_time_ms is already set in _analyze_with_llm
                 self.analysis_history[error_report.error_id] = analysis
                 logger.info(
@@ -165,19 +160,14 @@ class ErrorAnalysisModule:
                 return analysis
             except TimeoutException:
                 logger.warning(
-                    f"LLM analysis timed out for {error_report.error_id}, "
-                    f"falling back to learning database"
+                    f"LLM analysis timed out for {error_report.error_id}, " f"falling back to learning database"
                 )
             except Exception as e:
                 logger.warning(
-                    f"LLM analysis failed for {error_report.error_id}: {str(e)}, "
-                    f"falling back to learning database"
+                    f"LLM analysis failed for {error_report.error_id}: {str(e)}, " f"falling back to learning database"
                 )
         else:
-            logger.warning(
-                f"LLM unavailable for {error_report.error_id}, "
-                f"using learning database fallback"
-            )
+            logger.warning(f"LLM unavailable for {error_report.error_id}, " f"using learning database fallback")
 
         # Fallback to learning database
         analysis = self._analyze_with_learning_database(error_report, learning_context)
@@ -218,7 +208,7 @@ class ErrorAnalysisModule:
         Requirements: 2.1, 2.2, 2.3
         """
         start_time = time.time()
-        
+
         # Generate analysis prompt
         prompt = self.generate_analysis_prompt(error_report, learning_context)
 
@@ -234,13 +224,9 @@ class ErrorAnalysisModule:
 
         # Parse LLM response
         try:
-            root_cause, suggested_fixes, affected_files, confidence = (
-                self.parse_llm_response(response)
-            )
+            root_cause, suggested_fixes, affected_files, confidence = self.parse_llm_response(response)
         except Exception as e:
-            logger.error(
-                f"Failed to parse LLM response for {error_report.error_id}: {str(e)}"
-            )
+            logger.error(f"Failed to parse LLM response for {error_report.error_id}: {str(e)}")
             # Return default analysis with low confidence
             analysis_time_ms = (time.time() - start_time) * 1000
             return ErrorAnalysis(
@@ -256,9 +242,7 @@ class ErrorAnalysisModule:
             )
 
         # Build reasoning
-        reasoning = self._build_reasoning(
-            error_report, root_cause, suggested_fixes, learning_context
-        )
+        reasoning = self._build_reasoning(error_report, root_cause, suggested_fixes, learning_context)
 
         analysis_time_ms = (time.time() - start_time) * 1000
         return ErrorAnalysis(
@@ -297,9 +281,7 @@ class ErrorAnalysisModule:
 
         if not learning_context:
             # No similar patterns found
-            logger.warning(
-                f"No similar patterns found in learning database for {error_report.error_id}"
-            )
+            logger.warning(f"No similar patterns found in learning database for {error_report.error_id}")
             return ErrorAnalysis(
                 error_id=error_report.error_id,
                 root_cause="No similar patterns found in learning database",
@@ -462,16 +444,14 @@ Provide your response as JSON with this structure:
 
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse JSON from LLM response: {str(e)}")
-                raise Exception(f"Invalid JSON in LLM response: {str(e)}")
+                raise Exception(f"Invalid JSON in LLM response: {str(e)}") from e
 
         else:
             # No JSON found in response
             logger.error("No JSON found in LLM response")
             raise Exception("LLM response does not contain valid JSON")
 
-    def _invoke_llm_with_timeout(
-        self, prompt: str, timeout_seconds: int
-    ) -> str:
+    def _invoke_llm_with_timeout(self, prompt: str, timeout_seconds: int) -> str:
         """
         Invoke LLM with timeout handling.
 
@@ -490,11 +470,10 @@ Provide your response as JSON with this structure:
 
         Requirements: 2.2
         """
+
         # Set timeout using signal (Unix-like systems)
         def timeout_handler(signum, frame):
-            raise TimeoutException(
-                f"LLM analysis timed out after {timeout_seconds} seconds"
-            )
+            raise TimeoutException(f"LLM analysis timed out after {timeout_seconds} seconds")
 
         # Note: signal.signal only works on Unix-like systems
         # For cross-platform support, we use a simpler approach with time tracking
@@ -506,8 +485,7 @@ Provide your response as JSON with this structure:
             elapsed_time = time.time() - start_time
             if elapsed_time > timeout_seconds:
                 raise TimeoutException(
-                    f"LLM analysis exceeded timeout of {timeout_seconds} seconds "
-                    f"(took {elapsed_time:.1f}s)"
+                    f"LLM analysis exceeded timeout of {timeout_seconds} seconds " f"(took {elapsed_time:.1f}s)"
                 )
 
             if not response:
@@ -518,7 +496,7 @@ Provide your response as JSON with this structure:
         except TimeoutException:
             raise
         except Exception as e:
-            raise Exception(f"LLM invocation failed: {str(e)}")
+            raise Exception(f"LLM invocation failed: {str(e)}") from e
 
     def _build_reasoning(
         self,
@@ -550,13 +528,10 @@ Provide your response as JSON with this structure:
             reasoning += f"  {i}. {fix}\n"
 
         if learning_context:
-            reasoning += f"\nLearning Database Context:\n"
+            reasoning += "\nLearning Database Context:\n"
             reasoning += f"  Found {len(learning_context)} similar pattern(s)\n"
             best_match = learning_context[0]
-            reasoning += (
-                f"  Best match: {best_match.error_pattern} "
-                f"({best_match.success_rate:.1%} success rate)\n"
-            )
+            reasoning += f"  Best match: {best_match.error_pattern} " f"({best_match.success_rate:.1%} success rate)\n"
 
         return reasoning
 

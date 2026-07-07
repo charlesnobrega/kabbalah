@@ -11,15 +11,15 @@ Tests fix generation functionality including:
 Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 3.9
 """
 
-import pytest
-from datetime import datetime
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
+import pytest
+
+from kabbalah.error_analysis_module import ErrorAnalysis
 from kabbalah.fix_generation_module import (
     FixGenerationModule,
     FixGenerationResult,
 )
-from kabbalah.error_analysis_module import ErrorAnalysis
 from kabbalah.self_healing_models import (
     CodeChange,
     FixProposal,
@@ -60,10 +60,20 @@ class TestFixGenerationModule:
         code_change = CodeChange(
             file_path="src/auth/validators.py",
             original_content="def validate_email(email):\n    return True",
-            new_content="def validate_email(email):\n    import re\n    return re.match(r'^[^@]+@[^@]+\\.[^@]+$', email) is not None",
+            new_content=(
+                "def validate_email(email):\n"
+                "    import re\n"
+                "    return re.match(r'^[^@]+@[^@]+\\.[^@]+$', email) is not None"
+            ),
             line_start=1,
             line_end=2,
-            diff="- def validate_email(email):\n-     return True\n+ def validate_email(email):\n+     import re\n+     return re.match(r'^[^@]+@[^@]+\\.[^@]+$', email) is not None",
+            diff=(
+                "- def validate_email(email):\n"
+                "-     return True\n"
+                "+ def validate_email(email):\n"
+                "+     import re\n"
+                "+     return re.match(r'^[^@]+@[^@]+\\.[^@]+$', email) is not None"
+            ),
         )
 
         return LearningEntry(
@@ -97,12 +107,8 @@ class TestFixGenerationModule:
             diff="- email = request.get('email')\n+ email = validate_email(request.get('email'))",
         )
 
-        with patch.object(
-            fix_generation_module, "extract_code_changes", return_value=[code_change]
-        ):
-            with patch.object(
-                fix_generation_module, "validate_syntax", return_value=True
-            ):
+        with patch.object(fix_generation_module, "extract_code_changes", return_value=[code_change]):
+            with patch.object(fix_generation_module, "validate_syntax", return_value=True):
                 result = fix_generation_module.generate_fix(error_analysis)
 
         assert isinstance(result, FixGenerationResult)
@@ -112,9 +118,7 @@ class TestFixGenerationModule:
         assert result.primary_fix.status == FixStatus.PENDING
         assert result.generation_time_ms >= 0  # Can be 0 for very fast operations
 
-    def test_generate_fix_with_learning_context(
-        self, fix_generation_module, error_analysis, learning_entry
-    ):
+    def test_generate_fix_with_learning_context(self, fix_generation_module, error_analysis, learning_entry):
         """Test fix generation with learning context."""
         code_change = CodeChange(
             file_path="src/auth/registration.py",
@@ -125,15 +129,9 @@ class TestFixGenerationModule:
             diff="- email = request.get('email')\n+ email = validate_email(request.get('email'))",
         )
 
-        with patch.object(
-            fix_generation_module, "extract_code_changes", return_value=[code_change]
-        ):
-            with patch.object(
-                fix_generation_module, "validate_syntax", return_value=True
-            ):
-                result = fix_generation_module.generate_fix(
-                    error_analysis, learning_context=[learning_entry]
-                )
+        with patch.object(fix_generation_module, "extract_code_changes", return_value=[code_change]):
+            with patch.object(fix_generation_module, "validate_syntax", return_value=True):
+                result = fix_generation_module.generate_fix(error_analysis, learning_context=[learning_entry])
 
         assert len(result.fixes) == 1
         # Confidence should be boosted by learning context
@@ -141,18 +139,14 @@ class TestFixGenerationModule:
 
     def test_generate_fix_no_code_changes(self, fix_generation_module, error_analysis):
         """Test fix generation when no code changes can be extracted."""
-        with patch.object(
-            fix_generation_module, "extract_code_changes", return_value=[]
-        ):
+        with patch.object(fix_generation_module, "extract_code_changes", return_value=[]):
             result = fix_generation_module.generate_fix(error_analysis)
 
         assert len(result.fixes) == 0
         assert result.primary_fix is None
         assert len(result.errors) > 0
 
-    def test_generate_fix_syntax_validation_failure(
-        self, fix_generation_module, error_analysis
-    ):
+    def test_generate_fix_syntax_validation_failure(self, fix_generation_module, error_analysis):
         """Test fix generation with syntax validation failure."""
         code_change = CodeChange(
             file_path="src/auth/registration.py",
@@ -163,20 +157,14 @@ class TestFixGenerationModule:
             diff="",
         )
 
-        with patch.object(
-            fix_generation_module, "extract_code_changes", return_value=[code_change]
-        ):
-            with patch.object(
-                fix_generation_module, "validate_syntax", return_value=False
-            ):
+        with patch.object(fix_generation_module, "extract_code_changes", return_value=[code_change]):
+            with patch.object(fix_generation_module, "validate_syntax", return_value=False):
                 result = fix_generation_module.generate_fix(error_analysis)
 
         # Should still generate fix but with errors recorded
         assert len(result.errors) > 0
 
-    def test_generate_fix_requires_manual_review_low_confidence(
-        self, fix_generation_module
-    ):
+    def test_generate_fix_requires_manual_review_low_confidence(self, fix_generation_module):
         """Test that low confidence fixes require manual review."""
         error_analysis = ErrorAnalysis(
             error_id="err-002",
@@ -198,19 +186,13 @@ class TestFixGenerationModule:
             diff="",
         )
 
-        with patch.object(
-            fix_generation_module, "extract_code_changes", return_value=[code_change]
-        ):
-            with patch.object(
-                fix_generation_module, "validate_syntax", return_value=True
-            ):
+        with patch.object(fix_generation_module, "extract_code_changes", return_value=[code_change]):
+            with patch.object(fix_generation_module, "validate_syntax", return_value=True):
                 result = fix_generation_module.generate_fix(error_analysis)
 
         assert result.primary_fix.requires_manual_review is True
 
-    def test_generate_fix_requires_manual_review_many_files(
-        self, fix_generation_module, error_analysis
-    ):
+    def test_generate_fix_requires_manual_review_many_files(self, fix_generation_module, error_analysis):
         """Test that fixes affecting many files require manual review."""
         code_changes = [
             CodeChange(
@@ -224,12 +206,8 @@ class TestFixGenerationModule:
             for i in range(6)  # 6 files
         ]
 
-        with patch.object(
-            fix_generation_module, "extract_code_changes", return_value=code_changes
-        ):
-            with patch.object(
-                fix_generation_module, "validate_syntax", return_value=True
-            ):
+        with patch.object(fix_generation_module, "extract_code_changes", return_value=code_changes):
+            with patch.object(fix_generation_module, "validate_syntax", return_value=True):
                 result = fix_generation_module.generate_fix(error_analysis)
 
         assert result.primary_fix.requires_manual_review is True
@@ -274,9 +252,7 @@ def test_function():
 
     def test_extract_code_changes_malformed_input(self, fix_generation_module):
         """Test extracting code changes from malformed input."""
-        suggested_fixes = [
-            "This is just plain text without any code blocks or file markers"
-        ]
+        suggested_fixes = ["This is just plain text without any code blocks or file markers"]
 
         changes = fix_generation_module.extract_code_changes(suggested_fixes)
 
@@ -298,17 +274,12 @@ def hello_world():
 def hello_world(
     print("Hello, World!")
 """
-        assert (
-            fix_generation_module.validate_syntax("src/test.py", invalid_code) is False
-        )
+        assert fix_generation_module.validate_syntax("src/test.py", invalid_code) is False
 
     def test_validate_syntax_non_python_file(self, fix_generation_module):
         """Test syntax validation for non-Python files."""
         # Non-Python files should pass validation (skipped)
-        assert (
-            fix_generation_module.validate_syntax("src/test.js", "invalid code")
-            is True
-        )
+        assert fix_generation_module.validate_syntax("src/test.js", "invalid code") is True
 
     def test_validate_syntax_complex_code(self, fix_generation_module):
         """Test syntax validation for complex Python code."""
@@ -316,7 +287,7 @@ def hello_world(
 class MyClass:
     def __init__(self, value):
         self.value = value
-    
+
     def method(self):
         try:
             return self.value * 2
@@ -324,9 +295,7 @@ class MyClass:
             print(f"Error: {e}")
             return None
 """
-        assert (
-            fix_generation_module.validate_syntax("src/test.py", complex_code) is True
-        )
+        assert fix_generation_module.validate_syntax("src/test.py", complex_code) is True
 
     def test_rank_fixes_by_confidence(self, fix_generation_module):
         """Test ranking fixes by confidence score."""
@@ -406,16 +375,12 @@ class MyClass:
             )
         ]
 
-        confidence = fix_generation_module._calculate_confidence_score(
-            error_analysis, code_changes
-        )
+        confidence = fix_generation_module._calculate_confidence_score(error_analysis, code_changes)
 
         # Should be close to base confidence (0.85)
         assert 0.8 <= confidence <= 0.9
 
-    def test_calculate_confidence_score_file_penalty(
-        self, fix_generation_module, error_analysis
-    ):
+    def test_calculate_confidence_score_file_penalty(self, fix_generation_module, error_analysis):
         """Test confidence score calculation with file count penalty."""
         code_changes = [
             CodeChange(
@@ -429,16 +394,12 @@ class MyClass:
             for i in range(5)  # 5 files
         ]
 
-        confidence = fix_generation_module._calculate_confidence_score(
-            error_analysis, code_changes
-        )
+        confidence = fix_generation_module._calculate_confidence_score(error_analysis, code_changes)
 
         # Should be penalized for multiple files
         assert confidence < error_analysis.confidence_score
 
-    def test_calculate_confidence_score_learning_boost(
-        self, fix_generation_module, error_analysis, learning_entry
-    ):
+    def test_calculate_confidence_score_learning_boost(self, fix_generation_module, error_analysis, learning_entry):
         """Test confidence score calculation with learning database boost."""
         code_changes = [
             CodeChange(
@@ -458,9 +419,7 @@ class MyClass:
         # Should be boosted by learning context
         assert confidence > error_analysis.confidence_score
 
-    def test_calculate_confidence_score_bounds(
-        self, fix_generation_module, error_analysis
-    ):
+    def test_calculate_confidence_score_bounds(self, fix_generation_module, error_analysis):
         """Test that confidence score stays within bounds."""
         code_changes = [
             CodeChange(
@@ -474,9 +433,7 @@ class MyClass:
             for i in range(10)  # Many files
         ]
 
-        confidence = fix_generation_module._calculate_confidence_score(
-            error_analysis, code_changes
-        )
+        confidence = fix_generation_module._calculate_confidence_score(error_analysis, code_changes)
 
         # Should be bounded between 0.0 and 1.0
         assert 0.0 <= confidence <= 1.0
@@ -492,12 +449,8 @@ class MyClass:
             diff="",
         )
 
-        with patch.object(
-            fix_generation_module, "extract_code_changes", return_value=[code_change]
-        ):
-            with patch.object(
-                fix_generation_module, "validate_syntax", return_value=True
-            ):
+        with patch.object(fix_generation_module, "extract_code_changes", return_value=[code_change]):
+            with patch.object(fix_generation_module, "validate_syntax", return_value=True):
                 result1 = fix_generation_module.generate_fix(error_analysis)
 
         history = fix_generation_module.get_generation_history()
@@ -516,12 +469,8 @@ class MyClass:
             diff="",
         )
 
-        with patch.object(
-            fix_generation_module, "extract_code_changes", return_value=[code_change]
-        ):
-            with patch.object(
-                fix_generation_module, "validate_syntax", return_value=True
-            ):
+        with patch.object(fix_generation_module, "extract_code_changes", return_value=[code_change]):
+            with patch.object(fix_generation_module, "validate_syntax", return_value=True):
                 fix_generation_module.generate_fix(error_analysis)
 
         assert len(fix_generation_module.generation_history) > 0
@@ -552,9 +501,7 @@ class MyClass:
             ),
         ]
 
-        description = fix_generation_module._generate_fix_description(
-            root_cause, code_changes
-        )
+        description = fix_generation_module._generate_fix_description(root_cause, code_changes)
 
         assert "Missing input validation" in description
         assert "2 file(s)" in description

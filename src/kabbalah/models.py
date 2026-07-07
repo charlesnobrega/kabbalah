@@ -2,12 +2,12 @@
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-from datetime import datetime
 
 
 @dataclass
 class UserRequest:
     """User's project request."""
+
     project_name: str
     project_description: str
     scope: Optional[str] = None
@@ -19,6 +19,7 @@ class UserRequest:
 @dataclass
 class Specification:
     """Premium project specification."""
+
     run_id: str
     project_name: str
     project_description: str

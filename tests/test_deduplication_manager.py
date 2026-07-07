@@ -12,16 +12,14 @@ Tests cover:
 Requirements: 1.6, 11.6
 """
 
-import pytest
 import time
-from datetime import datetime, timedelta
-from unittest.mock import patch
+from datetime import datetime
+
+import pytest
 
 from src.kabbalah.deduplication_manager import (
     DeduplicationManager,
     DeduplicationRule,
-    DeduplicationStats,
-    DuplicateGroup,
 )
 from src.kabbalah.self_healing_models import ErrorReport, ErrorSeverity
 
@@ -538,7 +536,7 @@ class TestErrorProcessing:
         )
 
         # Process same error 5 times
-        for i in range(5):
+        for _i in range(5):
             manager.process_error(error)
 
         assert error.occurrence_count == 5
