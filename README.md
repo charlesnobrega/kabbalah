@@ -1,9 +1,58 @@
 # Kabbalah
 
+### Autonomia com governança. Execução com evidência.
+
+**Kabbalah é um kernel de governança zero-trust para agentes de IA.**
+Seu objetivo é permitir que agentes trabalhem com modelos locais e APIs externas,
+sem transformar acesso a ferramentas em permissão irrestrita para agir.
+Intenção, contratos, políticas, aprovação humana e orçamento devem orientar a
+execução — com registros que permitam entender o que aconteceu e por quê.
+
+**Estágio: alpha, em desenvolvimento e validação.** Este repositório apresenta
+o produto e seu código público. Não representa uma instalação pronta para qualquer
+equipamento nem uma certificação de segurança para produção.
+
+[Visão do produto](docs/specs/PRD.md) ·
+[Arquitetura](docs/ARCHITECTURE.md) ·
+[Plano de execução](docs/roadmap/handoff-execution-plan.md) ·
+[Limites de publicação](docs/PUBLICATION_POLICY.md) ·
+[Quickstart](#five-minute-quickstart)
+
 [![CI](https://github.com/charlesnobrega/kabbalah/actions/workflows/ci.yml/badge.svg)](https://github.com/charlesnobrega/kabbalah/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/github/v/tag/charlesnobrega/kabbalah?label=version)](https://github.com/charlesnobrega/kabbalah/tags)
 [![License](https://img.shields.io/github/license/charlesnobrega/kabbalah)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+
+## O que o projeto busca entregar
+
+- **Trabalho coordenado:** decompor objetivos em tarefas de coordenação, execução
+  e verificação, sem confundir um catálogo de modelos com agentes em atividade.
+- **Governança antes da ação:** avaliar solicitações de ferramentas, exigir os
+  contratos aplicáveis e encaminhar decisões sensíveis à pessoa responsável.
+- **Modelos adequados à tarefa:** combinar execução local e provedores externos
+  conforme capacidade, disponibilidade e limites de recursos.
+- **Adaptação ao equipamento:** considerar CPU, memória e GPUs. O uso de múltiplas
+  GPUs depende do backend, da topologia e de testes no hardware real; não é uma
+  soma automática de capacidade nem uma promessa de compatibilidade universal.
+- **Continuidade e rastreabilidade:** preservar estado, decisões e evidências para
+  que um trabalho possa ser retomado sem reinventar o projeto.
+
+## Como interpretar o estado do projeto
+
+| Evidência | O que ela demonstra | O que ela não demonstra |
+|---|---|---|
+| Código e teste automatizado | Um comportamento verificado no ambiente do teste | Instalação validada no equipamento do usuário |
+| Serviço com health check | Disponibilidade daquele serviço | Objetivo completo executado por agentes |
+| Resposta de uma API | A conexão e o modelo responderam naquele teste | Qualidade do orquestrador ou validade de todas as integrações |
+| Teste ponta a ponta | O fluxo testado produziu um resultado verificável | Ausência de limites ou segurança universal |
+
+O PRD documenta a visão e o escopo; a arquitetura descreve os componentes; o plano
+de execução registra o progresso. Datas e resultados históricos nesses documentos
+não devem ser apresentados como validações atuais. Configurações particulares,
+inventário de máquinas e registros de implantação pertencem à documentação
+privada da instalação, não a esta vitrine pública.
+
+## Technical overview
 
 Kabbalah is a zero-trust governance kernel for AI agents. It sits between an
 agent UI/client and the actions that agent wants to execute, then applies
